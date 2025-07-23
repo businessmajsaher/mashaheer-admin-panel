@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { signIn, signOut, getSession } from '@/services/authService';
-import { User } from '@/types/user';
+import { supabase } from '@/services/supabaseClient';
+
+interface User {
+  id: string;
+  email: string;
+  role?: string;
+}
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
-  signOut: () => Promise<any>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,26 +21,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+    // Check session on mount
+    supabase.auth.getSession().then(async ({ data }) => {
+      console.log('AuthContext getSession on mount:', data.session);
+      if (data.session?.user) {
+        setUser({
+          id: data.session.user.id,
+          email: data.session.user.email ?? '',
+          role: data.session.user.user_metadata?.role || 'user',
+        });
+      } else if (data.session?.access_token) {
+        // Fetch user info if not present in session
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          setUser({
+            id: userData.user.id,
+            email: userData.user.email ?? '',
+            role: userData.user.user_metadata?.role || 'user',
+          });
+        }
+      }
       setLoading(false);
     });
+    // Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? '',
+          role: session.user.user_metadata?.role || 'user',
+        });
+      } else {
+        setUser(null);
+      }
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
   }, []);
 
-  const handleSignIn = async (email: string, password: string) => {
-    const { data, error } = await signIn(email, password);
+  const signIn = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    setUser(data.user);
+    // Immediately fetch session and set user after signIn
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.user) {
+      setUser({
+        id: sessionData.session.user.id,
+        email: sessionData.session.user.email ?? '',
+        role: sessionData.session.user.user_metadata?.role || 'user',
+      });
+    } else if (sessionData.session?.access_token) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        setUser({
+          id: userData.user.id,
+          email: userData.user.email ?? '',
+          role: userData.user.user_metadata?.role || 'user',
+        });
+      }
+    }
     return data;
   };
 
-  const handleSignOut = async () => {
-    await signOut();
+  const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn: handleSignIn, signOut: handleSignOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

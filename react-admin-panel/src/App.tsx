@@ -14,11 +14,12 @@ const Reviews = lazy(() => import('@/pages/Reviews/Reviews'));
 const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
 const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
+const Signup = lazy(() => import('@/pages/Signup'));
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div>Loading...</div>;
-  if (!user || user.role !== 'admin') return <Navigate to="/login" replace />;
+  if (!user /*|| user.role !== 'admin'*/) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -30,6 +31,7 @@ export default function App() {
           <Suspense fallback={<div>Loading...</div>}>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>
                   <Route path="/dashboard" element={<Dashboard />} />

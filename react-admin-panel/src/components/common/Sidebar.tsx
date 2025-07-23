@@ -1,37 +1,49 @@
 import React from 'react';
+import { Menu } from 'antd';
+import {
+  DashboardOutlined,
+  UserOutlined,
+  StarOutlined,
+  AppstoreOutlined,
+  ShoppingCartOutlined,
+  WalletOutlined,
+  StarTwoTone,
+  CalendarOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import { Link, useLocation } from 'react-router-dom';
-import { cn } from '@/utils/cn';
 
 const navItems = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Users', to: '/users' },
-  { label: 'Influencers', to: '/influencers' },
-  { label: 'Services', to: '/services' },
-  { label: 'Orders', to: '/orders' },
-  { label: 'Wallets', to: '/wallets' },
-  { label: 'Reviews', to: '/reviews' },
-  { label: 'Bookings', to: '/bookings' },
-  { label: 'Settings', to: '/settings' },
+  { label: 'Dashboard', to: '/dashboard', icon: <DashboardOutlined /> },
+  { label: 'Users', to: '/users', icon: <UserOutlined /> },
+  { label: 'Influencers', to: '/influencers', icon: <StarOutlined /> },
+  { label: 'Services', to: '/services', icon: <AppstoreOutlined /> },
+  { label: 'Orders', to: '/orders', icon: <ShoppingCartOutlined /> },
+  { label: 'Wallets', to: '/wallets', icon: <WalletOutlined /> },
+  { label: 'Reviews', to: '/reviews', icon: <StarTwoTone twoToneColor="#faad14" /> },
+  { label: 'Bookings', to: '/bookings', icon: <CalendarOutlined /> },
+  { label: 'Settings', to: '/settings', icon: <SettingOutlined /> },
 ];
 
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   return (
-    <aside className="w-64 bg-card border-r hidden md:block">
-      <nav className="flex flex-col gap-2 p-4">
+    <div style={{ width: 220, minHeight: '100vh', background: '#001529', color: '#fff', position: 'fixed', left: 0, top: 0 }}>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 22, color: '#fff', letterSpacing: 2 }}>
+        ADMIN
+      </div>
+      <Menu
+        theme="dark"
+        mode="inline"
+        selectedKeys={[location.pathname]}
+        style={{ borderRight: 0 }}
+      >
         {navItems.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={cn(
-              'rounded px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
-              location.pathname.startsWith(item.to) && 'bg-accent text-accent-foreground'
-            )}
-          >
-            {item.label}
-          </Link>
+          <Menu.Item key={item.to} icon={item.icon}>
+            <Link to={item.to}>{item.label}</Link>
+          </Menu.Item>
         ))}
-      </nav>
-    </aside>
+      </Menu>
+    </div>
   );
 }; 

@@ -11,18 +11,21 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         className={cn(
-          'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background',
-          variant === 'default' && 'bg-primary text-primary-foreground hover:bg-primary/90',
-          variant === 'outline' && 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-          variant === 'ghost' && 'hover:bg-accent hover:text-accent-foreground',
-          variant === 'link' && 'underline-offset-4 hover:underline text-primary',
+          // Modern, bold, black and white button style
+          'inline-flex items-center justify-center rounded-lg text-base font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background',
+          variant === 'default' && 'bg-black text-white dark:bg-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-100 shadow-lg py-3 px-6',
+          variant === 'outline' && 'border-2 border-black dark:border-white bg-white dark:bg-black text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-900 shadow-md py-3 px-6',
+          variant === 'ghost' && 'hover:bg-gray-100 dark:hover:bg-gray-900 text-black dark:text-white py-3 px-6',
+          variant === 'link' && 'underline-offset-4 hover:underline text-black dark:text-white',
           className
         )}
         ref={ref}
         disabled={loading || props.disabled}
         {...props}
       >
-        {loading ? <span className="loader mr-2" /> : null}
+        {loading ? (
+          <span className="mr-2 inline-block h-5 w-5 animate-spin rounded-full border-2 border-t-transparent border-white dark:border-black dark:border-t-transparent align-middle" />
+        ) : null}
         {children}
       </button>
     );

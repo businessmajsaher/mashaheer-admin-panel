@@ -1,15 +1,15 @@
 import React from 'react';
-import { ThemeToggle } from './ThemeToggle';
+import { Layout, Avatar, Button } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
 
 export const Header: React.FC = () => {
   return (
-    <header className="flex items-center justify-between px-4 py-2 border-b bg-background">
-      <h1 className="text-lg font-bold">Admin Panel</h1>
-      <div className="flex items-center gap-4">
-        <ThemeToggle />
-        {/* User menu placeholder */}
-        <div className="w-8 h-8 rounded-full bg-muted" />
+    <Layout.Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 8px #f0f1f2' }}>
+      <span style={{ fontSize: 24, fontWeight: 700 }}>Dashboard</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Button shape="circle" icon={<UserOutlined />} />
+        <Avatar size={40} icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }} />
       </div>
-    </header>
+    </Layout.Header>
   );
 }; 
