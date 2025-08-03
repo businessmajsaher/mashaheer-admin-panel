@@ -15,6 +15,7 @@ const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
 const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
 const Signup = lazy(() => import('@/pages/Signup'));
+const Platforms = lazy(() => import('@/pages/Platforms'));
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/users" element={<Users />} />
                   <Route path="/influencers" element={<Influencers />} />
+                  <Route path="/platforms" element={<Platforms />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/orders" element={<Orders />} />
                   <Route path="/wallets" element={<Wallets />} />

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/services/supabaseClient';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,11 +17,21 @@ export default function Login() {
     try {
       console.log('Attempting signIn with:', values.email);
       await signIn(values.email, values.password);
+      // Fetch user info to check role
+      const { data: userData } = await supabase.auth.getUser();
+      const role = userData?.user?.user_metadata?.role;
+      if (role !== 'admin') {
+        setError('Invalid user name or password');
+        setLoading(false);
+        return;
+      }
       console.log('SignIn successful, navigating to /dashboard');
       navigate('/dashboard');
     } catch (err: any) {
       console.error('SignIn error:', err);
-      setError(err.message || 'Login failed');
+      // Always show a string error message
+      let msg = err?.message || err?.error_description || err?.error || JSON.stringify(err) || 'Login failed';
+      setError(msg);
     } finally {
       setLoading(false);
     }

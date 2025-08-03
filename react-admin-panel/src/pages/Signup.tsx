@@ -16,6 +16,7 @@ export default function Signup() {
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
+        options: { data: { role: 'admin' } }
       });
       if (error) throw error;
       // Optionally, you can auto-login or ask user to verify email
