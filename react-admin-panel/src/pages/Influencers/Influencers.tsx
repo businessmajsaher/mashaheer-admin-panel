@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber } from 'antd';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import Cropper from 'react-easy-crop';
 import { Modal as AntdModal, Slider } from 'antd';
@@ -410,220 +410,186 @@ export default function Influencers() {
   // Step content
   const stepItems = [
     {
-      title: 'Basic Info',
+      title: 'Basic Information',
       content: (
-        <Row gutter={24}>
-          <Col xs={24} sm={12}>
-            <Form.Item
-              name="name"
-              label="Name"
-              rules={[
-                { required: true, message: 'Please enter a name' },
-                { validator: (_, value) => value && value.trim() ? Promise.resolve() : Promise.reject(new Error('Name cannot be empty or whitespace')) }
-              ]}
-            >
-              <Input autoFocus />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item
-              name="email"
-              label="Email"
-              rules={[
-                { required: true, message: 'Please enter an email' },
-                { type: 'email', message: 'Please enter a valid email' },
-                {
-                  async validator(_, value) {
-                    if (!value) return Promise.resolve();
-                    // Check if email exists in Supabase
-                    const { data } = await supabase.from('profiles').select('id').eq('email', value).maybeSingle();
-                    if (data) {
-                      return Promise.reject(new Error('This email is already registered.'));
-                    }
-                    return Promise.resolve();
-                  },
-                  validateTrigger: 'onBlur',
-                },
-              ]}
-            >
-              <Input type="email" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item
-              name="password"
-              label="Password"
-              rules={[
-                { required: true, message: 'Please enter a password' },
-                { min: 8, message: 'Password must be at least 8 characters' }
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="is_verified" valuePropName="checked" style={{ marginTop: isMobile ? 0 : 32 }}> <Checkbox>Is Verified</Checkbox> </Form.Item>
-          </Col>
-          <Col xs={24}>
-            <Form.Item name="bio" label="Bio"> <Input.TextArea rows={2} /> </Form.Item>
-          </Col>
-          <Col xs={24}>
-            <Form.Item
-              label="Profile Image"
-              required
-              tooltip="Upload a profile image for the influencer"
-            >
-              {profileImagePreview && (
-                <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <Image src={profileImagePreview} width={96} height={96} style={{ objectFit: 'cover', borderRadius: 8 }} />
-                  <Button
-                    danger
-                    size="small"
-                    style={{ marginTop: 8 }}
-                    disabled={profileImageUploading}
+        <div className="space-y-4">
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Please input email!' },
+              { type: 'email', message: 'Please enter a valid email!' }
+            ]}
+          >
+            <Input placeholder="Enter email" />
+          </Form.Item>
+          
+          <Form.Item
+            name="password"
+            label="Password"
+            rules={[
+              { required: true, message: 'Please input password!' },
+              { min: 6, message: 'Password must be at least 6 characters!' }
+            ]}
+          >
+            <Input.Password placeholder="Enter password" />
+          </Form.Item>
+          
+          <Form.Item
+            name="name"
+            label="Full Name"
+            rules={[{ required: true, message: 'Please input full name!' }]}
+          >
+            <Input placeholder="Enter full name" />
+          </Form.Item>
+          
+          <Form.Item
+            name="bio"
+            label="Bio"
+          >
+            <Input.TextArea 
+              rows={4} 
+              placeholder="Enter bio (optional)" 
+              maxLength={500}
+              showCount
+            />
+          </Form.Item>
+        </div>
+      )
+    },
+    {
+      title: 'Profile Settings',
+      content: (
+        <div className="space-y-4">
+          <Form.Item
+            name="is_verified"
+            label="Verification Status"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          <Form.Item
+            name="profile_image_url"
+            label="Profile Image"
+          >
+            <div className="space-y-2">
+              <Input 
+                placeholder="Enter profile image URL (optional)" 
+                value={profileImagePreview || ''}
+                onChange={(e) => setProfileImagePreview(e.target.value)}
+              />
+              <div className="flex items-center space-x-2">
+                <Button 
+                  onClick={() => document.getElementById('profile-upload')?.click()}
+                  icon={<UploadOutlined />}
+                >
+                  Upload Image
+                </Button>
+                {profileImagePreview && (
+                  <Button 
+                    danger 
                     onClick={() => {
                       setProfileImagePreview(null);
-                      form.setFieldsValue({ profile_image_url: undefined });
+                      form.setFieldsValue({ profile_image_url: null });
                     }}
                   >
                     Remove
                   </Button>
+                )}
+              </div>
+                             <input
+                 id="profile-upload"
+                 type="file"
+                 accept="image/*"
+                 className="hidden"
+                 onChange={(e) => {
+                   const file = e.target.files?.[0];
+                   if (file) {
+                     handleProfileImageUpload(file);
+                   }
+                 }}
+               />
+              {profileImagePreview && (
+                <div className="mt-2">
+                  <img 
+                    src={profileImagePreview} 
+                    alt="Profile preview" 
+                    className="w-20 h-20 object-cover rounded-lg border"
+                  />
                 </div>
               )}
-              <Upload
-                accept="image/*"
-                showUploadList={false}
-                beforeUpload={file => {
-                  const reader = new FileReader();
-                  reader.onload = (e) => {
-                    setCropImage(e.target?.result as string);
-                    setCropModalOpen(true);
-                  };
-                  reader.readAsDataURL(file);
-                  return false;
-                }}
-                disabled={profileImageUploading}
-              >
-                <Button loading={profileImageUploading} disabled={profileImageUploading}>Choose Image</Button>
-              </Upload>
-              <Form.Item name="profile_image_url" style={{ display: 'none' }} rules={[{ required: true, message: 'Please upload a profile image' }]}> <Input type="hidden" /> </Form.Item>
-              <AntdModal
-                open={cropModalOpen}
-                onCancel={() => setCropModalOpen(false)}
-                onOk={async () => {
-                  setProfileImageUploading(true);
-                  try {
-                    if (!cropImage || !croppedAreaPixels) return;
-                    const croppedBlob = await getCroppedImg(cropImage, croppedAreaPixels);
-                    const ext = 'jpg';
-                    const filePath = `influencers/profile/${Date.now()}-cropped.jpg`;
-                    const bucketName = 'influencer-profile';
-                    // Get current user and role
-                    const { data: userData } = await supabase.auth.getUser();
-                    const userRole = userData?.user?.user_metadata?.role || 'unknown';
-                    console.log('Uploading to bucket:', bucketName);
-                    console.log('Full file path:', `${bucketName}/${filePath}`);
-                    console.log('Current user role:', userRole);
-                    const { error: uploadError } = await supabase.storage.from(bucketName).upload(filePath, croppedBlob, { upsert: true, contentType: 'image/jpeg' });
-                    if (uploadError) {
-                      console.error('Upload error details:', JSON.stringify(uploadError, null, 2));
-                      throw uploadError;
-                    }
-                    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-                    const url = publicUrlData?.publicUrl;
-                    console.log('Public URL:', url);
-                    if (url) {
-                      form.setFieldsValue({ profile_image_url: url });
-                      setProfileImagePreview(url);
-                    }
-                    setCropModalOpen(false);
-                  } catch (err: any) {
-                    console.error('Crop upload handler error:', err, JSON.stringify(err, null, 2));
-                    message.error(
-                      (err && (err.message || err.error_description || err.error)) ||
-                      JSON.stringify(err) ||
-                      'Failed to upload profile image'
-                    );
-                  } finally {
-                    setProfileImageUploading(false);
-                  }
-                }}
-                okText="Crop & Upload"
-                cancelText="Cancel"
-                width={400}
-                destroyOnClose
-              >
-                {cropImage && (
-                  <div style={{ position: 'relative', width: '100%', height: 300, background: '#222' }}>
-                    <Cropper
-                      image={cropImage}
-                      crop={crop}
-                      zoom={zoom}
-                      aspect={1}
-                      onCropChange={setCrop}
-                      onZoomChange={setZoom}
-                      onCropComplete={(_: any, croppedAreaPixels: any) => setCroppedAreaPixels(croppedAreaPixels)}
+            </div>
+          </Form.Item>
+        </div>
+      )
+    },
+    {
+      title: 'Social Media',
+      content: (
+        <div className="space-y-4">
+          <Form.List name="social_links">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <div key={key} className="flex items-center space-x-2 p-4 border rounded-lg">
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'platform']}
+                      rules={[{ required: true, message: 'Missing platform' }]}
+                      className="flex-1"
+                    >
+                      <Select placeholder="Select platform">
+                        <Select.Option value="instagram">Instagram</Select.Option>
+                        <Select.Option value="youtube">YouTube</Select.Option>
+                        <Select.Option value="tiktok">TikTok</Select.Option>
+                        <Select.Option value="twitter">Twitter</Select.Option>
+                        <Select.Option value="facebook">Facebook</Select.Option>
+                        <Select.Option value="linkedin">LinkedIn</Select.Option>
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'handle']}
+                      rules={[{ required: true, message: 'Missing handle' }]}
+                      className="flex-1"
+                    >
+                      <Input placeholder="Enter handle" />
+                    </Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'followers_count']}
+                      className="flex-1"
+                    >
+                      <InputNumber 
+                        placeholder="Followers count" 
+                        min={0}
+                        className="w-full"
+                      />
+                    </Form.Item>
+                    <Button 
+                      danger 
+                      onClick={() => remove(name)}
+                      icon={<DeleteOutlined />}
                     />
                   </div>
-                )}
-                <div style={{ marginTop: 16 }}>
-                  <span>Zoom: </span>
-                  <Slider min={1} max={3} step={0.1} value={zoom} onChange={setZoom} style={{ width: 200 }} />
-                </div>
-              </AntdModal>
-            </Form.Item>
-          </Col>
-        </Row>
-      ),
-    },
-    {
-      title: 'Social Links',
-      content: (
-        <Form.List name="social_links">
-          {(fields, { add, remove }) => (
-            <div>
-              <Typography.Text strong>Social Media Links</Typography.Text>
-              {fields.map(({ key, name, ...restField }) => (
-                <Space key={key} style={{ display: 'flex', marginBottom: 8, flexWrap: isMobile ? 'wrap' : 'nowrap' }} align="baseline">
-                  <Form.Item {...restField} name={[name, 'platform_id']} rules={[{ required: true, message: 'Platform' }]} style={{ minWidth: 120 }}>
-                    <Select placeholder="Platform">
-                      {platforms.map((p: any) => (
-                        <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item {...restField} name={[name, 'handle']} rules={[{ required: true, message: 'Handle' }]}> <Input placeholder="Handle" /> </Form.Item>
-                  <Form.Item {...restField} name={[name, 'profile_url']} rules={[{ required: true, message: 'Profile URL' }]}> <Input placeholder="Profile URL" /> </Form.Item>
-                  <Form.Item {...restField} name={[name, 'followers_count']} rules={[{ required: true, message: 'Followers' }]}> <Input type="number" placeholder="Followers" min={0} /> </Form.Item>
-                  <Form.Item {...restField} name={[name, 'engagement_rate']} rules={[{ required: false }]}> <Input type="number" step="0.01" placeholder="Engagement %" min={0} max={100} /> </Form.Item>
-                  <Button danger onClick={() => remove(name)} type="link">Remove</Button>
-                </Space>
-              ))}
-              <Form.Item>
-                <Button type="dashed" onClick={() => add()} block>Add Social Link</Button>
-              </Form.Item>
-            </div>
-          )}
-        </Form.List>
-      ),
-    },
-    {
-      title: 'Media',
-      content: (
-        <Form.Item label="Media (Images/Videos)">
-          <Upload
-            multiple
-            accept="image/*,video/*"
-            beforeUpload={() => false}
-            fileList={mediaFiles}
-            onChange={({ fileList }) => setMediaFiles(fileList)}
-            listType="picture"
-          >
-            <Button icon={<UploadOutlined />}>Select Files</Button>
-          </Upload>
-        </Form.Item>
-      ),
-    },
+                ))}
+                <Form.Item>
+                  <Button 
+                    type="dashed" 
+                    onClick={() => add()} 
+                    block 
+                    icon={<PlusOutlined />}
+                  >
+                    Add Social Media Link
+                  </Button>
+                </Form.Item>
+              </>
+            )}
+          </Form.List>
+        </div>
+      )
+    }
   ];
 
   // Step field names for validation
@@ -643,6 +609,16 @@ export default function Influencers() {
     }
   };
   const prev = () => setCurrentStep((s) => s - 1);
+
+  // Check if user can proceed to next step
+  const canProceedToNextStep = () => {
+    if (currentStep === 0) {
+      // Check if required fields are filled
+      const values = form.getFieldsValue();
+      return values.email && values.password && values.name;
+    }
+    return true;
+  };
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
@@ -726,13 +702,52 @@ export default function Influencers() {
               form={form}
               layout="vertical"
               onFinish={handleAddInfluencer}
-              style={{ maxWidth: 520, margin: '0 auto', padding: isMobile ? 8 : 24 }}
+              initialValues={{
+                is_verified: false,
+                social_links: []
+              }}
             >
-              {stepItems[currentStep].content}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 40 }}>
-                {currentStep > 0 && <Button size="large" style={{ minWidth: 120 }} onClick={prev}>Previous</Button>}
-                {currentStep < stepItems.length - 1 && <Button type="primary" size="large" style={{ minWidth: 120, marginLeft: 'auto' }} onClick={next}>Next</Button>}
-                {currentStep === stepItems.length - 1 && <Button type="primary" size="large" style={{ minWidth: 120, marginLeft: 'auto' }} htmlType="submit" loading={formLoading}>Create</Button>}
+              <div className="space-y-6">
+                {/* Render all steps but hide non-active ones */}
+                {stepItems.map((step, index) => (
+                  <div 
+                    key={index}
+                    className={`transition-all duration-300 ${
+                      index === currentStep 
+                        ? 'block opacity-100' 
+                        : 'hidden opacity-0'
+                    }`}
+                  >
+                    {step.content}
+                  </div>
+                ))}
+                
+                <div className="flex justify-between pt-4">
+                  <Button 
+                    onClick={prev}
+                    disabled={currentStep === 0}
+                  >
+                    Previous
+                  </Button>
+                  
+                  {currentStep < stepItems.length - 1 ? (
+                    <Button 
+                      onClick={next}
+                      disabled={!canProceedToNextStep()}
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button 
+                      type="primary" 
+                      htmlType="submit"
+                      loading={formLoading}
+                      disabled={!canProceedToNextStep()}
+                    >
+                      Create Influencer
+                    </Button>
+                  )}
+                </div>
               </div>
             </Form>
           </AntCard>
