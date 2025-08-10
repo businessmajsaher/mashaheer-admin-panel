@@ -73,6 +73,11 @@ export default function Influencers() {
       const token = session?.access_token;
       console.log('JWT access token used for Edge Function:', token);
       
+      // Debug: Log the raw form values
+      console.log('Raw form values:', values);
+      console.log('Form values type:', typeof values);
+      console.log('Form values keys:', Object.keys(values));
+      
       // Prepare the data to send to the Edge Function
       // Note: Your Edge Function only handles basic fields, not social_links
       const influencerData = {
@@ -85,6 +90,7 @@ export default function Influencers() {
       };
       
       console.log('Sending data to Edge Function:', influencerData);
+      console.log('Data being stringified:', JSON.stringify(influencerData, null, 2));
       
       console.log('Making request to Edge Function...');
       const response = await fetch('https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/create-influencer', {

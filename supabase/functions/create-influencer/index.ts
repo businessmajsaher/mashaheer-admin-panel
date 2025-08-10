@@ -47,12 +47,51 @@ serve(async (req: Request) => {
     // Check authorization (basic token check)
     await checkAuthorization(req);
     
+    // Log the raw request body for debugging
+    const rawBody = await req.text();
+    console.log('Raw request body:', rawBody);
+    
     // Parse request body
-    const { email, password, name, bio, profile_image_url, is_verified } = await req.json();
+    let bodyData;
+    try {
+      bodyData = JSON.parse(rawBody);
+      console.log('Parsed body data:', bodyData);
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', parseError);
+      return new Response(JSON.stringify({
+        error: 'Invalid JSON in request body',
+        details: parseError.message
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    const { email, password, name, bio, profile_image_url, is_verified } = bodyData;
+    
+    // Log individual fields for debugging
+    console.log('Extracted fields:', {
+      email: email ? 'present' : 'missing',
+      password: password ? 'present' : 'missing', 
+      name: name ? 'present' : 'missing',
+      bio: bio ? 'present' : 'missing',
+      profile_image_url: profile_image_url ? 'present' : 'missing',
+      is_verified: is_verified ? 'present' : 'missing'
+    });
     
     if (!email || !password || !name) {
+      console.log('Missing required fields. Email:', !!email, 'Password:', !!password, 'Name:', !!name);
       return new Response(JSON.stringify({
-        error: 'Missing required fields: email, password, name'
+        error: 'Missing required fields: email, password, name',
+        received: {
+          email: !!email,
+          password: !!password,
+          name: !!name,
+          bodyKeys: Object.keys(bodyData)
+        }
       }), {
         status: 400,
         headers: {
