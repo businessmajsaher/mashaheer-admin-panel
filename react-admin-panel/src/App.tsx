@@ -7,8 +7,8 @@ import { MainLayout } from '@/layouts/MainLayout';
 const Dashboard = lazy(() => import('@/pages/Dashboard/Dashboard'));
 const Users = lazy(() => import('@/pages/Users/Users'));
 const Influencers = lazy(() => import('@/pages/Influencers/Influencers'));
+const Categories = lazy(() => import('@/pages/Categories/Categories'));
 const Services = lazy(() => import('@/pages/Services/Services'));
-const Orders = lazy(() => import('@/pages/Orders/Orders'));
 const Wallets = lazy(() => import('@/pages/Wallets/Wallets'));
 const Reviews = lazy(() => import('@/pages/Reviews/Reviews'));
 const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
@@ -20,7 +20,7 @@ const Platforms = lazy(() => import('@/pages/Platforms'));
 function ProtectedRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div>Loading...</div>;
-  if (!user /*|| user.role !== 'admin'*/) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -35,17 +35,17 @@ export default function App() {
               <Route path="/signup" element={<Signup />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/users" element={<Users />} />
                   <Route path="/influencers" element={<Influencers />} />
+                  <Route path="/categories" element={<Categories />} />
                   <Route path="/platforms" element={<Platforms />} />
                   <Route path="/services" element={<Services />} />
-                  <Route path="/orders" element={<Orders />} />
                   <Route path="/wallets" element={<Wallets />} />
                   <Route path="/reviews" element={<Reviews />} />
                   <Route path="/bookings" element={<Bookings />} />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Route>
               </Route>
             </Routes>

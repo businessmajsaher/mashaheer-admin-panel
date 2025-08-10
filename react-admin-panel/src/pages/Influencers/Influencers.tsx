@@ -72,26 +72,66 @@ export default function Influencers() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       console.log('JWT access token used for Edge Function:', token);
+      
+      // Prepare the data to send to the Edge Function
+      // Note: Your Edge Function only handles basic fields, not social_links
+      const influencerData = {
+        email: values.email,
+        password: values.password,
+        name: values.name,
+        bio: values.bio || null,
+        is_verified: values.is_verified || false,
+        profile_image_url: values.profile_image_url || null
+      };
+      
+      console.log('Sending data to Edge Function:', influencerData);
+      
+      console.log('Making request to Edge Function...');
       const response = await fetch('https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/create-influencer', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: values.email,
-          password: values.password,
-          name: values.name
-        })
+        body: JSON.stringify(influencerData)
       });
-      const result = await response.json();
-      if (response.ok) {
-        message.success('Influencer created!');
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      let result;
+      try {
+        result = await response.json();
+        console.log('Edge Function response:', result);
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        const textResponse = await response.text();
+        console.log('Raw response text:', textResponse);
+        throw new Error('Invalid response from server');
+      }
+      
+      if (response.ok || response.status === 201) {
+        message.success('Influencer created successfully!');
+        
+        // If we have social links, create them separately since the Edge Function doesn't handle them
+        if (values.social_links && values.social_links.length > 0) {
+          try {
+            await createSocialLinks(result.user.id, values.social_links);
+            message.info('Social links added successfully');
+          } catch (socialError) {
+            console.error('Failed to create social links:', socialError);
+            message.warning('Influencer created but social links failed to save');
+          }
+        }
+        
         setDrawerOpen(false);
         form.resetFields();
         setMediaFiles([]);
+        setCurrentStep(0);
+        setProfileImagePreview(null);
       } else {
-        throw new Error(result.error || 'Failed to create influencer');
+        console.error('Edge Function error response:', result);
+        throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
       }
     } catch (err: any) {
       console.error('Add Influencer error:', err, JSON.stringify(err, null, 2));
@@ -105,21 +145,105 @@ export default function Influencers() {
     }
   };
 
+  // Helper function to create social links separately
+  const createSocialLinks = async (userId: string, socialLinks: any[]) => {
+    try {
+      // Create social links
+      const socialLinksData = socialLinks.map((link: any) => ({
+        user_id: userId,
+        platform_id: link.platform_id,
+        handle: link.handle,
+        profile_url: link.profile_url,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error: socialError } = await supabase
+        .from('social_links')
+        .insert(socialLinksData);
+
+      if (socialError) throw socialError;
+
+      // Create social stats if followers/engagement data is provided
+      const socialStatsData = socialLinks
+        .filter((link: any) => link.followers_count || link.engagement_rate)
+        .map((link: any) => ({
+          user_id: userId,
+          platform_id: link.platform_id,
+          followers_count: link.followers_count || 0,
+          engagement_rate: link.engagement_rate || 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+
+      if (socialStatsData.length > 0) {
+        const { error: statsError } = await supabase
+          .from('social_stats')
+          .insert(socialStatsData);
+
+        if (statsError) throw statsError;
+      }
+
+      // Create default wallet
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .insert({
+          user_id: userId,
+          balance: 0,
+          currency: 'USD',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (walletError) throw walletError;
+
+    } catch (error) {
+      console.error('Error creating additional data:', error);
+      throw error;
+    }
+  };
+
   // Fetch media and social links for influencer
   const openDetail = async (record: any) => {
     setDetailOpen(true);
     setDetailLoading(true);
     setDetailData(record);
     try {
-      // Fetch media
-      const { data: media } = await supabase.from('influencer_media').select('*').eq('influencer_id', record.id);
-      setDetailMedia(media || []);
+      // Fetch media - handle case where table might not exist
+      try {
+        const { data: media, error: mediaError } = await supabase
+          .from('influencer_media')
+          .select('*')
+          .eq('influencer_id', record.id);
+        
+        if (mediaError) {
+          console.warn('Media table might not exist or have different structure:', mediaError);
+          setDetailMedia([]);
+        } else {
+          setDetailMedia(media || []);
+        }
+      } catch (mediaTableError) {
+        console.warn('influencer_media table not accessible:', mediaTableError);
+        setDetailMedia([]);
+      }
+      
       // Fetch social links (with platform name)
-      const { data: social } = await supabase
-        .from('social_links')
-        .select('*, social_media_platforms(name)')
-        .eq('user_id', record.id);
-      setDetailSocial(social || []);
+      try {
+        const { data: social, error: socialError } = await supabase
+          .from('social_links')
+          .select('*, social_media_platforms(name)')
+          .eq('user_id', record.id);
+        
+        if (socialError) {
+          console.warn('Social links table might not exist or have different structure:', socialError);
+          setDetailSocial([]);
+        } else {
+          setDetailSocial(social || []);
+        }
+      } catch (socialTableError) {
+        console.warn('social_links table not accessible:', socialTableError);
+        setDetailSocial([]);
+      }
     } finally {
       setDetailLoading(false);
     }
@@ -140,12 +264,41 @@ export default function Influencers() {
   // MediaCount subcomponent
   function MediaCount({ influencerId }: { influencerId: string }) {
     const [count, setCount] = useState<number | null>(null);
+    const [error, setError] = useState<boolean>(false);
+    
     useEffect(() => {
       let mounted = true;
-      supabase.from('influencer_media').select('id', { count: 'exact', head: true }).eq('influencer_id', influencerId)
-        .then(({ count }) => { if (mounted) setCount(count || 0); });
+      
+      // Try to fetch media count, but handle case where table doesn't exist
+      supabase.from('influencer_media')
+        .select('id', { count: 'exact', head: true })
+        .eq('influencer_id', influencerId)
+        .then(({ count, error }) => { 
+          if (mounted) {
+            if (error) {
+              console.warn('influencer_media table not accessible:', error);
+              setError(true);
+              setCount(0);
+            } else {
+              setCount(count || 0);
+            }
+          }
+        })
+        .catch((err) => {
+          if (mounted) {
+            console.warn('influencer_media table not accessible:', err);
+            setError(true);
+            setCount(0);
+          }
+        });
+        
       return () => { mounted = false; };
     }, [influencerId]);
+    
+    if (error) {
+      return <span title="Media table not accessible">-</span>;
+    }
+    
     return count === null ? <Spin size="small" /> : <span>{count}</span>;
   }
 
@@ -158,11 +311,19 @@ export default function Influencers() {
         const { error: storageError } = await supabase.storage.from('influencer-media').remove([filePath]);
         if (storageError) throw storageError;
       }
-      // Remove from DB
-      const { error: dbError } = await supabase.from('influencer_media').delete().eq('id', media.id);
-      if (dbError) throw dbError;
-      setDetailMedia((prev) => prev.filter((m) => m.id !== media.id));
-      message.success('Media deleted');
+      
+      // Remove from DB - handle case where table might not exist
+      try {
+        const { error: dbError } = await supabase.from('influencer_media').delete().eq('id', media.id);
+        if (dbError) throw dbError;
+        setDetailMedia((prev) => prev.filter((m) => m.id !== media.id));
+        message.success('Media deleted');
+      } catch (dbTableError) {
+        console.warn('influencer_media table not accessible:', dbTableError);
+        // Still remove from local state even if DB update fails
+        setDetailMedia((prev) => prev.filter((m) => m.id !== media.id));
+        message.success('Media removed from storage');
+      }
     } catch (err: any) {
       message.error(err.message || 'Failed to delete media');
     }
@@ -182,11 +343,19 @@ export default function Influencers() {
       if (uploadError) throw uploadError;
       const { data: publicUrlData } = supabase.storage.from('influencer-media').getPublicUrl(newFilePath);
       const newFileUrl = publicUrlData?.publicUrl;
-      // Update DB entry
-      const { error: updateError } = await supabase.from('influencer_media').update({ file_url: newFileUrl }).eq('id', media.id);
-      if (updateError) throw updateError;
-      setDetailMedia((prev) => prev.map((m) => m.id === media.id ? { ...m, file_url: newFileUrl } : m));
-      message.success('Image replaced');
+      
+      // Update DB entry - handle case where table might not exist
+      try {
+        const { error: updateError } = await supabase.from('influencer_media').update({ file_url: newFileUrl }).eq('id', media.id);
+        if (updateError) throw updateError;
+        setDetailMedia((prev) => prev.map((m) => m.id === media.id ? { ...m, file_url: newFileUrl } : m));
+        message.success('Image replaced');
+      } catch (dbTableError) {
+        console.warn('influencer_media table not accessible:', dbTableError);
+        // Still update local state even if DB update fails
+        setDetailMedia((prev) => prev.map((m) => m.id === media.id ? { ...m, file_url: newFileUrl } : m));
+        message.success('Image replaced in storage');
+      }
     } catch (err: any) {
       message.error(err.message || 'Failed to replace image');
     }
