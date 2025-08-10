@@ -66,17 +66,47 @@ export default function Influencers() {
 
   // Add Influencer handler
   const handleAddInfluencer = async (values: any) => {
+    console.log('=== FORM SUBMISSION DEBUG ===');
+    console.log('1. Raw form values received:', values);
+    console.log('2. Form values type:', typeof values);
+    console.log('3. Form values keys:', Object.keys(values));
+    console.log('4. Form values length:', Object.keys(values).length);
+    console.log('5. Individual field values:');
+    console.log('   - email:', values.email, 'Type:', typeof values.email, 'Present:', !!values.email);
+    console.log('   - password:', values.password ? '[HIDDEN]' : 'missing', 'Type:', typeof values.password, 'Present:', !!values.password);
+    console.log('   - name:', values.name, 'Type:', typeof values.name, 'Present:', !!values.name);
+    console.log('   - bio:', values.bio, 'Type:', typeof values.bio, 'Present:', !!values.bio);
+    console.log('   - is_verified:', values.is_verified, 'Type:', typeof values.is_verified, 'Present:', !!values.is_verified);
+    console.log('   - profile_image_url:', values.profile_image_url, 'Type:', typeof values.profile_image_url, 'Present:', !!values.profile_image_url);
+    
+    // Check if form is valid
+    try {
+      await form.validateFields();
+      console.log('6. Form validation passed');
+    } catch (validationError: any) {
+      console.error('6. Form validation failed:', validationError);
+      console.error('Validation error details:', validationError.errorFields);
+      setFormError('Form validation failed. Please check all required fields.');
+      setFormLoading(false);
+      return;
+    }
+    
+    // Get current form values again after validation
+    const currentFormValues = form.getFieldsValue();
+    console.log('7. Current form values after validation:', currentFormValues);
+    console.log('8. Current form values keys:', Object.keys(currentFormValues));
+    
     setFormLoading(true);
     setFormError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      console.log('JWT access token used for Edge Function:', token);
+      console.log('9. JWT access token used for Edge Function:', token);
       
-      // Debug: Log the raw form values
-      console.log('Raw form values:', values);
-      console.log('Form values type:', typeof values);
-      console.log('Form values keys:', Object.keys(values));
+      // Debug: Log the raw form values again
+      console.log('10. Raw form values (again):', values);
+      console.log('11. Form values type (again):', typeof values);
+      console.log('12. Form values keys (again):', Object.keys(values));
       
       // Prepare the data to send to the Edge Function
       // Note: Your Edge Function only handles basic fields, not social_links
@@ -89,10 +119,10 @@ export default function Influencers() {
         profile_image_url: values.profile_image_url || null
       };
       
-      console.log('Sending data to Edge Function:', influencerData);
-      console.log('Data being stringified:', JSON.stringify(influencerData, null, 2));
+      console.log('13. Sending data to Edge Function:', influencerData);
+      console.log('14. Data being stringified:', JSON.stringify(influencerData, null, 2));
       
-      console.log('Making request to Edge Function...');
+      console.log('15. Making request to Edge Function...');
       const response = await fetch('https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/create-influencer', {
         method: 'POST',
         headers: {
@@ -102,21 +132,22 @@ export default function Influencers() {
         body: JSON.stringify(influencerData)
       });
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('16. Response status:', response.status);
+      console.log('17. Response headers:', Object.fromEntries(response.headers.entries()));
       
       let result;
       try {
         result = await response.json();
-        console.log('Edge Function response:', result);
+        console.log('18. Edge Function response:', result);
       } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
+        console.error('19. Failed to parse response:', parseError);
         const textResponse = await response.text();
-        console.log('Raw response text:', textResponse);
+        console.log('20. Raw response text:', textResponse);
         throw new Error('Invalid response from server');
       }
       
       if (response.ok || response.status === 201) {
+        console.log('21. Success! Influencer created');
         message.success('Influencer created successfully!');
         
         // If we have social links, create them separately since the Edge Function doesn't handle them
@@ -136,11 +167,11 @@ export default function Influencers() {
         setCurrentStep(0);
         setProfileImagePreview(null);
       } else {
-        console.error('Edge Function error response:', result);
+        console.error('22. Edge Function error response:', result);
         throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
       }
     } catch (err: any) {
-      console.error('Add Influencer error:', err, JSON.stringify(err, null, 2));
+      console.error('23. Add Influencer error:', err, JSON.stringify(err, null, 2));
       setFormError(
         (err && (err.message || err.error_description || err.error)) ||
         JSON.stringify(err) ||
@@ -275,28 +306,34 @@ export default function Influencers() {
     useEffect(() => {
       let mounted = true;
       
-      // Try to fetch media count, but handle case where table doesn't exist
-      supabase.from('influencer_media')
-        .select('id', { count: 'exact', head: true })
-        .eq('influencer_id', influencerId)
-        .then(({ count, error }) => { 
+      async function fetchMediaCount() {
+        try {
+          const { data, error, count } = await supabase
+            .from('influencer_media')
+            .select('id', { count: 'exact', head: true })
+            .eq('influencer_id', influencerId);
+          
           if (mounted) {
             if (error) {
               console.warn('influencer_media table not accessible:', error);
               setError(true);
               setCount(0);
+            } else if (count !== null) {
+              setCount(count);
             } else {
-              setCount(count || 0);
+              setCount(0);
             }
           }
-        })
-        .catch((err) => {
+        } catch (err: any) {
           if (mounted) {
             console.warn('influencer_media table not accessible:', err);
             setError(true);
             setCount(0);
           }
-        });
+        }
+      }
+      
+      fetchMediaCount();
         
       return () => { mounted = false; };
     }, [influencerId]);
@@ -492,11 +529,7 @@ export default function Influencers() {
                       console.error('Upload error details:', JSON.stringify(uploadError, null, 2));
                       throw uploadError;
                     }
-                    const { data: publicUrlData, error: urlError } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-                    if (urlError) {
-                      console.error('Public URL error:', JSON.stringify(urlError, null, 2));
-                      throw urlError;
-                    }
+                    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
                     const url = publicUrlData?.publicUrl;
                     console.log('Public URL:', url);
                     if (url) {
