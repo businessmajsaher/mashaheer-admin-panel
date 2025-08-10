@@ -28,8 +28,15 @@ async function checkAuthorization(req: Request) {
 }
 
 serve(async (req: Request) => {
+  // Log the complete request details
+  console.log('=== EDGE FUNCTION REQUEST LOG ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Headers:', Object.fromEntries(req.headers.entries()));
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response(null, {
       status: 204,
       headers: corsHeaders
@@ -37,6 +44,7 @@ serve(async (req: Request) => {
   }
 
   if (req.method !== 'POST') {
+    console.log('Invalid method:', req.method);
     return new Response('Method Not Allowed', {
       status: 405,
       headers: corsHeaders
@@ -44,23 +52,37 @@ serve(async (req: Request) => {
   }
 
   try {
+    console.log('Processing POST request...');
+    
     // Check authorization (basic token check)
     await checkAuthorization(req);
+    console.log('Authorization passed');
     
     // Log the raw request body for debugging
     const rawBody = await req.text();
+    console.log('=== REQUEST BODY DETAILS ===');
+    console.log('Raw request body length:', rawBody.length);
     console.log('Raw request body:', rawBody);
+    console.log('Raw body type:', typeof rawBody);
+    console.log('Raw body is empty?', rawBody === '');
     
     // Parse request body
     let bodyData;
     try {
       bodyData = JSON.parse(rawBody);
+      console.log('=== PARSED BODY DATA ===');
       console.log('Parsed body data:', bodyData);
+      console.log('Parsed body type:', typeof bodyData);
+      console.log('Parsed body keys:', Object.keys(bodyData));
+      console.log('Is bodyData an object?', typeof bodyData === 'object' && bodyData !== null);
     } catch (parseError) {
+      console.error('=== JSON PARSE ERROR ===');
       console.error('Failed to parse JSON:', parseError);
+      console.error('Parse error message:', parseError.message);
       return new Response(JSON.stringify({
         error: 'Invalid JSON in request body',
-        details: parseError.message
+        details: parseError.message,
+        rawBody: rawBody.substring(0, 200) + (rawBody.length > 200 ? '...' : '')
       }), {
         status: 400,
         headers: {
@@ -73,24 +95,33 @@ serve(async (req: Request) => {
     const { email, password, name, bio, profile_image_url, is_verified } = bodyData;
     
     // Log individual fields for debugging
-    console.log('Extracted fields:', {
-      email: email ? 'present' : 'missing',
-      password: password ? 'present' : 'missing', 
-      name: name ? 'present' : 'missing',
-      bio: bio ? 'present' : 'missing',
-      profile_image_url: profile_image_url ? 'present' : 'missing',
-      is_verified: is_verified ? 'present' : 'missing'
-    });
+    console.log('=== EXTRACTED FIELDS ===');
+    console.log('Email:', email, 'Type:', typeof email, 'Present:', !!email);
+    console.log('Password:', password ? '[HIDDEN]' : 'missing', 'Type:', typeof password, 'Present:', !!password);
+    console.log('Name:', name, 'Type:', typeof name, 'Present:', !!name);
+    console.log('Bio:', bio, 'Type:', typeof bio, 'Present:', !!bio);
+    console.log('Profile Image URL:', profile_image_url, 'Type:', typeof profile_image_url, 'Present:', !!profile_image_url);
+    console.log('Is Verified:', is_verified, 'Type:', typeof is_verified, 'Present:', !!is_verified);
     
     if (!email || !password || !name) {
+      console.log('=== MISSING REQUIRED FIELDS ===');
       console.log('Missing required fields. Email:', !!email, 'Password:', !!password, 'Name:', !!name);
+      console.log('Email value:', email);
+      console.log('Password value:', password ? '[HIDDEN]' : 'missing');
+      console.log('Name value:', name);
+      console.log('All body keys:', Object.keys(bodyData));
+      console.log('Body data stringified:', JSON.stringify(bodyData, null, 2));
+      
       return new Response(JSON.stringify({
         error: 'Missing required fields: email, password, name',
         received: {
           email: !!email,
           password: !!password,
           name: !!name,
-          bodyKeys: Object.keys(bodyData)
+          bodyKeys: Object.keys(bodyData),
+          emailValue: email,
+          nameValue: name,
+          passwordPresent: !!password
         }
       }), {
         status: 400,
@@ -100,6 +131,9 @@ serve(async (req: Request) => {
         }
       });
     }
+
+    console.log('=== ALL REQUIRED FIELDS PRESENT ===');
+    console.log('Proceeding with user creation...');
 
     // Create Supabase client with service role key
     const supabase = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
@@ -174,6 +208,7 @@ serve(async (req: Request) => {
       });
     }
 
+    console.log('=== SUCCESS ===');
     console.log('User and profile created successfully:', profileData);
 
     return new Response(JSON.stringify({
@@ -192,7 +227,12 @@ serve(async (req: Request) => {
     });
 
   } catch (error: any) {
-    console.error('Edge Function error:', error);
+    console.error('=== EDGE FUNCTION ERROR ===');
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error object:', error);
+    
     return new Response(JSON.stringify({
       error: error.message || 'Internal Server Error'
     }), {
