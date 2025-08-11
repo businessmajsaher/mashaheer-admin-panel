@@ -521,11 +521,14 @@ export default function Influencers() {
                   icon={<UploadOutlined />}
                   size="large"
                   style={{
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     border: 'none',
-                    boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)',
-                    transition: 'all 0.3s ease'
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                    transition: 'all 0.3s ease',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}
                 >
                   Upload Image
@@ -539,9 +542,14 @@ export default function Influencers() {
                       form.setFieldsValue({ profile_image_url: null });
                     }}
                     style={{
-                      borderRadius: '8px',
-                      boxShadow: '0 2px 8px rgba(255, 77, 79, 0.2)',
-                      transition: 'all 0.3s ease'
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)',
+                      border: 'none',
+                      boxShadow: '0 4px 15px rgba(255, 107, 107, 0.4)',
+                      transition: 'all 0.3s ease',
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
                     }}
                   >
                     Remove
@@ -561,12 +569,11 @@ export default function Influencers() {
                 }}
               />
               {profileImagePreview && (
-                <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                  <p className="text-sm text-gray-600 mb-2">Profile Image Preview:</p>
+                <div className="mt-3 inline-block">
                   <img 
                     src={profileImagePreview} 
                     alt="Profile preview" 
-                    className="w-24 h-24 object-cover rounded-lg border-2 border-white shadow-md"
+                    className="w-16 h-16 object-cover rounded-full border-2 border-white shadow-lg"
                   />
                 </div>
               )}
