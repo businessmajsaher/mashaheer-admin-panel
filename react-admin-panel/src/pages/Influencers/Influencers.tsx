@@ -618,25 +618,7 @@ export default function Influencers() {
   };
   const prev = () => setCurrentStep((s) => s - 1);
 
-  // Check if user can proceed to next step
-  const canProceedToNextStep = () => {
-    if (currentStep === 0) {
-      // Check if required fields are filled
-      const values = form.getFieldsValue();
-      console.log('=== CAN PROCEED CHECK ===');
-      console.log('Current step:', currentStep);
-      console.log('Form values:', values);
-      console.log('Email present:', !!values.email, 'Value:', values.email);
-      console.log('Password present:', !!values.password, 'Value:', values.password ? '[HIDDEN]' : 'missing');
-      console.log('Name present:', !!values.name, 'Value:', values.name);
-      
-      const canProceed = values.email && values.password && values.name;
-      console.log('Final result - Can proceed:', canProceed);
-      return canProceed;
-    }
-    console.log('Not step 0, can proceed:', true);
-    return true;
-  };
+
 
   // Reset form when drawer opens
   useEffect(() => {
@@ -770,23 +752,11 @@ export default function Influencers() {
                     Previous
                   </Button>
                   
-                  {/* Debug button to check form values */}
-                  <Button 
-                    onClick={() => {
-                      const values = form.getFieldsValue();
-                      console.log('=== MANUAL FORM CHECK ===');
-                      console.log('All form values:', values);
-                      console.log('Form instance:', form);
-                    }}
-                    size="small"
-                  >
-                    Debug Form
-                  </Button>
+
                   
                   {currentStep < stepItems.length - 1 ? (
                     <Button 
                       onClick={next}
-                      disabled={!canProceedToNextStep()}
                     >
                       Next
                     </Button>
@@ -795,7 +765,6 @@ export default function Influencers() {
                       type="primary" 
                       htmlType="submit"
                       loading={formLoading}
-                      disabled={!canProceedToNextStep()}
                     >
                       Create Influencer
                     </Button>
