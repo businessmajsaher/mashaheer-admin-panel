@@ -623,9 +623,15 @@ export default function Influencers() {
     if (currentStep === 0) {
       // Check if required fields are filled
       const values = form.getFieldsValue();
-      console.log('Checking if can proceed from step 0:', values);
+      console.log('=== CAN PROCEED CHECK ===');
+      console.log('Current step:', currentStep);
+      console.log('Form values:', values);
+      console.log('Email present:', !!values.email, 'Value:', values.email);
+      console.log('Password present:', !!values.password, 'Value:', values.password ? '[HIDDEN]' : 'missing');
+      console.log('Name present:', !!values.name, 'Value:', values.name);
+      
       const canProceed = values.email && values.password && values.name;
-      console.log('Can proceed:', canProceed);
+      console.log('Final result - Can proceed:', canProceed);
       return canProceed;
     }
     console.log('Not step 0, can proceed:', true);
@@ -744,10 +750,17 @@ export default function Influencers() {
               }}
             >
               <div className="space-y-6">
-                {/* Render only the current step */}
-                <div className="transition-all duration-300">
-                  {stepItems[currentStep].content}
-                </div>
+                {/* Render all steps but hide non-active ones */}
+                {stepItems.map((step, index) => (
+                  <div 
+                    key={index}
+                    style={{
+                      display: index === currentStep ? 'block' : 'none'
+                    }}
+                  >
+                    {step.content}
+                  </div>
+                ))}
                 
                 <div className="flex justify-between pt-4">
                   <Button 
@@ -755,6 +768,19 @@ export default function Influencers() {
                     disabled={currentStep === 0}
                   >
                     Previous
+                  </Button>
+                  
+                  {/* Debug button to check form values */}
+                  <Button 
+                    onClick={() => {
+                      const values = form.getFieldsValue();
+                      console.log('=== MANUAL FORM CHECK ===');
+                      console.log('All form values:', values);
+                      console.log('Form instance:', form);
+                    }}
+                    size="small"
+                  >
+                    Debug Form
                   </Button>
                   
                   {currentStep < stepItems.length - 1 ? (
