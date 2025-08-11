@@ -522,9 +522,9 @@ export default function Influencers() {
                   size="large"
                   style={{
                     borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
                     border: 'none',
-                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                    boxShadow: '0 4px 15px rgba(24, 144, 255, 0.4)',
                     transition: 'all 0.3s ease',
                     fontWeight: '600',
                     textTransform: 'uppercase',
@@ -560,7 +560,7 @@ export default function Influencers() {
                 id="profile-upload"
                 type="file"
                 accept="image/*"
-                className="hidden"
+                style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
