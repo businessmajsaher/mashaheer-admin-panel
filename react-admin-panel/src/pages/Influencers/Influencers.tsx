@@ -515,19 +515,6 @@ export default function Influencers() {
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Profile Image</span>}
           >
             <div className="space-y-4">
-              <Input 
-                placeholder="Enter profile image URL (optional)" 
-                value={profileImagePreview || ''}
-                onChange={(e) => setProfileImagePreview(e.target.value)}
-                size="large"
-                style={{
-                  borderRadius: '8px',
-                  border: '1px solid #d9d9d9',
-                  padding: '12px 16px',
-                  fontSize: '14px',
-                  transition: 'all 0.3s ease'
-                }}
-              />
               <div className="flex items-center space-x-3">
                 <Button 
                   onClick={() => document.getElementById('profile-upload')?.click()}
@@ -561,24 +548,25 @@ export default function Influencers() {
                   </Button>
                 )}
               </div>
-                             <input
-                 id="profile-upload"
-                 type="file"
-                 accept="image/*"
-                 className="hidden"
-                 onChange={(e) => {
-                   const file = e.target.files?.[0];
-                   if (file) {
-                     handleProfileImageUpload(file);
-                   }
-                 }}
-               />
+                                           <input
+                id="profile-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleProfileImageUpload(file);
+                  }
+                }}
+              />
               {profileImagePreview && (
-                <div className="mt-2">
+                <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                  <p className="text-sm text-gray-600 mb-2">Profile Image Preview:</p>
                   <img 
                     src={profileImagePreview} 
                     alt="Profile preview" 
-                    className="w-20 h-20 object-cover rounded-lg border"
+                    className="w-24 h-24 object-cover rounded-lg border-2 border-white shadow-md"
                   />
                 </div>
               )}
