@@ -412,46 +412,83 @@ export default function Influencers() {
     {
       title: 'Basic Information',
       content: (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Form.Item
             name="email"
-            label="Email"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Email</span>}
             rules={[
               { required: true, message: 'Please input email!' },
               { type: 'email', message: 'Please enter a valid email!' }
             ]}
           >
-            <Input placeholder="Enter email" />
+            <Input 
+              placeholder="Enter email" 
+              size="large"
+              style={{
+                borderRadius: '8px',
+                border: '1px solid #d9d9d9',
+                padding: '12px 16px',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+            />
           </Form.Item>
           
           <Form.Item
             name="password"
-            label="Password"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Password</span>}
             rules={[
               { required: true, message: 'Please input password!' },
               { min: 6, message: 'Password must be at least 6 characters!' }
             ]}
           >
-            <Input.Password placeholder="Enter password" />
+            <Input.Password 
+              placeholder="Enter password" 
+              size="large"
+              style={{
+                borderRadius: '8px',
+                border: '1px solid #d9d9d9',
+                padding: '12px 16px',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+            />
           </Form.Item>
           
           <Form.Item
             name="name"
-            label="Full Name"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Full Name</span>}
             rules={[{ required: true, message: 'Please input full name!' }]}
           >
-            <Input placeholder="Enter full name" />
+            <Input 
+              placeholder="Enter full name" 
+              size="large"
+              style={{
+                borderRadius: '8px',
+                border: '1px solid #d9d9d9',
+                padding: '12px 16px',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+            />
           </Form.Item>
           
           <Form.Item
             name="bio"
-            label="Bio"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Bio</span>}
           >
             <Input.TextArea 
               rows={4} 
               placeholder="Enter bio (optional)" 
               maxLength={500}
               showCount
+              style={{
+                borderRadius: '8px',
+                border: '1px solid #d9d9d9',
+                padding: '12px 16px',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
             />
           </Form.Item>
         </div>
@@ -460,38 +497,64 @@ export default function Influencers() {
     {
       title: 'Profile Settings',
       content: (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Form.Item
             name="is_verified"
-            label="Verification Status"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Verification Status</span>}
             valuePropName="checked"
           >
-            <Switch />
+            <Switch 
+              style={{
+                backgroundColor: '#d9d9d9'
+              }}
+            />
           </Form.Item>
           
           <Form.Item
             name="profile_image_url"
-            label="Profile Image"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Profile Image</span>}
           >
-            <div className="space-y-2">
+            <div className="space-y-4">
               <Input 
                 placeholder="Enter profile image URL (optional)" 
                 value={profileImagePreview || ''}
                 onChange={(e) => setProfileImagePreview(e.target.value)}
+                size="large"
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid #d9d9d9',
+                  padding: '12px 16px',
+                  fontSize: '14px',
+                  transition: 'all 0.3s ease'
+                }}
               />
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Button 
                   onClick={() => document.getElementById('profile-upload')?.click()}
                   icon={<UploadOutlined />}
+                  size="large"
+                  style={{
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+                    border: 'none',
+                    boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
                 >
                   Upload Image
                 </Button>
                 {profileImagePreview && (
                   <Button 
                     danger 
+                    size="large"
                     onClick={() => {
                       setProfileImagePreview(null);
                       form.setFieldsValue({ profile_image_url: null });
+                    }}
+                    style={{
+                      borderRadius: '8px',
+                      boxShadow: '0 2px 8px rgba(255, 77, 79, 0.2)',
+                      transition: 'all 0.3s ease'
                     }}
                   >
                     Remove
@@ -527,19 +590,25 @@ export default function Influencers() {
     {
       title: 'Social Media',
       content: (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Form.List name="social_links">
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <div key={key} className="flex items-center space-x-2 p-4 border rounded-lg">
+                  <div key={key} className="flex items-center space-x-3 p-6 border border-gray-200 rounded-xl bg-gray-50">
                     <Form.Item
                       {...restField}
                       name={[name, 'platform']}
                       rules={[{ required: true, message: 'Missing platform' }]}
                       className="flex-1"
                     >
-                      <Select placeholder="Select platform">
+                      <Select 
+                        placeholder="Select platform"
+                        size="large"
+                        style={{
+                          borderRadius: '8px'
+                        }}
+                      >
                         <Select.Option value="instagram">Instagram</Select.Option>
                         <Select.Option value="youtube">YouTube</Select.Option>
                         <Select.Option value="tiktok">TikTok</Select.Option>
@@ -554,7 +623,17 @@ export default function Influencers() {
                       rules={[{ required: true, message: 'Missing handle' }]}
                       className="flex-1"
                     >
-                      <Input placeholder="Enter handle" />
+                      <Input 
+                        placeholder="Enter handle" 
+                        size="large"
+                        style={{
+                          borderRadius: '8px',
+                          border: '1px solid #d9d9d9',
+                          padding: '12px 16px',
+                          fontSize: '14px',
+                          transition: 'all 0.3s ease'
+                        }}
+                      />
                     </Form.Item>
                     <Form.Item
                       {...restField}
@@ -564,13 +643,27 @@ export default function Influencers() {
                       <InputNumber 
                         placeholder="Followers count" 
                         min={0}
-                        className="w-full"
+                        size="large"
+                        style={{
+                          borderRadius: '8px',
+                          border: '1px solid #d9d9d9',
+                          padding: '12px 16px',
+                          fontSize: '14px',
+                          transition: 'all 0.3s ease',
+                          width: '100%'
+                        }}
                       />
                     </Form.Item>
                     <Button 
                       danger 
                       onClick={() => remove(name)}
                       icon={<DeleteOutlined />}
+                      size="large"
+                      style={{
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 8px rgba(255, 77, 79, 0.2)',
+                        transition: 'all 0.3s ease'
+                      }}
                     />
                   </div>
                 ))}
@@ -580,6 +673,16 @@ export default function Influencers() {
                     onClick={() => add()} 
                     block 
                     icon={<PlusOutlined />}
+                    size="large"
+                    style={{
+                      borderRadius: '8px',
+                      border: '2px dashed #1890ff',
+                      color: '#1890ff',
+                      height: '48px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      transition: 'all 0.3s ease'
+                    }}
                   >
                     Add Social Media Link
                   </Button>
@@ -744,19 +847,41 @@ export default function Influencers() {
                   </div>
                 ))}
                 
-                <div className="flex justify-between pt-4">
+                                <div className="flex justify-between items-center pt-8 pb-4">
                   <Button 
                     onClick={prev}
                     disabled={currentStep === 0}
+                    size="large"
+                    style={{
+                      minWidth: '120px',
+                      height: '44px',
+                      borderRadius: '8px',
+                      border: currentStep === 0 ? '1px solid #d9d9d9' : '1px solid #1890ff',
+                      color: currentStep === 0 ? '#bfbfbf' : '#1890ff',
+                      background: currentStep === 0 ? '#f5f5f5' : '#ffffff',
+                      boxShadow: currentStep === 0 ? 'none' : '0 2px 8px rgba(24, 144, 255, 0.15)',
+                      transition: 'all 0.3s ease'
+                    }}
+                    icon={currentStep === 0 ? null : <span>←</span>}
                   >
                     Previous
                   </Button>
                   
-
-                  
                   {currentStep < stepItems.length - 1 ? (
                     <Button 
                       onClick={next}
+                      type="primary"
+                      size="large"
+                      style={{
+                        minWidth: '120px',
+                        height: '44px',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+                        border: 'none',
+                        boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                        transition: 'all 0.3s ease'
+                      }}
+                      icon={<span>→</span>}
                     >
                       Next
                     </Button>
@@ -765,6 +890,19 @@ export default function Influencers() {
                       type="primary" 
                       htmlType="submit"
                       loading={formLoading}
+                      size="large"
+                      style={{
+                        minWidth: '140px',
+                        height: '48px',
+                        borderRadius: '10px',
+                        background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+                        border: 'none',
+                        boxShadow: '0 6px 16px rgba(82, 196, 26, 0.3)',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        transition: 'all 0.3s ease'
+                      }}
+                      icon={<span>✓</span>}
                     >
                       Create Influencer
                     </Button>
