@@ -67,6 +67,8 @@ export default function Influencers() {
   // Add Influencer handler
   const handleAddInfluencer = async (values: any) => {
     console.log('=== FORM SUBMISSION DEBUG ===');
+    console.log('Form submission triggered at:', new Date().toISOString());
+    console.log('Current step:', currentStep);
     console.log('1. Raw form values received:', values);
     console.log('2. Form values type:', typeof values);
     console.log('3. Form values keys:', Object.keys(values));
@@ -744,22 +746,34 @@ export default function Influencers() {
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
+    console.log('=== PROFILE IMAGE UPLOAD STARTED ===');
+    console.log('File selected:', file.name, file.size, file.type);
+    
     setProfileImageUploading(true);
     try {
       const ext = file.name.split('.').pop();
       const filePath = `influencers/profile/${Date.now()}-${file.name}`;
+      console.log('Uploading to path:', filePath);
+      
       const { error: uploadError } = await supabase.storage.from('influencer-profile').upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
+      
       const { data: publicUrlData } = supabase.storage.from('influencer-profile').getPublicUrl(filePath);
       const url = publicUrlData?.publicUrl;
+      console.log('Upload successful, URL:', url);
+      
       if (url) {
+        console.log('Setting form field profile_image_url to:', url);
         form.setFieldsValue({ profile_image_url: url });
         setProfileImagePreview(url);
+        console.log('Form field updated, preview set');
       }
     } catch (err: any) {
+      console.error('Upload error:', err);
       message.error(err.message || 'Failed to upload profile image');
     } finally {
       setProfileImageUploading(false);
+      console.log('=== PROFILE IMAGE UPLOAD COMPLETED ===');
     }
   };
 
