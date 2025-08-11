@@ -592,19 +592,27 @@ export default function Influencers() {
     }
   ];
 
-  // Step field names for validation
-  const stepFieldNames = [
-    ["name", "email", "password", "bio", "profile_image_url", "is_verified"],
-    ["social_links"],
-    ["mediaFiles"] // Not a form field, but for completeness
-  ];
-
   // Step navigation with validation
   const next = async () => {
     try {
-      await form.validateFields(stepFieldNames[currentStep]);
+      console.log('Next button clicked, current step:', currentStep);
+      
+      if (currentStep === 0) {
+        // Validate only required fields for step 1
+        await form.validateFields(['email', 'password', 'name']);
+        console.log('Step 1 validation passed');
+      } else if (currentStep === 1) {
+        // Step 2 has no required fields, just proceed
+        console.log('Step 2 - no validation needed');
+      } else if (currentStep === 2) {
+        // Step 3 has no required fields, just proceed
+        console.log('Step 3 - no validation needed');
+      }
+      
       setCurrentStep((s) => s + 1);
+      console.log('Moved to step:', currentStep + 1);
     } catch (err) {
+      console.error('Validation failed:', err);
       // Validation errors are shown by AntD
     }
   };
@@ -615,10 +623,38 @@ export default function Influencers() {
     if (currentStep === 0) {
       // Check if required fields are filled
       const values = form.getFieldsValue();
-      return values.email && values.password && values.name;
+      console.log('Checking if can proceed from step 0:', values);
+      const canProceed = values.email && values.password && values.name;
+      console.log('Can proceed:', canProceed);
+      return canProceed;
     }
+    console.log('Not step 0, can proceed:', true);
     return true;
   };
+
+  // Reset form when drawer opens
+  useEffect(() => {
+    if (drawerOpen) {
+      form.resetFields();
+      setCurrentStep(0);
+      setFormError(null);
+      setProfileImagePreview(null);
+      console.log('Form reset, current step:', 0);
+    }
+  }, [drawerOpen, form]);
+
+  // Monitor form values for debugging
+  useEffect(() => {
+    if (drawerOpen) {
+      // Log form values every time the step changes
+      const interval = setInterval(() => {
+        const values = form.getFieldsValue();
+        console.log('Current form values:', values);
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [drawerOpen, form]);
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
@@ -708,19 +744,10 @@ export default function Influencers() {
               }}
             >
               <div className="space-y-6">
-                {/* Render all steps but hide non-active ones */}
-                {stepItems.map((step, index) => (
-                  <div 
-                    key={index}
-                    className={`transition-all duration-300 ${
-                      index === currentStep 
-                        ? 'block opacity-100' 
-                        : 'hidden opacity-0'
-                    }`}
-                  >
-                    {step.content}
-                  </div>
-                ))}
+                {/* Render only the current step */}
+                <div className="transition-all duration-300">
+                  {stepItems[currentStep].content}
+                </div>
                 
                 <div className="flex justify-between pt-4">
                   <Button 
