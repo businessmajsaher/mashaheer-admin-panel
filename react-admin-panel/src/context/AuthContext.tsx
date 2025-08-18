@@ -21,26 +21,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🔍 AuthContext: Starting session check...');
+    
+    // Add a timeout to prevent hanging
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ AuthContext: Session check timed out after 10 seconds');
+      setLoading(false);
+    }, 10000);
+    
     // Check session on mount
-    supabase.auth.getSession().then(async ({ data }) => {
-      console.log('AuthContext getSession on mount:', data.session);
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      console.log('🔍 AuthContext getSession result:', { data, error });
+      if (error) {
+        console.error('❌ AuthContext session error:', error);
+        setLoading(false);
+        return;
+      }
+      
       if (data.session?.user) {
+        console.log('✅ AuthContext: User found in session');
         setUser({
           id: data.session.user.id,
           email: data.session.user.email ?? '',
           role: data.session.user.user_metadata?.role || 'user',
         });
       } else if (data.session?.access_token) {
+        console.log('🔍 AuthContext: Access token found, fetching user...');
         // Fetch user info if not present in session
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.error('❌ AuthContext getUser error:', userError);
+        } else if (userData.user) {
+          console.log('✅ AuthContext: User fetched successfully');
           setUser({
             id: userData.user.id,
             email: userData.user.email ?? '',
             role: userData.user.user_metadata?.role || 'user',
           });
         }
+      } else {
+        console.log('ℹ️ AuthContext: No session found');
       }
+      console.log('🔍 AuthContext: Setting loading to false');
+      clearTimeout(timeoutId);
+      setLoading(false);
+    }).catch(err => {
+      console.error('❌ AuthContext getSession catch error:', err);
+      clearTimeout(timeoutId);
       setLoading(false);
     });
     // Listen for auth changes
@@ -56,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
     return () => {
+      clearTimeout(timeoutId);
       listener?.subscription.unsubscribe();
     };
   }, []);

@@ -19,8 +19,16 @@ const Platforms = lazy(() => import('@/pages/Platforms'));
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  console.log('🔍 ProtectedRoute: loading=', loading, 'user=', user);
+  if (loading) {
+    console.log('🔍 ProtectedRoute: Showing loading...');
+    return <div>Loading...</div>;
+  }
+  if (!user) {
+    console.log('🔍 ProtectedRoute: No user, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+  console.log('🔍 ProtectedRoute: User authenticated, showing content');
   return <Outlet />;
 }
 

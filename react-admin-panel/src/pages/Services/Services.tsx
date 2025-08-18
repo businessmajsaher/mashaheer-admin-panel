@@ -3,6 +3,66 @@ import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, messa
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import dayjs from 'dayjs';
+import { getCurrencyByCountry, getCurrencySymbol, formatPrice } from '@/utils/currencyUtils';
+
+// Currency options for dropdown
+const currencyOptions = [
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'EUR', label: 'EUR (€)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'CAD', label: 'CAD (C$)' },
+  { value: 'AUD', label: 'AUD (A$)' },
+  { value: 'JPY', label: 'JPY (¥)' },
+  { value: 'CHF', label: 'CHF' },
+  { value: 'INR', label: 'INR (₹)' },
+  { value: 'BRL', label: 'BRL (R$)' },
+  { value: 'MXN', label: 'MXN ($)' },
+  { value: 'SGD', label: 'SGD (S$)' },
+  { value: 'HKD', label: 'HKD (HK$)' },
+  { value: 'NZD', label: 'NZD (NZ$)' },
+  { value: 'SEK', label: 'SEK (kr)' },
+  { value: 'NOK', label: 'NOK (kr)' },
+  { value: 'DKK', label: 'DKK (kr)' },
+  { value: 'ZAR', label: 'ZAR (R)' },
+  { value: 'TRY', label: 'TRY (₺)' },
+  { value: 'RUB', label: 'RUB (₽)' },
+  { value: 'KRW', label: 'KRW (₩)' },
+  { value: 'THB', label: 'THB (฿)' },
+  { value: 'MYR', label: 'MYR (RM)' },
+  { value: 'IDR', label: 'IDR (Rp)' },
+  { value: 'PHP', label: 'PHP (₱)' },
+  { value: 'VND', label: 'VND (₫)' },
+  { value: 'AED', label: 'AED (د.إ)' },
+  { value: 'BHD', label: 'BHD (د.ب)' },
+  { value: 'KWD', label: 'KWD (د.ك)' },
+  { value: 'OMR', label: 'OMR (ر.ع.)' },
+  { value: 'QAR', label: 'QAR (ر.ق)' },
+  { value: 'SAR', label: 'SAR (ر.س)' },
+  { value: 'EGP', label: 'EGP (E£)' },
+  { value: 'NGN', label: 'NGN (₦)' },
+  { value: 'KES', label: 'KES (KSh)' },
+  { value: 'MAD', label: 'MAD' },
+  { value: 'ARS', label: 'ARS (AR$)' },
+  { value: 'CLP', label: 'CLP (CL$)' },
+  { value: 'COP', label: 'COP (CO$)' },
+  { value: 'PEN', label: 'PEN (S/)' },
+  { value: 'UAH', label: 'UAH (₴)' },
+  { value: 'BYN', label: 'BYN (Br)' },
+  { value: 'KZT', label: 'KZT (₸)' },
+  { value: 'UZS', label: 'UZS (so\'m)' },
+  { value: 'KGS', label: 'KGS (с)' },
+  { value: 'TJS', label: 'TJS (ЅM)' },
+  { value: 'TMT', label: 'TMT (T)' },
+  { value: 'AZN', label: 'AZN (₼)' },
+  { value: 'GEL', label: 'GEL (₾)' },
+  { value: 'AMD', label: 'AMD (֏)' },
+  { value: 'MDL', label: 'MDL (L)' },
+  { value: 'ALL', label: 'ALL (L)' },
+  { value: 'MKD', label: 'MKD (ден)' },
+  { value: 'RSD', label: 'RSD (дин)' },
+  { value: 'BAM', label: 'BAM (KM)' },
+  { value: 'ISK', label: 'ISK (kr)' }
+];
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -28,6 +88,10 @@ export default function Services() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
+  const [isFlashDeal, setIsFlashDeal] = useState(false);
+  const [editIsFlashDeal, setEditIsFlashDeal] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
+  const [editSelectedCurrency, setEditSelectedCurrency] = useState<string>('USD');
   const [filters, setFilters] = useState({
     category_id: undefined,
     service_type: undefined,
@@ -64,7 +128,7 @@ export default function Services() {
     console.log('🔄 Fetching services...');
     setLoading(true);
     try {
-      let query = supabase.from('services').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('services').select('*, profiles!primary_influencer_id(country)').order('created_at', { ascending: false });
       
       if (filters.category_id) {
         query = query.eq('category_id', filters.category_id);
@@ -115,7 +179,7 @@ export default function Services() {
   const fetchInfluencers = async () => {
     console.log('🔄 Fetching influencers...');
     try {
-      const { data, error } = await supabase.from('profiles').select('id, name, email').eq('role', 'influencer').order('name');
+      const { data, error } = await supabase.from('profiles').select('id, name, email, country').eq('role', 'influencer').order('name');
       if (error) {
         console.error('❌ Influencers fetch error:', error);
         message.error(error.message);
@@ -154,6 +218,21 @@ export default function Services() {
     fetchPlatforms();
   }, [modalOpen, editModalOpen, filters]);
 
+  // Handle influencer selection and auto-populate currency
+  const handleInfluencerChange = (influencerId: string, isEditForm: boolean = false) => {
+    const selectedInfluencer = influencers.find(inf => inf.id === influencerId);
+    if (selectedInfluencer && selectedInfluencer.country) {
+      const currency = getCurrencyByCountry(selectedInfluencer.country);
+      if (isEditForm) {
+        setEditSelectedCurrency(currency);
+        editForm.setFieldsValue({ currency });
+      } else {
+        setSelectedCurrency(currency);
+        form.setFieldsValue({ currency });
+      }
+    }
+  };
+
   // Add Service handler
   const handleAddService = async (values: any) => {
     console.log('🔄 Adding service with values:', values);
@@ -174,6 +253,12 @@ export default function Services() {
         console.log('✅ Thumbnail uploaded successfully:', thumbnail);
       }
       
+      // Set offer_price based on service type and flash deal status
+      let offerPrice = values.price;
+      if (values.is_flash_deal && values.offer_price) {
+        offerPrice = values.offer_price;
+      }
+
       const serviceData = {
         title: values.title,
         description: values.description,
@@ -188,7 +273,10 @@ export default function Services() {
         primary_influencer_id: values.primary_influencer_id,
         invited_influencer_id: values.invited_influencer_id,
         category_id: values.category_id,
-        platform_id: values.platform_id,
+        platform_ids: values.platform_id ? (Array.isArray(values.platform_id) ? values.platform_id : [values.platform_id]) : [], // Ensure it's always an array
+        price: values.price,
+        offer_price: offerPrice,
+        currency: values.currency || selectedCurrency,
         created_at: new Date().toISOString(),
       };
       
@@ -227,6 +315,12 @@ export default function Services() {
         thumbnail = publicUrlData?.publicUrl;
       }
       
+      // Set offer_price based on service type and flash deal status
+      let offerPrice = values.price;
+      if (values.is_flash_deal && values.offer_price) {
+        offerPrice = values.offer_price;
+      }
+
       const { error } = await supabase.from('services').update({
         title: values.title,
         description: values.description,
@@ -241,7 +335,10 @@ export default function Services() {
         primary_influencer_id: values.primary_influencer_id,
         invited_influencer_id: values.invited_influencer_id,
         category_id: values.category_id,
-        platform_id: values.platform_id,
+        platform_ids: values.platform_id ? (Array.isArray(values.platform_id) ? values.platform_id : [values.platform_id]) : [], // Ensure it's always an array
+        price: values.price,
+        offer_price: offerPrice,
+        currency: values.currency || editSelectedCurrency,
       }).eq('id', editingService.id);
       if (error) throw error;
       message.success('Service updated!');
@@ -295,6 +392,50 @@ export default function Services() {
       render: (days: number) => days ? `${days} days` : '-'
     },
     { 
+      title: 'Currency', 
+      dataIndex: 'currency', 
+      key: 'currency',
+      render: (currency: string) => (
+        <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
+          {currency || 'USD'}
+        </span>
+      )
+    },
+    { 
+      title: 'Price', 
+      dataIndex: 'price', 
+      key: 'price',
+      render: (price: number, record: any) => {
+        const currency = record.currency || 'USD';
+        const symbol = getCurrencySymbol(currency);
+        return (
+          <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
+            {formatPrice(price || 0, currency)}
+          </span>
+        );
+      }
+    },
+    { 
+      title: 'Offer Price', 
+      dataIndex: 'offer_price', 
+      key: 'offer_price',
+      render: (offerPrice: number, record: any) => {
+        const currency = record.currency || 'USD';
+        if (record.is_flash_deal && offerPrice) {
+          return (
+            <span style={{ fontWeight: 'bold', color: '#ff4d4f' }}>
+              {formatPrice(offerPrice, currency)}
+            </span>
+          );
+        }
+        return (
+          <span style={{ color: '#8c8c8c' }}>
+            {formatPrice(record.price || 0, currency)}
+          </span>
+        );
+      }
+    },
+    { 
       title: 'Flash Deal', 
       dataIndex: 'is_flash_deal', 
       key: 'is_flash_deal',
@@ -330,8 +471,13 @@ export default function Services() {
               primary_influencer_id: record.primary_influencer_id,
               invited_influencer_id: record.invited_influencer_id,
               category_id: record.category_id,
-              platform_id: record.platform_id
+              platform_id: record.platform_ids || record.platform_id, // Use platform_ids array or fallback to platform_id
+              price: record.price,
+              offer_price: record.offer_price,
+              currency: record.currency || 'USD'
             });
+            setEditIsFlashDeal(record.is_flash_deal);
+            setEditSelectedCurrency(record.currency || 'USD');
             setEditThumbnailFile(null);
             setSelectedServiceType(record.service_type);
           }}>Edit</Button>
@@ -398,7 +544,11 @@ export default function Services() {
           >
             🔍 Debug Supabase
           </Button>
-          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
+          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { 
+            setModalOpen(true); 
+            form.resetFields(); 
+            setIsFlashDeal(false);
+          }}>
             Add Service
           </Button>
         </div>
@@ -528,6 +678,74 @@ export default function Services() {
             </Col>
           </Row>
 
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="currency"
+                label="Currency"
+                rules={[{ required: true, message: 'Please select currency' }]}
+              >
+                <Select 
+                  placeholder="Select currency"
+                  value={selectedCurrency}
+                  onChange={(value) => setSelectedCurrency(value)}
+                >
+                  {currencyOptions.map(option => (
+                    <Select.Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="price"
+                label={`Price (${getCurrencySymbol(selectedCurrency)})`}
+                rules={[{ required: true, message: 'Please enter price' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  onChange={(value) => {
+                    // Auto-update offer price for normal/duo services
+                    if (!isFlashDeal && value) {
+                      form.setFieldsValue({ offer_price: value });
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="offer_price"
+                label={`Offer Price (${getCurrencySymbol(selectedCurrency)})`}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (getFieldValue('is_flash_deal') && !value) {
+                        return Promise.reject(new Error('Please enter offer price for flash deals'));
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
+              >
+                <InputNumber 
+                  min={0} 
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  disabled={!isFlashDeal}
+                  formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
                      <Row gutter={16}>
              <Col span={12}>
                <Form.Item
@@ -535,10 +753,17 @@ export default function Services() {
                  label="Primary Influencer"
                  rules={[{ required: true, message: 'Please select primary influencer' }]}
                >
-                 <Select placeholder="Select primary influencer">
+                 <Select 
+                   placeholder="Select primary influencer"
+                   showSearch
+                   filterOption={(input, option) =>
+                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                   }
+                   onChange={(value) => handleInfluencerChange(value, false)}
+                 >
                    {influencers.map(influencer => (
                      <Option key={influencer.id} value={influencer.id}>
-                       {influencer.name} ({influencer.email})
+                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
                      </Option>
                    ))}
                  </Select>
@@ -550,7 +775,14 @@ export default function Services() {
                    name="invited_influencer_id"
                    label="Invited Influencer"
                  >
-                   <Select placeholder="Select invited influencer" allowClear>
+                   <Select 
+                     placeholder="Select invited influencer" 
+                     allowClear
+                     showSearch
+                     filterOption={(input, option) =>
+                       String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                     }
+                   >
                      {influencers.map(influencer => (
                        <Option key={influencer.id} value={influencer.id}>
                          {influencer.name} ({influencer.email})
@@ -566,10 +798,17 @@ export default function Services() {
              <Col span={12}>
                <Form.Item
                  name="platform_id"
-                 label="Platform"
-                 rules={[{ required: true, message: 'Please select platform' }]}
+                 label="Platforms"
+                 rules={[{ required: true, message: 'Please select platforms' }]}
                >
-                 <Select placeholder="Select platform">
+                 <Select 
+                   placeholder="Select platform"
+                   mode="multiple"
+                   showSearch
+                   filterOption={(input, option) =>
+                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                   }
+                 >
                    {platforms.map(platform => (
                      <Option key={platform.id} value={platform.id}>
                        {platform.name}
@@ -596,7 +835,19 @@ export default function Services() {
                  label="Is Flash Deal"
                  valuePropName="checked"
                >
-                 <Switch />
+                 <Switch 
+                   onChange={(checked) => {
+                     setIsFlashDeal(checked);
+                     if (checked) {
+                       // When enabling flash deal, copy price to offer price if offer price is empty
+                       const currentPrice = form.getFieldValue('price');
+                       const currentOfferPrice = form.getFieldValue('offer_price');
+                       if (currentPrice && !currentOfferPrice) {
+                         form.setFieldsValue({ offer_price: currentPrice });
+                       }
+                     }
+                   }}
+                 />
                </Form.Item>
              </Col>
            </Row>
@@ -720,13 +971,88 @@ export default function Services() {
             </Col>
           </Row>
 
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="currency"
+                label="Currency"
+                rules={[{ required: true, message: 'Please select currency' }]}
+              >
+                <Select 
+                  placeholder="Select currency"
+                  value={editSelectedCurrency}
+                  onChange={(value) => setEditSelectedCurrency(value)}
+                >
+                  {currencyOptions.map(option => (
+                    <Select.Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="price"
+                label={`Price (${getCurrencySymbol(editSelectedCurrency)})`}
+                rules={[{ required: true, message: 'Please enter price' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  onChange={(value) => {
+                    // Auto-update offer price for normal/duo services
+                    if (!editIsFlashDeal && value) {
+                      editForm.setFieldsValue({ offer_price: value });
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="offer_price"
+                label={`Offer Price (${getCurrencySymbol(editSelectedCurrency)})`}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (getFieldValue('is_flash_deal') && !value) {
+                        return Promise.reject(new Error('Please enter offer price for flash deals'));
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
+              >
+                <InputNumber 
+                  min={0} 
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  disabled={!editIsFlashDeal}
+                  formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
                      <Row gutter={16}>
              <Col span={12}>
                <Form.Item name="primary_influencer_id" label="Primary Influencer" rules={[{ required: true, message: 'Please select primary influencer' }]}>
-                 <Select placeholder="Select primary influencer">
+                 <Select 
+                   placeholder="Select primary influencer"
+                   showSearch
+                   filterOption={(input, option) =>
+                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                   }
+                   onChange={(value) => handleInfluencerChange(value, true)}
+                 >
                    {influencers.map(influencer => (
                      <Option key={influencer.id} value={influencer.id}>
-                       {influencer.name} ({influencer.email})
+                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
                      </Option>
                    ))}
                  </Select>
@@ -735,7 +1061,14 @@ export default function Services() {
              <Col span={12}>
                {selectedServiceType === 'dual' && (
                  <Form.Item name="invited_influencer_id" label="Invited Influencer">
-                   <Select placeholder="Select invited influencer" allowClear>
+                   <Select 
+                     placeholder="Select invited influencer" 
+                     allowClear
+                     showSearch
+                     filterOption={(input, option) =>
+                       String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                     }
+                   >
                      {influencers.map(influencer => (
                        <Option key={influencer.id} value={influencer.id}>
                          {influencer.name} ({influencer.email})
@@ -749,8 +1082,15 @@ export default function Services() {
 
                      <Row gutter={16}>
              <Col span={12}>
-               <Form.Item name="platform_id" label="Platform" rules={[{ required: true, message: 'Please select platform' }]}>
-                 <Select placeholder="Select platform">
+               <Form.Item name="platform_id" label="Platforms" rules={[{ required: true, message: 'Please select platforms' }]}>
+                 <Select 
+                   placeholder="Select platform"
+                   mode="multiple"
+                   showSearch
+                   filterOption={(input, option) =>
+                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                   }
+                 >
                    {platforms.map(platform => (
                      <Option key={platform.id} value={platform.id}>
                        {platform.name}
@@ -768,7 +1108,21 @@ export default function Services() {
 
                      <Row gutter={16}>
              <Col span={12}>
-               <Form.Item name="is_flash_deal" label="Is Flash Deal" valuePropName="checked"> <Switch /> </Form.Item>
+               <Form.Item name="is_flash_deal" label="Is Flash Deal" valuePropName="checked"> 
+                 <Switch 
+                   onChange={(checked) => {
+                     setEditIsFlashDeal(checked);
+                     if (checked) {
+                       // When enabling flash deal, copy price to offer price if offer price is empty
+                       const currentPrice = editForm.getFieldValue('price');
+                       const currentOfferPrice = editForm.getFieldValue('offer_price');
+                       if (currentPrice && !currentOfferPrice) {
+                         editForm.setFieldsValue({ offer_price: currentPrice });
+                       }
+                     }
+                   }}
+                 /> 
+               </Form.Item>
              </Col>
            </Row>
 

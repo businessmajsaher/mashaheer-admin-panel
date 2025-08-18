@@ -168,48 +168,11 @@ serve(async (req: Request) => {
       });
     }
 
-    // Insert user profile
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: authUser.user.id,
-        email,
-        name,
-        role: 'influencer',
-        bio: bio || null,
-        profile_image_url: profile_image_url || null,
-        is_verified: is_verified || false,
-        is_suspended: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-      // Rollback user if profile fails
-      try {
-        await supabase.auth.admin.deleteUser(authUser.user.id);
-        console.log('Cleaned up auth user after profile creation failure');
-      } catch (cleanupError) {
-        console.error('Failed to cleanup auth user:', cleanupError);
-      }
-      
-      return new Response(JSON.stringify({
-        error: 'Failed to create user profile',
-        details: profileError.message
-      }), {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      });
-    }
+    // Profile is already created in the frontend, just return the auth user
+    console.log('Auth user created successfully, profile already exists in database');
 
     console.log('=== SUCCESS ===');
-    console.log('User and profile created successfully:', profileData);
+    console.log('Auth user created successfully:', authUser.user);
 
     return new Response(JSON.stringify({
       user: {
