@@ -199,6 +199,7 @@ export default function Influencers() {
     // Get form values manually since we're not using onFinish
     const values = form.getFieldsValue();
     console.log('Form values retrieved:', values);
+    console.log('Verification status in form values:', values.is_verified, 'Type:', typeof values.is_verified);
     
     // Check if form is valid
     try {
@@ -243,6 +244,7 @@ export default function Influencers() {
           console.log('13a. Profile update data:', profileUpdateData);
           console.log('13b. Profile image URL value:', values.profile_image_url);
           console.log('13c. Social links value:', values.social_links);
+          console.log('13d. Verification status value:', values.is_verified, 'Type:', typeof values.is_verified);
           
           const { error: updateError } = await supabase
             .from('profiles')
@@ -268,6 +270,7 @@ export default function Influencers() {
           } else {
             console.log('14a. Profile verification after update:', verifyProfile);
             console.log('14b. Updated profile image URL:', verifyProfile.profile_image_url);
+            console.log('14c. Updated verification status:', verifyProfile.is_verified);
           }
           
           influencerId = editingInfluencer.id;
@@ -1314,6 +1317,10 @@ export default function Influencers() {
               style={{
                 backgroundColor: '#d9d9d9'
               }}
+              onChange={(checked) => {
+                console.log('Switch onChange - checked:', checked, 'Type:', typeof checked);
+                form.setFieldsValue({ is_verified: checked });
+              }}
             />
           </Form.Item>
           
@@ -1935,10 +1942,10 @@ export default function Influencers() {
           <Divider style={{ margin: '16px 0 32px 0' }} />
           <AntCard style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} bodyStyle={{ padding: 0 }}>
             <Form
+              key={editingInfluencer?.id || 'new'}
               form={form}
               layout="vertical"
               initialValues={{
-                is_verified: false,
                 social_links: []
               }}
             >
