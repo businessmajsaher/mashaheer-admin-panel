@@ -1,8 +1,9 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { MainLayout } from '@/layouts/MainLayout';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 const Dashboard = lazy(() => import('@/pages/Dashboard/Dashboard'));
 const Users = lazy(() => import('@/pages/Users/Users'));
@@ -17,21 +18,6 @@ const Login = lazy(() => import('@/pages/Login'));
 const Signup = lazy(() => import('@/pages/Signup'));
 const Platforms = lazy(() => import('@/pages/Platforms'));
 
-function ProtectedRoute() {
-  const { user, loading } = useAuth();
-  console.log('🔍 ProtectedRoute: loading=', loading, 'user=', user);
-  if (loading) {
-    console.log('🔍 ProtectedRoute: Showing loading...');
-    return <div>Loading...</div>;
-  }
-  if (!user) {
-    console.log('🔍 ProtectedRoute: No user, redirecting to login');
-    return <Navigate to="/login" replace />;
-  }
-  console.log('🔍 ProtectedRoute: User authenticated, showing content');
-  return <Outlet />;
-}
-
 export default function App() {
   return (
     <ThemeProvider>
@@ -41,21 +27,83 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<MainLayout />}>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/users" element={<Users />} />
-                  <Route path="/influencers" element={<Influencers />} />
-                  <Route path="/categories" element={<Categories />} />
-                  <Route path="/platforms" element={<Platforms />} />
-                  <Route path="/services" element={<Services />} />
-                  <Route path="/wallets" element={<Wallets />} />
-                  <Route path="/reviews" element={<Reviews />} />
-                  <Route path="/bookings" element={<Bookings />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Route>
-              </Route>
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Navigate to="/dashboard" replace />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Dashboard />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/users" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Users />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/influencers" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Influencers />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/categories" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Categories />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/platforms" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Platforms />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/services" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Services />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/wallets" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Wallets />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/reviews" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Reviews />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/bookings" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Bookings />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <Settings />
+                  </MainLayout>
+                </ProtectedRoute>
+              } />
             </Routes>
           </Suspense>
         </Router>

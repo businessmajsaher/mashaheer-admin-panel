@@ -362,64 +362,88 @@ serve(async (req: Request) => {
       console.log('=== PROCESSING MEDIA FILES ===');
       console.log('Media files received:', media_files);
       console.log('Media files count:', media_files.length);
+      console.log('User ID for media:', userId);
       
       try {
         // First, check if the table exists
+        console.log('Checking if influencer_media table exists...');
         const { data: tableCheck, error: tableError } = await supabase
           .from('influencer_media')
           .select('id')
           .limit(1);
         
         if (tableError) {
-          console.error('Table check error - influencer_media table might not exist:', tableError);
-          console.log('Skipping media file processing due to table error');
+          console.error('❌ Table check error - influencer_media table might not exist:', tableError);
+          console.error('❌ Error details:', JSON.stringify(tableError, null, 2));
+          
+          if (tableError.message && tableError.message.includes('relation "influencer_media" does not exist')) {
+            console.error('❌ CRITICAL: influencer_media table does not exist!');
+            console.error('❌ Please run the create_influencer_media_table.sql script in your Supabase database');
+            console.error('❌ Skipping media file processing due to missing table');
+          } else {
+            console.error('❌ Other table error, skipping media file processing');
+          }
           return;
         }
         
-        console.log('Table check successful, influencer_media table exists');
+        console.log('✅ Table check successful, influencer_media table exists');
         
         // Delete existing media if updating
         if (is_update) {
+          console.log('Deleting existing media for user:', userId);
           const { error: deleteError } = await supabase
             .from('influencer_media')
             .delete()
             .eq('influencer_id', userId);
 
           if (deleteError) {
-            console.warn('Failed to delete existing media:', deleteError);
+            console.warn('⚠️ Failed to delete existing media:', deleteError);
+          } else {
+            console.log('✅ Existing media deleted successfully');
           }
         }
 
         // Create media records
-        const mediaData = media_files.map((media: any) => ({
-          influencer_id: userId,
-          file_url: media.file_url,
-          file_type: media.file_type,
-          file_name: media.file_name,
-          created_at: new Date().toISOString()
-        }));
+        console.log('Preparing media data for insertion...');
+        const mediaData = media_files.map((media: any, index: number) => {
+          console.log(`Processing media file ${index + 1}:`, media);
+          return {
+            influencer_id: userId,
+            file_url: media.file_url,
+            file_type: media.file_type || 'image',
+            file_name: media.file_name,
+            file_size: media.file_size || 0,
+            mime_type: media.mime_type || 'image/jpeg',
+            created_at: new Date().toISOString()
+          };
+        });
 
-        console.log('Prepared media data for insertion:', mediaData);
+        console.log('✅ Prepared media data for insertion:', mediaData);
+        console.log('Media data count:', mediaData.length);
 
+        console.log('Inserting media records into database...');
         const { data: insertedMedia, error: mediaError } = await supabase
           .from('influencer_media')
           .insert(mediaData)
           .select();
 
         if (mediaError) {
-          console.error('Media creation error:', mediaError);
-          console.error('Error details:', JSON.stringify(mediaError, null, 2));
+          console.error('❌ Media creation error:', mediaError);
+          console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
+          console.error('❌ Media data that failed to insert:', mediaData);
           throw mediaError;
         }
 
-        console.log('Media files processed successfully:', insertedMedia);
+        console.log('✅ Media files processed successfully:', insertedMedia);
+        console.log('✅ Inserted media count:', insertedMedia?.length || 0);
       } catch (mediaError: any) {
-        console.error('Failed to process media files:', mediaError);
-        console.error('Error details:', JSON.stringify(mediaError, null, 2));
+        console.error('❌ Failed to process media files:', mediaError);
+        console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
+        console.error('❌ This error will not fail the entire operation');
         // Don't fail the entire operation for media files
       }
     } else {
-      console.log('No media files to process');
+      console.log('ℹ️ No media files to process');
     }
 
     // Create default wallet if new user

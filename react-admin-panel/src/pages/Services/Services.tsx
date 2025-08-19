@@ -218,6 +218,43 @@ export default function Services() {
     fetchPlatforms();
   }, [modalOpen, editModalOpen, filters]);
 
+  // Set form values when editing service changes
+  useEffect(() => {
+    if (editingService && editModalOpen) {
+      editForm.resetFields();
+      editForm.setFieldsValue({
+        title: editingService.title,
+        description: editingService.description,
+        thumbnail: editingService.thumbnail,
+        min_duration_days: editingService.min_duration_days,
+        is_flash_deal: editingService.is_flash_deal,
+        flash_from: editingService.flash_from ? dayjs(editingService.flash_from) : null,
+        flash_to: editingService.flash_to ? dayjs(editingService.flash_to) : null,
+        location_required: editingService.location_required,
+        about_us: editingService.about_us,
+        service_type: editingService.service_type,
+        primary_influencer_id: editingService.primary_influencer_id,
+        invited_influencer_id: editingService.invited_influencer_id,
+        category_id: editingService.category_id,
+        platform_id: editingService.platform_ids || editingService.platform_id,
+        price: editingService.price,
+        offer_price: editingService.offer_price,
+        currency: editingService.currency || 'USD'
+      });
+      setEditIsFlashDeal(editingService.is_flash_deal);
+      setEditSelectedCurrency(editingService.currency || 'USD');
+      setSelectedServiceType(editingService.service_type);
+    }
+  }, [editingService, editModalOpen, editForm]);
+
+  // Reset form when edit modal closes
+  useEffect(() => {
+    if (!editModalOpen) {
+      editForm.resetFields();
+      setEditThumbnailFile(null);
+    }
+  }, [editModalOpen, editForm]);
+
   // Handle influencer selection and auto-populate currency
   const handleInfluencerChange = (influencerId: string, isEditForm: boolean = false) => {
     const selectedInfluencer = influencers.find(inf => inf.id === influencerId);
@@ -315,37 +352,115 @@ export default function Services() {
         thumbnail = publicUrlData?.publicUrl;
       }
       
-      // Set offer_price based on service type and flash deal status
+      // Handle flash deal to normal transition
+      let flashFrom = null;
+      let flashTo = null;
       let offerPrice = values.price;
-      if (values.is_flash_deal && values.offer_price) {
-        offerPrice = values.offer_price;
+      
+      if (values.is_flash_deal) {
+        // If it's a flash deal, set the flash dates and offer price
+        if (values.flash_from && typeof values.flash_from.toISOString === 'function') {
+          flashFrom = values.flash_from.toISOString();
+        } else if (values.flash_from) {
+          console.warn('⚠️ Flash from date is not a valid dayjs object:', values.flash_from);
+          flashFrom = null;
+        }
+        
+        if (values.flash_to && typeof values.flash_to.toISOString === 'function') {
+          flashTo = values.flash_to.toISOString();
+        } else if (values.flash_to) {
+          console.warn('⚠️ Flash to date is not a valid dayjs object:', values.flash_to);
+          flashTo = null;
+        }
+        
+        if (values.offer_price) {
+          offerPrice = values.offer_price;
+        }
+      } else {
+        // If it's not a flash deal, clear flash dates and set offer price to regular price
+        flashFrom = null;
+        flashTo = null;
+        offerPrice = values.price;
       }
 
-      const { error } = await supabase.from('services').update({
+      console.log('🔍 Date Debug:');
+      console.log('Flash From (raw):', values.flash_from);
+      console.log('Flash To (raw):', values.flash_to);
+      console.log('Flash From (processed):', flashFrom);
+      console.log('Flash To (processed):', flashTo);
+
+      const updateData = {
         title: values.title,
         description: values.description,
         thumbnail,
         min_duration_days: values.min_duration_days,
         is_flash_deal: values.is_flash_deal || false,
-        flash_from: values.flash_from?.toISOString(),
-        flash_to: values.flash_to?.toISOString(),
+        flash_from: flashFrom,
+        flash_to: flashTo,
         location_required: values.location_required || false,
         about_us: values.about_us,
         service_type: values.service_type,
         primary_influencer_id: values.primary_influencer_id,
         invited_influencer_id: values.invited_influencer_id,
         category_id: values.category_id,
-        platform_ids: values.platform_id ? (Array.isArray(values.platform_id) ? values.platform_id : [values.platform_id]) : [], // Ensure it's always an array
+        platform_ids: values.platform_id ? (Array.isArray(values.platform_id) ? values.platform_id : [values.platform_id]) : [],
         price: values.price,
         offer_price: offerPrice,
         currency: values.currency || editSelectedCurrency,
-      }).eq('id', editingService.id);
-      if (error) throw error;
+      };
+
+      console.log('📝 Updating service with data:', updateData);
+      console.log('🔄 Service type transition:', editingService.service_type, '->', values.service_type);
+      console.log('🔄 Flash deal transition:', editingService.is_flash_deal, '->', values.is_flash_deal);
+      console.log('🔍 Service type in updateData:', updateData.service_type);
+      console.log('🔍 Is flash deal in updateData:', updateData.is_flash_deal);
+
+      const { error } = await supabase.from('services').update(updateData).eq('id', editingService.id);
+      if (error) {
+        console.error('❌ Supabase update error:', error);
+        throw error;
+      }
+      
+      // Check if any rows were actually updated
+      const { count, error: countError } = await supabase
+        .from('services')
+        .select('*', { count: 'exact', head: true })
+        .eq('id', editingService.id);
+      
+      if (countError) {
+        console.error('❌ Count query error:', countError);
+      } else {
+        console.log('🔍 Rows affected by update:', count);
+      }
+      
+      console.log('✅ Service update successful!');
+      console.log('📊 Updated service data:', updateData);
+      console.log('🆔 Service ID:', editingService.id);
+      
+      // Verify the update by querying the database
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('services')
+        .select('*')
+        .eq('id', editingService.id)
+        .single();
+      
+      if (verifyError) {
+        console.error('❌ Verification query error:', verifyError);
+      } else {
+        console.log('🔍 Database verification after update:', verifyData);
+        console.log('🔍 Service type in database:', verifyData.service_type);
+        console.log('🔍 Is flash deal in database:', verifyData.is_flash_deal);
+      }
+      
       message.success('Service updated!');
       setEditModalOpen(false);
       setEditingService(null);
       setEditThumbnailFile(null);
+      
+      // Refresh the services list to show updated data
+      fetchServices();
     } catch (err: any) {
+      console.error('❌ Service update error:', err);
       setEditFormError(err.message || 'Failed to update service');
     } finally {
       setEditFormLoading(false);
@@ -457,29 +572,6 @@ export default function Services() {
           <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
             setEditingService(record);
             setEditModalOpen(true);
-            editForm.setFieldsValue({ 
-              title: record.title,
-              description: record.description,
-              thumbnail: record.thumbnail,
-              min_duration_days: record.min_duration_days,
-              is_flash_deal: record.is_flash_deal,
-              flash_from: record.flash_from ? dayjs(record.flash_from) : null,
-              flash_to: record.flash_to ? dayjs(record.flash_to) : null,
-              location_required: record.location_required,
-              about_us: record.about_us,
-              service_type: record.service_type,
-              primary_influencer_id: record.primary_influencer_id,
-              invited_influencer_id: record.invited_influencer_id,
-              category_id: record.category_id,
-              platform_id: record.platform_ids || record.platform_id, // Use platform_ids array or fallback to platform_id
-              price: record.price,
-              offer_price: record.offer_price,
-              currency: record.currency || 'USD'
-            });
-            setEditIsFlashDeal(record.is_flash_deal);
-            setEditSelectedCurrency(record.currency || 'USD');
-            setEditThumbnailFile(null);
-            setSelectedServiceType(record.service_type);
           }}>Edit</Button>
           <Popconfirm title="Delete this service?" onConfirm={() => handleDeleteService(record.id)} okText="Yes" cancelText="No">
             <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
@@ -537,6 +629,17 @@ export default function Services() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Services</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
+          <Button 
+            type="default" 
+            onClick={() => {
+              console.log('🔍 Current services in table:', services);
+              console.log('🔍 Services with flash deals:', services.filter(s => s.is_flash_deal));
+              console.log('🔍 Services with flash type:', services.filter(s => s.service_type === 'flash'));
+            }}
+            style={{ borderColor: '#1890ff', color: '#1890ff' }}
+          >
+            🔍 Debug Services Table
+          </Button>
           <Button 
             type="default" 
             onClick={debugSupabaseState}
@@ -612,7 +715,6 @@ export default function Services() {
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setThumbnailFile(null); form.resetFields(); }}
         footer={null}
-        destroyOnClose
         width={800}
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
@@ -839,12 +941,20 @@ export default function Services() {
                    onChange={(checked) => {
                      setIsFlashDeal(checked);
                      if (checked) {
+                       // When enabling flash deal, change service type to flash
+                       form.setFieldsValue({ service_type: 'flash' });
+                       setSelectedServiceType('flash');
+                       
                        // When enabling flash deal, copy price to offer price if offer price is empty
                        const currentPrice = form.getFieldValue('price');
                        const currentOfferPrice = form.getFieldValue('offer_price');
                        if (currentPrice && !currentOfferPrice) {
                          form.setFieldsValue({ offer_price: currentPrice });
                        }
+                     } else {
+                       // When disabling flash deal, change service type back to normal
+                       form.setFieldsValue({ service_type: 'normal' });
+                       setSelectedServiceType('normal');
                      }
                    }}
                  />
@@ -855,23 +965,83 @@ export default function Services() {
            {form.getFieldValue('is_flash_deal') && (
              <>
                <Divider>Flash Deal Settings</Divider>
+               
+               {/* Debug button */}
+               <Button 
+                 type="dashed" 
+                 size="small" 
+                 onClick={() => {
+                   const flashFrom = form.getFieldValue('flash_from');
+                   const flashTo = form.getFieldValue('flash_to');
+                   console.log('🔍 Flash Deal Debug:');
+                   console.log('Flash From:', flashFrom);
+                   console.log('Flash From type:', typeof flashFrom);
+                   console.log('Flash To:', flashTo);
+                   console.log('Flash To type:', typeof flashTo);
+                   console.log('Is Flash Deal:', form.getFieldValue('is_flash_deal'));
+                 }}
+                 style={{ marginBottom: 16 }}
+               >
+                 Debug: Check Flash Deal Dates
+               </Button>
+               
                <Row gutter={16}>
                  <Col span={12}>
                    <Form.Item
                      name="flash_from"
                      label="Flash Deal From"
-                     rules={[{ required: true, message: 'Please select flash deal start date' }]}
+                     rules={[
+                       { required: true, message: 'Please select flash deal start date' },
+                       {
+                         validator: (_, value) => {
+                           if (!value) {
+                             return Promise.reject(new Error('Please select flash deal start date'));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
                    >
-                     <DatePicker showTime style={{ width: '100%' }} />
+                     <DatePicker 
+                       showTime={{ format: 'HH:mm' }}
+                       style={{ width: '100%' }}
+                       format="YYYY-MM-DD HH:mm"
+                       placeholder="Select start date and time"
+                       showNow={false}
+                       onChange={(date, dateString) => {
+                         console.log('DatePicker onChange - date:', date);
+                         console.log('DatePicker onChange - dateString:', dateString);
+                       }}
+                     />
                    </Form.Item>
                  </Col>
                  <Col span={12}>
                    <Form.Item
                      name="flash_to"
                      label="Flash Deal To"
-                     rules={[{ required: true, message: 'Please select flash deal end date' }]}
+                     rules={[
+                       { required: true, message: 'Please select flash deal end date' },
+                       {
+                         validator: (_, value) => {
+                           if (!value) {
+                             return Promise.reject(new Error('Please select flash deal end date'));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
                    >
-                     <DatePicker showTime style={{ width: '100%' }} />
+                     <DatePicker 
+                       showTime={{ format: 'HH:mm' }}
+                       style={{ width: '100%' }}
+                       format="YYYY-MM-DD HH:mm"
+                       placeholder="Select end date and time"
+                       showNow={false}
+                       onChange={(date, dateString) => {
+                         console.log('DatePicker onChange - date:', date);
+                         console.log('DatePicker onChange - dateString:', dateString);
+                       }}
+                     />
                    </Form.Item>
                  </Col>
                </Row>
@@ -927,16 +1097,46 @@ export default function Services() {
       <Modal
         title="Edit Service"
         open={editModalOpen}
-        onCancel={() => { setEditModalOpen(false); setEditingService(null); setEditThumbnailFile(null); }}
+        onCancel={() => { 
+          setEditModalOpen(false); 
+          setEditingService(null); 
+          editForm.resetFields();
+          setEditThumbnailFile(null); 
+        }}
         footer={null}
-        destroyOnClose
         width={800}
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form form={editForm} layout="vertical" onFinish={handleEditService}>
+        <Form 
+          key={editingService?.id || 'new'}
+          form={editForm} 
+          layout="vertical" 
+          onFinish={handleEditService}
+          initialValues={editingService ? {
+            title: editingService.title,
+            description: editingService.description,
+            thumbnail: editingService.thumbnail,
+            min_duration_days: editingService.min_duration_days,
+            is_flash_deal: editingService.is_flash_deal,
+            flash_from: editingService.flash_from ? dayjs(editingService.flash_from) : null,
+            flash_to: editingService.flash_to ? dayjs(editingService.flash_to) : null,
+            location_required: editingService.location_required,
+            about_us: editingService.about_us,
+            service_type: editingService.service_type,
+            primary_influencer_id: editingService.primary_influencer_id,
+            invited_influencer_id: editingService.invited_influencer_id,
+            category_id: editingService.category_id,
+            platform_id: editingService.platform_ids || editingService.platform_id,
+            price: editingService.price,
+            offer_price: editingService.offer_price,
+            currency: editingService.currency || 'USD'
+          } : {}}
+        >
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Please enter service title' }]}> <Input autoFocus /> </Form.Item>
+              <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Please enter service title' }]}>
+                <Input autoFocus />
+              </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="service_type" label="Service Type" rules={[{ required: true, message: 'Please select service type' }]}>
@@ -952,7 +1152,9 @@ export default function Services() {
             </Col>
           </Row>
 
-          <Form.Item name="description" label="Description" rules={[{ required: true, message: 'Please enter service description' }]}> <TextArea rows={3} /> </Form.Item>
+          <Form.Item name="description" label="Description" rules={[{ required: true, message: 'Please enter service description' }]}>
+            <TextArea rows={3} />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
@@ -1100,7 +1302,9 @@ export default function Services() {
                </Form.Item>
              </Col>
              <Col span={12}>
-               <Form.Item name="location_required" label="Location Required" valuePropName="checked"> <Switch /> </Form.Item>
+               <Form.Item name="location_required" label="Location Required" valuePropName="checked">
+                 <Switch />
+               </Form.Item>
              </Col>
            </Row>
 
@@ -1113,12 +1317,20 @@ export default function Services() {
                    onChange={(checked) => {
                      setEditIsFlashDeal(checked);
                      if (checked) {
+                       // When enabling flash deal, change service type to flash
+                       editForm.setFieldsValue({ service_type: 'flash' });
+                       setSelectedServiceType('flash');
+                       
                        // When enabling flash deal, copy price to offer price if offer price is empty
                        const currentPrice = editForm.getFieldValue('price');
                        const currentOfferPrice = editForm.getFieldValue('offer_price');
                        if (currentPrice && !currentOfferPrice) {
                          editForm.setFieldsValue({ offer_price: currentPrice });
                        }
+                     } else {
+                       // When disabling flash deal, change service type back to normal
+                       editForm.setFieldsValue({ service_type: 'normal' });
+                       setSelectedServiceType('normal');
                      }
                    }}
                  /> 
@@ -1129,19 +1341,95 @@ export default function Services() {
            {editForm.getFieldValue('is_flash_deal') && (
              <>
                <Divider>Flash Deal Settings</Divider>
+               
+               {/* Debug button for edit modal */}
+               <Button 
+                 type="dashed" 
+                 size="small" 
+                 onClick={() => {
+                   const flashFrom = editForm.getFieldValue('flash_from');
+                   const flashTo = editForm.getFieldValue('flash_to');
+                   const serviceType = editForm.getFieldValue('service_type');
+                   const isFlashDeal = editForm.getFieldValue('is_flash_deal');
+                   console.log('🔍 Edit Modal Flash Deal Debug:');
+                   console.log('Flash From:', flashFrom);
+                   console.log('Flash To:', flashTo);
+                   console.log('Service Type:', serviceType);
+                   console.log('Is Flash Deal:', isFlashDeal);
+                   console.log('Original Service:', editingService);
+                 }}
+                 style={{ marginBottom: 16 }}
+               >
+                 Debug: Check Edit Form Values
+               </Button>
+               
                <Row gutter={16}>
                  <Col span={12}>
-                   <Form.Item name="flash_from" label="Flash Deal From" rules={[{ required: true, message: 'Please select flash deal start date' }]}> <DatePicker showTime style={{ width: '100%' }} /> </Form.Item>
+                   <Form.Item
+                     name="flash_from"
+                     label="Flash Deal From"
+                     rules={[
+                       { required: true, message: 'Please select flash deal start date' },
+                       {
+                         validator: (_, value) => {
+                           if (!value) {
+                             return Promise.reject(new Error('Please select flash deal start date'));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                   >
+                     <DatePicker 
+                       showTime={{ format: 'HH:mm' }}
+                       style={{ width: '100%' }}
+                       format="YYYY-MM-DD HH:mm"
+                       placeholder="Select start date and time"
+                       showNow={false}
+                       onChange={(date, dateString) => {
+                         console.log('DatePicker onChange - date:', date);
+                         console.log('DatePicker onChange - dateString:', dateString);
+                       }}
+                     />
+                   </Form.Item>
                  </Col>
                  <Col span={12}>
-                   <Form.Item name="flash_to" label="Flash Deal To" rules={[{ required: true, message: 'Please select flash deal end date' }]}> <DatePicker showTime style={{ width: '100%' }} /> </Form.Item>
+                   <Form.Item
+                     name="flash_to"
+                     label="Flash Deal To"
+                     rules={[
+                       { required: true, message: 'Please select flash deal end date' },
+                       {
+                         validator: (_, value) => {
+                           if (!value) {
+                             return Promise.reject(new Error('Please select flash deal end date'));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                   >
+                     <DatePicker 
+                       showTime={{ format: 'HH:mm' }}
+                       style={{ width: '100%' }}
+                       format="YYYY-MM-DD HH:mm"
+                       placeholder="Select end date and time"
+                       showNow={false}
+                       onChange={(date, dateString) => {
+                         console.log('DatePicker onChange - date:', date);
+                         console.log('DatePicker onChange - dateString:', dateString);
+                       }}
+                     />
+                   </Form.Item>
                  </Col>
                </Row>
              </>
            )}
 
                      {selectedServiceType === 'dual' && (
-             <Form.Item name="about_us" label="About Us"> <TextArea rows={3} /> </Form.Item>
+             <Form.Item name="about_us" label="About Us">
+               <TextArea rows={3} />
+             </Form.Item>
            )}
 
           <Form.Item label="Thumbnail">

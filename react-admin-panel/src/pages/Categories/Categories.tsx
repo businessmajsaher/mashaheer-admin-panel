@@ -28,53 +28,163 @@ export default function Categories() {
   // Fetch categories from Supabase
   const fetchCategories = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('service_categories').select('*').order('created_at', { ascending: false });
-    if (error) message.error(error.message);
-    setCategories(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('service_categories').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error fetching categories:', error);
+        message.error(error.message);
+      }
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Exception fetching categories:', err);
+      message.error('Failed to fetch categories');
+    } finally {
+      setLoading(false);
+    }
   };
+  
   useEffect(() => { fetchCategories(); }, [modalOpen, editModalOpen]);
+
+  // Set form values when editing category changes
+  useEffect(() => {
+    console.log('🔍 Edit form useEffect triggered:', { editingCategory, editModalOpen });
+    if (editingCategory && editModalOpen) {
+      console.log('📝 Setting form values:', {
+        name: editingCategory.name,
+        description: editingCategory.description,
+        icon: editingCategory.icon,
+        thumb: editingCategory.thumb
+      });
+      
+      // Reset form and set values
+      editForm.resetFields();
+      editForm.setFieldsValue({
+        name: editingCategory.name,
+        description: editingCategory.description,
+        icon: editingCategory.icon,
+        thumb: editingCategory.thumb
+      });
+      console.log('✅ Form values set successfully');
+    }
+  }, [editingCategory, editModalOpen, editForm]);
+
+  // Reset form when edit modal closes
+  useEffect(() => {
+    if (!editModalOpen) {
+      editForm.resetFields();
+      setEditThumbnailFile(null);
+      setEditIconFile(null);
+    }
+  }, [editModalOpen, editForm]);
+
+  // Test storage buckets
+  const testStorageBuckets = async () => {
+    try {
+      console.log('Testing storage buckets...');
+      
+      // Test thumbnails bucket
+      const { data: thumbnailsList, error: thumbnailsError } = await supabase.storage.from('thumbnails').list();
+      if (thumbnailsError) {
+        console.error('Thumbnails bucket error:', thumbnailsError);
+      } else {
+        console.log('Thumbnails bucket accessible:', thumbnailsList);
+      }
+      
+      // Test if category bucket exists (fallback)
+      const { data: categoryList, error: categoryError } = await supabase.storage.from('category').list();
+      if (categoryError) {
+        console.error('Category bucket error:', categoryError);
+      } else {
+        console.log('Category bucket accessible:', categoryList);
+      }
+      
+    } catch (err) {
+      console.error('Storage bucket test error:', err);
+    }
+  };
+
+  // Helper function to get the correct storage bucket
+  const getStorageBucket = () => {
+    // Try thumbnails first, fallback to category
+    return 'thumbnails';
+  };
+
+  // Helper function to upload file with fallback
+  const uploadFile = async (file: File, path: string) => {
+    try {
+      // Try thumbnails bucket first
+      const { error: thumbnailsError } = await supabase.storage.from('thumbnails').upload(path, file, { upsert: true });
+      if (!thumbnailsError) {
+        const { data: publicUrlData } = supabase.storage.from('thumbnails').getPublicUrl(path);
+        return publicUrlData?.publicUrl;
+      }
+      
+      // Fallback to category bucket
+      console.log('Falling back to category bucket');
+      const { error: categoryError } = await supabase.storage.from('category').upload(path, file, { upsert: true });
+      if (categoryError) throw categoryError;
+      
+      const { data: publicUrlData } = supabase.storage.from('category').getPublicUrl(path);
+      return publicUrlData?.publicUrl;
+    } catch (error) {
+      console.error('File upload error:', error);
+      throw error;
+    }
+  };
+
+  // Test storage on component mount
+  useEffect(() => {
+    testStorageBuckets();
+  }, []);
 
   // Add Category handler
   const handleAddCategory = async (values: any) => {
     setFormLoading(true);
     setFormError(null);
     try {
+      console.log('Adding category with values:', values);
+      
       let thumb = values.thumb;
       let icon = values.icon;
       
       if (thumbnailFile) {
+        console.log('Uploading thumbnail file:', thumbnailFile.name);
         const filePath = `thumbnails/${Date.now()}-${thumbnailFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('category').upload(filePath, thumbnailFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('category').getPublicUrl(filePath);
-        thumb = publicUrlData?.publicUrl;
+        thumb = await uploadFile(thumbnailFile, filePath);
+        console.log('Thumbnail uploaded successfully:', thumb);
       }
       
       if (iconFile) {
+        console.log('Uploading icon file:', iconFile.name);
         const filePath = `icons/${Date.now()}-${iconFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('category').upload(filePath, iconFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('category').getPublicUrl(filePath);
-        icon = publicUrlData?.publicUrl;
+        icon = await uploadFile(iconFile, filePath);
+        console.log('Icon uploaded successfully:', icon);
       }
       
-      const { error } = await supabase.from('service_categories').insert([
-        {
-          name: values.name,
-          description: values.description,
-          icon,
-          thumb,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-      if (error) throw error;
+      const insertData = {
+        name: values.name,
+        description: values.description,
+        icon,
+        thumb: thumb,
+        created_at: new Date().toISOString(),
+      };
+      
+      console.log('Inserting category data:', insertData);
+      
+      const { data, error } = await supabase.from('service_categories').insert([insertData]).select();
+      if (error) {
+        console.error('Category insert error:', error);
+        throw error;
+      }
+      
+      console.log('Category added successfully:', data);
       message.success('Category added!');
       setModalOpen(false);
       form.resetFields();
       setThumbnailFile(null);
       setIconFile(null);
     } catch (err: any) {
+      console.error('Add category error:', err);
       setFormError(err.message || 'Failed to add category');
     } finally {
       setFormLoading(false);
@@ -86,38 +196,49 @@ export default function Categories() {
     setEditFormLoading(true);
     setEditFormError(null);
     try {
+      console.log('Updating category with values:', values);
+      console.log('Editing category ID:', editingCategory.id);
+      
       let thumb = values.thumb;
       let icon = values.icon;
       
       if (editThumbnailFile) {
+        console.log('Uploading new thumbnail file:', editThumbnailFile.name);
         const filePath = `thumbnails/${Date.now()}-${editThumbnailFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('category').upload(filePath, editThumbnailFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('category').getPublicUrl(filePath);
-        thumb = publicUrlData?.publicUrl;
+        thumb = await uploadFile(editThumbnailFile, filePath);
+        console.log('New thumbnail uploaded successfully:', thumb);
       }
       
       if (editIconFile) {
+        console.log('Uploading new icon file:', editIconFile.name);
         const filePath = `icons/${Date.now()}-${editIconFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('category').upload(filePath, editIconFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('category').getPublicUrl(filePath);
-        icon = publicUrlData?.publicUrl;
+        icon = await uploadFile(editIconFile, filePath);
+        console.log('New icon uploaded successfully:', icon);
       }
       
-      const { error } = await supabase.from('service_categories').update({
+      const updateData = {
         name: values.name,
         description: values.description,
         icon,
         thumb,
-      }).eq('id', editingCategory.id);
-      if (error) throw error;
+      };
+      
+      console.log('Updating category with data:', updateData);
+      
+      const { data, error } = await supabase.from('service_categories').update(updateData).eq('id', editingCategory.id).select();
+      if (error) {
+        console.error('Category update error:', error);
+        throw error;
+      }
+      
+      console.log('Category updated successfully:', data);
       message.success('Category updated!');
       setEditModalOpen(false);
       setEditingCategory(null);
       setEditThumbnailFile(null);
       setEditIconFile(null);
     } catch (err: any) {
+      console.error('Edit category error:', err);
       setEditFormError(err.message || 'Failed to update category');
     } finally {
       setEditFormLoading(false);
@@ -158,14 +279,9 @@ export default function Categories() {
       render: (_: any, record: any) => (
         <span>
           <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
+            console.log('🔍 Edit button clicked for category:', record);
             setEditingCategory(record);
             setEditModalOpen(true);
-            editForm.setFieldsValue({ 
-              name: record.name, 
-              description: record.description, 
-              icon: record.icon,
-              thumb: record.thumb 
-            });
             setEditThumbnailFile(null);
             setEditIconFile(null);
           }}>Edit</Button>
@@ -224,9 +340,17 @@ export default function Categories() {
     <Card style={{ margin: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Service Categories</Typography.Title>
-        <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
-          Add Category
-        </Button>
+        <div>
+          <Button 
+            style={{ marginRight: 8 }} 
+            onClick={testStorageBuckets}
+          >
+            Test Storage
+          </Button>
+          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
+            Add Category
+          </Button>
+        </div>
       </div>
       <Input.Search
         placeholder="Search categories"
@@ -273,7 +397,7 @@ export default function Categories() {
           >
             <TextArea rows={3} />
           </Form.Item>
-          <Form.Item label="Icon">
+          <Form.Item name="icon" label="Icon">
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}
@@ -302,7 +426,7 @@ export default function Categories() {
             </Upload>
             {iconFile && <div style={{ marginTop: 8 }}><img src={URL.createObjectURL(iconFile)} alt="icon" style={{ width: 32, height: 32, objectFit: 'contain' }} /></div>}
           </Form.Item>
-          <Form.Item label="Thumbnail">
+          <Form.Item name="thumb" label="Thumbnail">
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}
@@ -340,15 +464,36 @@ export default function Categories() {
       <Modal
         title="Edit Category"
         open={editModalOpen}
-        onCancel={() => { setEditModalOpen(false); setEditingCategory(null); setEditThumbnailFile(null); }}
+        onCancel={() => { 
+          setEditModalOpen(false); 
+          setEditingCategory(null); 
+          editForm.resetFields();
+          setEditThumbnailFile(null);
+          setEditIconFile(null);
+        }}
         footer={null}
-        destroyOnClose
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form form={editForm} layout="vertical" onFinish={handleEditCategory}>
-          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter a category name' }]}> <Input autoFocus /> </Form.Item>
-          <Form.Item name="description" label="Description" rules={[{ required: true, message: 'Please enter a category description' }]}> <TextArea rows={3} /> </Form.Item>
-          <Form.Item label="Icon">
+        <Form 
+          key={editingCategory?.id || 'new'}
+          form={editForm} 
+          layout="vertical" 
+          onFinish={handleEditCategory}
+          initialValues={editingCategory ? {
+            name: editingCategory.name,
+            description: editingCategory.description,
+            icon: editingCategory.icon,
+            thumb: editingCategory.thumb
+          } : {}}
+        >
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter a category name' }]}>
+            <Input autoFocus />
+          </Form.Item>
+          <Form.Item name="description" label="Description" rules={[{ required: true, message: 'Please enter a category description' }]}>
+            <TextArea rows={3} />
+          </Form.Item>
+          
+          <Form.Item name="icon" label="Icon">
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}
@@ -385,7 +530,7 @@ export default function Categories() {
               </div>
             )}
           </Form.Item>
-          <Form.Item label="Thumbnail">
+          <Form.Item name="thumb" label="Thumbnail">
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}

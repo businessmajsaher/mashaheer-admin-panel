@@ -196,52 +196,9 @@ export default function Influencers() {
     console.log('Processing final submission on step:', currentStep);
     console.log('Media files to upload:', mediaFiles.length);
     
-    // Debug: Check current state variables
-    console.log('=== STATE VARIABLES DEBUG ===');
-    console.log('editingInfluencer:', editingInfluencer);
-    console.log('influencerCreated:', influencerCreated);
-    console.log('drawerOpen:', drawerOpen);
-    console.log('currentStep:', currentStep);
-    
     // Get form values manually since we're not using onFinish
     const values = form.getFieldsValue();
     console.log('Form values retrieved:', values);
-    
-    // Debug: Check each field individually
-    console.log('=== FIELD BY FIELD DEBUG ===');
-    console.log('Email field value:', form.getFieldValue('email'));
-    console.log('Name field value:', form.getFieldValue('name'));
-    console.log('Bio field value:', form.getFieldValue('bio'));
-    console.log('Profile image field value:', form.getFieldValue('profile_image_url'));
-    console.log('Is verified field value:', form.getFieldValue('is_verified'));
-    console.log('Social links field value:', form.getFieldValue('social_links'));
-    
-    // Debug: Check media files state
-    console.log('=== MEDIA FILES DEBUG ===');
-    console.log('Media files state:', mediaFiles);
-    console.log('Media files length:', mediaFiles.length);
-    console.log('Media files details:', mediaFiles.map((file, index) => ({
-      index,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      hasFile: !!file.file,
-      hasFileUrl: !!file.file_url
-    })));
-    console.log('=== FORM SUBMISSION DEBUG ===');
-    console.log('Form submission triggered at:', new Date().toISOString());
-    console.log('Current step:', currentStep);
-    console.log('1. Raw form values received:', values);
-    console.log('2. Form values type:', typeof values);
-    console.log('3. Form values keys:', Object.keys(values));
-    console.log('4. Form values length:', Object.keys(values).length);
-    console.log('5. Individual field values:');
-    console.log('   - email:', values.email, 'Type:', typeof values.email, 'Present:', !!values.email);
-
-    console.log('   - name:', values.name, 'Type:', typeof values.name, 'Present:', !!values.name);
-    console.log('   - bio:', values.bio, 'Type:', typeof values.bio, 'Present:', !!values.bio);
-    console.log('   - is_verified:', values.is_verified, 'Type:', typeof values.is_verified, 'Present:', !!values.is_verified);
-    console.log('   - profile_image_url:', values.profile_image_url, 'Type:', typeof values.profile_image_url, 'Present:', !!values.profile_image_url);
     
     // Check if form is valid
     try {
@@ -267,18 +224,14 @@ export default function Influencers() {
       const token = session?.access_token;
       console.log('9. JWT access token used for Edge Function:', token);
       
-      // Debug: Log the raw form values again
-      console.log('10. Raw form values (again):', values);
-      console.log('11. Form values type (again):', typeof values);
-      console.log('12. Form values keys (again):', Object.keys(values));
-      
       let influencerId: string;
       
       if (editingInfluencer) {
-        // Update existing influencer - don't use Edge Function
-        console.log('13. Updating existing influencer directly in database');
+        // Update existing influencer - handle media files too
+        console.log('13. Updating existing influencer with media files');
         
         try {
+          // Update profile first
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -297,8 +250,114 @@ export default function Influencers() {
           
           console.log('14. Profile updated successfully');
           influencerId = editingInfluencer.id;
+          
+          // Handle media files for existing influencer
+          if (mediaFiles.length > 0) {
+            console.log('15. Uploading media files for existing influencer...');
+            console.log('15a. Media files to upload:', mediaFiles);
+            
+            // Test storage bucket access
+            try {
+              const { data: bucketTest, error: bucketError } = await supabase.storage
+                .from('influencer-media')
+                .list('', { limit: 1 });
+              
+              if (bucketError) {
+                console.error('15a1. Storage bucket test failed:', bucketError);
+                throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
+              }
+              
+              console.log('15a2. Storage bucket test successful');
+            } catch (bucketTestError) {
+              console.error('15a3. Storage bucket test error:', bucketTestError);
+              throw bucketTestError;
+            }
+            
+            try {
+              const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
+                console.log(`15b. Processing media file ${index + 1}:`, mediaFile);
+                const file = mediaFile.file;
+                const filePath = `influencer-media/${Date.now()}-${file.name}`;
+                
+                console.log(`15c. Uploading file ${index + 1} to path:`, filePath);
+                
+                // Upload to storage
+                const { error: uploadError } = await supabase.storage
+                  .from('influencer-media')
+                  .upload(filePath, file, { upsert: true });
+                
+                if (uploadError) {
+                  console.error(`15d. Upload error for file ${index + 1}:`, uploadError);
+                  throw uploadError;
+                }
+                
+                console.log(`15e. File ${index + 1} uploaded successfully to storage`);
+                
+                // Get public URL
+                const { data: publicUrlData } = supabase.storage
+                  .from('influencer-media')
+                  .getPublicUrl(filePath);
+                
+                const fileUrl = publicUrlData?.publicUrl;
+                console.log(`15f. Public URL for file ${index + 1}:`, fileUrl);
+                
+                return {
+                  file_url: fileUrl,
+                  file_type: file.type,
+                  file_name: file.name
+                };
+              });
+              
+              const uploadedMediaFiles = await Promise.all(uploadPromises);
+              console.log('16. Media files uploaded successfully:', uploadedMediaFiles);
+              
+              // Insert media files into database
+              console.log('17. Inserting media files into database...');
+              const mediaData = uploadedMediaFiles.map((media) => {
+                // Determine file type based on MIME type - only use 'image' and 'video' for now
+                let fileType = 'image'; // Default to image
+                if (media.file_type.startsWith('video/')) {
+                  fileType = 'video';
+                } else if (!media.file_type.startsWith('image/')) {
+                  // For non-image, non-video files, default to image for now
+                  // This can be updated once the constraint is fixed
+                  fileType = 'image';
+                }
+                
+                return {
+                  influencer_id: influencerId,
+                  file_url: media.file_url,
+                  file_type: fileType, // Use the mapped file type
+                  file_name: media.file_name,
+                  file_size: 0, // Default value since we don't have it in the uploaded media
+                  mime_type: media.file_type, // Store the original MIME type
+                  created_at: new Date().toISOString()
+                };
+              });
+              
+              const { data: insertedMedia, error: mediaError } = await supabase
+                .from('influencer_media')
+                .insert(mediaData)
+                .select();
+              
+              if (mediaError) {
+                console.error('❌ Media insertion error:', mediaError);
+                console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
+                throw new Error(`Failed to save media files: ${mediaError.message}`);
+              }
+              
+              console.log('✅ Media files saved to database:', insertedMedia);
+              
+            } catch (uploadError: any) {
+              console.error('Media upload error:', uploadError);
+              throw new Error(`Failed to upload media files: ${uploadError.message}`);
+            }
+          } else {
+            console.log('15. No media files to upload for existing influencer');
+          }
+          
         } catch (updateError: any) {
-          console.error('Error updating profile:', updateError);
+          console.error('Error updating influencer:', updateError);
           throw new Error(`Failed to update influencer: ${updateError.message}`);
         }
       } else {
@@ -502,16 +561,27 @@ export default function Influencers() {
   // Helper function to upload media files
   const uploadMediaFiles = async (userId: string, mediaFiles: any[]) => {
     try {
-      const uploadPromises = mediaFiles.map(async (mediaFile) => {
+      console.log('📁 Starting media file upload for user:', userId);
+      console.log('📁 Number of files to upload:', mediaFiles.length);
+      
+      const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
+        console.log(`📁 Processing file ${index + 1}:`, mediaFile);
         const file = mediaFile.file;
         const filePath = `influencer-media/${userId}/${Date.now()}-${file.name}`;
+        
+        console.log(`📁 Uploading file ${index + 1} to storage path:`, filePath);
         
         // Upload to storage
         const { error: uploadError } = await supabase.storage
           .from('influencer-media')
           .upload(filePath, file, { upsert: true });
         
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error(`📁 Storage upload error for file ${index + 1}:`, uploadError);
+          throw uploadError;
+        }
+        
+        console.log(`📁 File ${index + 1} uploaded to storage successfully`);
         
         // Get public URL
         const { data: publicUrlData } = supabase.storage
@@ -519,13 +589,16 @@ export default function Influencers() {
           .getPublicUrl(filePath);
         
         const fileUrl = publicUrlData?.publicUrl;
+        console.log(`📁 Public URL for file ${index + 1}:`, fileUrl);
         
         // Determine file type
         const fileType = file.type.startsWith('image/') ? 'image' : 'video';
         
         // Insert into database (if table exists)
         try {
-          const { error: dbError } = await supabase
+          console.log(`📁 Attempting to insert file ${index + 1} into influencer_media table`);
+          
+          const { data: insertData, error: dbError } = await supabase
             .from('influencer_media')
             .insert({
               influencer_id: userId,
@@ -535,23 +608,44 @@ export default function Influencers() {
               file_size: file.size,
               mime_type: file.type,
               created_at: new Date().toISOString()
-            });
+            })
+            .select();
           
           if (dbError) {
-            console.warn('influencer_media table not accessible:', dbError);
-            // Continue even if DB insert fails
+            console.error(`📁 Database insert error for file ${index + 1}:`, dbError);
+            console.error(`📁 Error details:`, JSON.stringify(dbError, null, 2));
+            
+            // Check if it's a table not found error
+            if (dbError.message && dbError.message.includes('relation "influencer_media" does not exist')) {
+              console.error('📁 CRITICAL: influencer_media table does not exist!');
+              console.error('📁 Please run the create_influencer_media_table.sql script in your Supabase database');
+              throw new Error('influencer_media table does not exist. Please create it first.');
+            }
+            
+            // Continue even if DB insert fails for other reasons
+            console.warn(`📁 Continuing without database insert for file ${index + 1}`);
+          } else {
+            console.log(`📁 File ${index + 1} inserted into database successfully:`, insertData);
           }
-        } catch (dbTableError) {
-          console.warn('influencer_media table not accessible:', dbTableError);
-          // Continue even if DB insert fails
+        } catch (dbTableError: any) {
+          console.error(`📁 Database table error for file ${index + 1}:`, dbTableError);
+          
+          if (dbTableError.message && dbTableError.message.includes('relation "influencer_media" does not exist')) {
+            console.error('📁 CRITICAL: influencer_media table does not exist!');
+            throw new Error('influencer_media table does not exist. Please create it first.');
+          }
+          
+          console.warn(`📁 Continuing without database insert for file ${index + 1}`);
         }
         
         return { success: true, fileUrl };
       });
       
-      await Promise.all(uploadPromises);
+      const results = await Promise.all(uploadPromises);
+      console.log('📁 All media files processed successfully:', results);
+      return results;
     } catch (error) {
-      console.error('Error uploading media files:', error);
+      console.error('📁 Error uploading media files:', error);
       throw error;
     }
   };
@@ -1370,9 +1464,6 @@ export default function Influencers() {
                   <Typography.Text strong style={{ display: 'block', marginBottom: '12px' }}>
                     Selected Media ({mediaFiles.length} files):
                   </Typography.Text>
-                  <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666' }}>
-                    Debug: {JSON.stringify(mediaFiles.map(f => ({ name: f.name, type: f.type, preview: f.preview?.substring(0, 50) })))}
-                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {mediaFiles.map((file, index) => (
                       <div key={index} className="relative group">
@@ -1431,25 +1522,18 @@ export default function Influencers() {
   // Step navigation with validation
   const next = async () => {
     try {
-      console.log('Next button clicked, current step:', currentStep);
-      
       if (currentStep === 0) {
         // Validate only required fields for step 1
         await form.validateFields(['email', 'name']);
-        console.log('Step 1 validation passed');
       } else if (currentStep === 1) {
         // Step 2 has no required fields, just proceed
-        console.log('Step 2 - no validation needed');
       } else if (currentStep === 2) {
         // Step 3 has no required fields, just proceed
-        console.log('Step 3 - no validation needed');
       } else if (currentStep === 3) {
         // Step 4 has no required fields, just proceed
-        console.log('Step 4 - no validation needed');
       }
       
       setCurrentStep((s) => s + 1);
-      console.log('Moved to step:', currentStep + 1);
     } catch (err) {
       console.error('Validation failed:', err);
       // Validation errors are shown by AntD
@@ -1590,14 +1674,12 @@ export default function Influencers() {
   // Monitor form values for debugging and sync profile image preview
   useEffect(() => {
     if (drawerOpen) {
-      // Log form values every time the step changes
+      // Sync profile image preview with form field
       const interval = setInterval(() => {
         const values = form.getFieldsValue();
-        console.log('Current form values:', values);
         
         // Sync profile image preview with form field
         if (values.profile_image_url && !profileImagePreview) {
-          console.log('Syncing profile image preview from form field:', values.profile_image_url);
           setProfileImagePreview(values.profile_image_url);
         }
       }, 1000);
@@ -1609,7 +1691,6 @@ export default function Influencers() {
   // Handle editing influencer data loading
   useEffect(() => {
     if (drawerOpen && editingInfluencer) {
-      console.log('Drawer opened with editing influencer, loading data...');
       // Small delay to ensure form is mounted
       const timer = setTimeout(() => {
         loadInfluencerForEditing(editingInfluencer);
@@ -1618,11 +1699,6 @@ export default function Influencers() {
       return () => clearTimeout(timer);
     }
   }, [drawerOpen, editingInfluencer]);
-
-  // Debug media files changes
-  useEffect(() => {
-    console.log('Media files state changed:', mediaFiles);
-  }, [mediaFiles]);
 
   // Handler for media files upload
   const handleMediaFilesUpload = (files: File[]) => {
@@ -1638,28 +1714,21 @@ export default function Influencers() {
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
-    console.log('=== PROFILE IMAGE UPLOAD STARTED ===');
-    console.log('File selected:', file.name, file.size, file.type);
-    
     setProfileImageUploading(true);
     try {
       const ext = file.name.split('.').pop();
       const filePath = `influencers/profile/${Date.now()}-${file.name}`;
-      console.log('Uploading to path:', filePath);
       
       const { error: uploadError } = await supabase.storage.from('influencer-profile').upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
       
       const { data: publicUrlData } = supabase.storage.from('influencer-profile').getPublicUrl(filePath);
       const url = publicUrlData?.publicUrl;
-      console.log('Upload successful, URL:', url);
       
       if (url) {
-        console.log('Setting form field profile_image_url to:', url);
         form.setFieldsValue({ profile_image_url: url });
         // Update preview with the uploaded URL (replaces the local blob URL)
         setProfileImagePreview(url);
-        console.log('Form field updated, preview set');
       }
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -1669,7 +1738,6 @@ export default function Influencers() {
       form.setFieldsValue({ profile_image_url: null });
     } finally {
       setProfileImageUploading(false);
-      console.log('=== PROFILE IMAGE UPLOAD COMPLETED ===');
     }
   };
 
@@ -1747,28 +1815,6 @@ export default function Influencers() {
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16, maxWidth: 600 }} />}
         
-        {/* Debug buttons for editing */}
-        {editingInfluencer && (
-          <div style={{ marginBottom: 16, textAlign: 'center' }}>
-            <Button 
-              size="small" 
-              onClick={() => {
-                console.log('Debug: Current form values:', form.getFieldsValue());
-                console.log('Debug: Editing influencer data:', editingInfluencer);
-              }}
-              style={{ marginRight: 8 }}
-            >
-              Debug Form
-            </Button>
-            <Button 
-              size="small" 
-              onClick={() => loadInfluencerForEditing(editingInfluencer)}
-            >
-              Reload Data
-            </Button>
-          </div>
-        )}
-        
         <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 16 }}>
           <Steps current={currentStep} items={stepItems.map(s => ({ title: s.title }))} style={{ marginBottom: 32 }} responsive direction={isMobile ? 'vertical' : 'horizontal'} />
           
@@ -1806,53 +1852,11 @@ export default function Influencers() {
                     {step.content}
                   </div>
                 ))}
-                
-
-
               </div>
               
               {/* Form buttons */}
               <div className="flex justify-between items-center pt-8 pb-4">
                 <div className="flex items-center space-x-3">
-                  {/* Debug button to check form values */}
-                  <Button 
-                    onClick={() => {
-                      console.log('🔍 DEBUG: Checking form values...');
-                      const values = form.getFieldsValue();
-                      console.log('All form values:', values);
-                      console.log('Media files state:', mediaFiles);
-                      console.log('Profile image preview:', profileImagePreview);
-                    }}
-                    size="small"
-                    style={{
-                      borderRadius: '8px',
-                      border: '1px solid #1890ff',
-                      color: '#1890ff',
-                      background: '#ffffff'
-                    }}
-                  >
-                    Debug Form
-                  </Button>
-                  
-                  {/* Debug button to reload influencer data */}
-                  {editingInfluencer && (
-                    <Button 
-                      onClick={() => {
-                        console.log('🔄 DEBUG: Reloading influencer data...');
-                        loadInfluencerForEditing(editingInfluencer);
-                      }}
-                      size="small"
-                      style={{
-                        borderRadius: '8px',
-                        border: '1px solid #52c41a',
-                        color: '#52c41a',
-                        background: '#ffffff'
-                      }}
-                    >
-                      Reload Data
-                    </Button>
-                  )}
-                  
                   {/* Show Close Form button after successful creation/update */}
                   {influencerCreated && (
                     <Button 
@@ -1925,18 +1929,7 @@ export default function Influencers() {
                     <Button 
                       type="primary" 
                       onClick={() => {
-                        console.log('🎯 FINAL BUTTON CLICKED!');
-                        console.log('Current step:', currentStep);
-                        console.log('Media files count:', mediaFiles.length);
-                        console.log('Button clicked at:', new Date().toISOString());
-                        
-                        // Test if the function exists
-                        if (typeof handleAddInfluencer === 'function') {
-                          console.log('✅ handleAddInfluencer is a function, calling it...');
-                          handleAddInfluencer();
-                        } else {
-                          console.error('❌ handleAddInfluencer is not a function:', typeof handleAddInfluencer);
-                        }
+                        handleAddInfluencer();
                       }}
                       loading={formLoading}
                       size="large"
