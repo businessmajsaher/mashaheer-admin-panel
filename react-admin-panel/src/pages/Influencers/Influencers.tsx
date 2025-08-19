@@ -232,15 +232,21 @@ export default function Influencers() {
         
         try {
           // Update profile first
+          const profileUpdateData = {
+            name: values.name,
+            bio: values.bio || null,
+            country: values.country,
+            is_verified: values.is_verified || false,
+            profile_image_url: values.profile_image_url || null
+          };
+          
+          console.log('13a. Profile update data:', profileUpdateData);
+          console.log('13b. Profile image URL value:', values.profile_image_url);
+          console.log('13c. Social links value:', values.social_links);
+          
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({
-              name: values.name,
-              bio: values.bio || null,
-              country: values.country,
-              is_verified: values.is_verified || false,
-              profile_image_url: values.profile_image_url || null
-            })
+            .update(profileUpdateData)
             .eq('id', editingInfluencer.id);
           
           if (updateError) {
@@ -249,111 +255,193 @@ export default function Influencers() {
           }
           
           console.log('14. Profile updated successfully');
+          
+          // Verify the profile update
+          const { data: verifyProfile, error: verifyError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', editingInfluencer.id)
+            .single();
+          
+          if (verifyError) {
+            console.error('Profile verification error:', verifyError);
+          } else {
+            console.log('14a. Profile verification after update:', verifyProfile);
+            console.log('14b. Updated profile image URL:', verifyProfile.profile_image_url);
+          }
+          
           influencerId = editingInfluencer.id;
+          
+          // Update social links for existing influencer
+          if (values.social_links && values.social_links.length > 0) {
+            console.log('14a. Updating social links for existing influencer...');
+            console.log('14b. Social links to update:', values.social_links);
+            
+            try {
+              // First, delete existing social links
+              const { error: deleteError } = await supabase
+                .from('social_links')
+                .delete()
+                .eq('user_id', influencerId);
+              
+              if (deleteError) {
+                console.error('14c. Error deleting existing social links:', deleteError);
+                throw new Error(`Failed to delete existing social links: ${deleteError.message}`);
+              }
+              
+              console.log('14d. Existing social links deleted successfully');
+              
+              // Then, insert new social links
+              const socialLinksData = values.social_links.map((link: any) => ({
+                user_id: influencerId,
+                platform_id: link.platform_id,
+                handle: link.handle,
+                profile_url: link.url,
+                created_at: new Date().toISOString()
+              }));
+              
+              const { data: insertedSocialLinks, error: socialError } = await supabase
+                .from('social_links')
+                .insert(socialLinksData)
+                .select();
+              
+              if (socialError) {
+                console.error('14e. Error inserting social links:', socialError);
+                throw new Error(`Failed to insert social links: ${socialError.message}`);
+              }
+              
+              console.log('14f. Social links updated successfully:', insertedSocialLinks);
+              
+            } catch (socialError: any) {
+              console.error('Social links update error:', socialError);
+              throw new Error(`Failed to update social links: ${socialError.message}`);
+            }
+          } else {
+            console.log('14a. No social links to update for existing influencer');
+          }
           
           // Handle media files for existing influencer
           if (mediaFiles.length > 0) {
-            console.log('15. Uploading media files for existing influencer...');
-            console.log('15a. Media files to upload:', mediaFiles);
+            console.log('15. Processing media files for existing influencer...');
+            console.log('15a. Media files to process:', mediaFiles);
             
-            // Test storage bucket access
-            try {
-              const { data: bucketTest, error: bucketError } = await supabase.storage
-                .from('influencer-media')
-                .list('', { limit: 1 });
-              
-              if (bucketError) {
-                console.error('15a1. Storage bucket test failed:', bucketError);
-                throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
-              }
-              
-              console.log('15a2. Storage bucket test successful');
-            } catch (bucketTestError) {
-              console.error('15a3. Storage bucket test error:', bucketTestError);
-              throw bucketTestError;
-            }
+            // Filter out existing media files (they don't have actual File objects)
+            const newMediaFiles = mediaFiles.filter(mediaFile => mediaFile.file !== null);
+            console.log('15b. New media files to upload:', newMediaFiles);
             
-            try {
-              const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
-                console.log(`15b. Processing media file ${index + 1}:`, mediaFile);
-                const file = mediaFile.file;
-                const filePath = `influencer-media/${Date.now()}-${file.name}`;
-                
-                console.log(`15c. Uploading file ${index + 1} to path:`, filePath);
-                
-                // Upload to storage
-                const { error: uploadError } = await supabase.storage
+            if (newMediaFiles.length > 0) {
+              // Test storage bucket access
+              try {
+                const { data: bucketTest, error: bucketError } = await supabase.storage
                   .from('influencer-media')
-                  .upload(filePath, file, { upsert: true });
+                  .list('', { limit: 1 });
                 
-                if (uploadError) {
-                  console.error(`15d. Upload error for file ${index + 1}:`, uploadError);
-                  throw uploadError;
+                if (bucketError) {
+                  console.error('15c. Storage bucket test failed:', bucketError);
+                  throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
                 }
                 
-                console.log(`15e. File ${index + 1} uploaded successfully to storage`);
-                
-                // Get public URL
-                const { data: publicUrlData } = supabase.storage
-                  .from('influencer-media')
-                  .getPublicUrl(filePath);
-                
-                const fileUrl = publicUrlData?.publicUrl;
-                console.log(`15f. Public URL for file ${index + 1}:`, fileUrl);
-                
-                return {
-                  file_url: fileUrl,
-                  file_type: file.type,
-                  file_name: file.name
-                };
-              });
-              
-              const uploadedMediaFiles = await Promise.all(uploadPromises);
-              console.log('16. Media files uploaded successfully:', uploadedMediaFiles);
-              
-              // Insert media files into database
-              console.log('17. Inserting media files into database...');
-              const mediaData = uploadedMediaFiles.map((media) => {
-                // Determine file type based on MIME type - only use 'image' and 'video' for now
-                let fileType = 'image'; // Default to image
-                if (media.file_type.startsWith('video/')) {
-                  fileType = 'video';
-                } else if (!media.file_type.startsWith('image/')) {
-                  // For non-image, non-video files, default to image for now
-                  // This can be updated once the constraint is fixed
-                  fileType = 'image';
-                }
-                
-                return {
-                  influencer_id: influencerId,
-                  file_url: media.file_url,
-                  file_type: fileType, // Use the mapped file type
-                  file_name: media.file_name,
-                  file_size: 0, // Default value since we don't have it in the uploaded media
-                  mime_type: media.file_type, // Store the original MIME type
-                  created_at: new Date().toISOString()
-                };
-              });
-              
-              const { data: insertedMedia, error: mediaError } = await supabase
-                .from('influencer_media')
-                .insert(mediaData)
-                .select();
-              
-              if (mediaError) {
-                console.error('❌ Media insertion error:', mediaError);
-                console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
-                throw new Error(`Failed to save media files: ${mediaError.message}`);
+                console.log('15d. Storage bucket test successful');
+              } catch (bucketTestError) {
+                console.error('15e. Storage bucket test error:', bucketTestError);
+                throw bucketTestError;
               }
               
-              console.log('✅ Media files saved to database:', insertedMedia);
-              
-            } catch (uploadError: any) {
-              console.error('Media upload error:', uploadError);
-              throw new Error(`Failed to upload media files: ${uploadError.message}`);
+              try {
+                const uploadPromises = newMediaFiles.map(async (mediaFile, index) => {
+                  console.log(`15f. Processing new media file ${index + 1}:`, mediaFile);
+                  const file = mediaFile.file;
+                  
+                  if (!file) {
+                    console.warn(`15g. Skipping media file ${index + 1} - no file object`);
+                    return null;
+                  }
+                  
+                  const filePath = `influencer-media/${Date.now()}-${file.name}`;
+                  
+                  console.log(`15h. Uploading file ${index + 1} to path:`, filePath);
+                  
+                  // Upload to storage
+                  const { error: uploadError } = await supabase.storage
+                    .from('influencer-media')
+                    .upload(filePath, file, { upsert: true });
+                  
+                  if (uploadError) {
+                    console.error(`15i. Upload error for file ${index + 1}:`, uploadError);
+                    throw uploadError;
+                  }
+                  
+                  console.log(`15j. File ${index + 1} uploaded successfully to storage`);
+                  
+                  // Get public URL
+                  const { data: publicUrlData } = supabase.storage
+                    .from('influencer-media')
+                    .getPublicUrl(filePath);
+                  
+                  const fileUrl = publicUrlData?.publicUrl;
+                  console.log(`15k. Public URL for file ${index + 1}:`, fileUrl);
+                  
+                  return {
+                    file_url: fileUrl,
+                    file_type: file.type,
+                    file_name: file.name
+                  };
+                });
+                
+                const uploadResults = await Promise.all(uploadPromises);
+                const uploadedMediaFiles = uploadResults.filter(result => result !== null);
+                console.log('15l. Media files uploaded successfully:', uploadedMediaFiles);
+                
+                if (uploadedMediaFiles.length > 0) {
+                  // Insert media files into database
+                  console.log('15m. Inserting media files into database...');
+                  const mediaData = uploadedMediaFiles.map((media) => {
+                    // Determine file type based on MIME type - only use 'image' and 'video' for now
+                    let fileType = 'image'; // Default to image
+                    if (media!.file_type.startsWith('video/')) {
+                      fileType = 'video';
+                    } else if (!media!.file_type.startsWith('image/')) {
+                      // For non-image, non-video files, default to image for now
+                      // This can be updated once the constraint is fixed
+                      fileType = 'image';
+                    }
+                    
+                    return {
+                      influencer_id: influencerId,
+                      file_url: media!.file_url,
+                      file_type: fileType, // Use the mapped file type
+                      file_name: media!.file_name,
+                      file_size: 0, // Default value since we don't have it in the uploaded media
+                      mime_type: media!.file_type, // Store the original MIME type
+                      created_at: new Date().toISOString()
+                    };
+                  });
+                  
+                  const { data: insertedMedia, error: mediaError } = await supabase
+                    .from('influencer_media')
+                    .insert(mediaData)
+                    .select();
+                  
+                  if (mediaError) {
+                    console.error('❌ Media insertion error:', mediaError);
+                    console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
+                    throw new Error(`Failed to save media files: ${mediaError.message}`);
+                  }
+                  
+                  console.log('✅ Media files saved to database:', insertedMedia);
+                } else {
+                  console.log('15m. No new media files to insert into database');
+                }
+                
+              } catch (uploadError: any) {
+                console.error('Media upload error:', uploadError);
+                throw new Error(`Failed to upload media files: ${uploadError.message}`);
+              }
+            } else {
+              console.log('15c. No new media files to upload for existing influencer');
             }
           } else {
-            console.log('15. No media files to upload for existing influencer');
+            console.log('15. No media files to process for existing influencer');
           }
           
         } catch (updateError: any) {
@@ -1626,14 +1714,22 @@ export default function Influencers() {
         .select('*')
         .eq('user_id', influencer.id);
       
+      console.log('Social links loaded from database:', socialLinks);
+      
       if (socialLinks && socialLinks.length > 0) {
+        const mappedSocialLinks = socialLinks.map(link => ({
+          platform_id: link.platform_id,
+          handle: link.handle,
+          url: link.profile_url
+        }));
+        
+        console.log('Mapped social links for form:', mappedSocialLinks);
+        
         form.setFieldsValue({
-          social_links: socialLinks.map(link => ({
-            platform_id: link.platform_id,
-            handle: link.handle,
-            profile_url: link.profile_url
-          }))
+          social_links: mappedSocialLinks
         });
+      } else {
+        console.log('No social links found for influencer');
       }
       
       // Load existing media files
