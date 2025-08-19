@@ -276,6 +276,12 @@ export default function Influencers() {
           if (values.social_links && values.social_links.length > 0) {
             console.log('14a. Updating social links for existing influencer...');
             console.log('14b. Social links to update:', values.social_links);
+            console.log('14c. Social links structure check:', values.social_links.map((link: any) => ({
+              platform_id: link.platform_id,
+              handle: link.handle,
+              profile_url: link.profile_url,
+              url: link.url // Check if this exists
+            })));
             
             try {
               // First, delete existing social links
@@ -296,7 +302,7 @@ export default function Influencers() {
                 user_id: influencerId,
                 platform_id: link.platform_id,
                 handle: link.handle,
-                profile_url: link.url,
+                profile_url: link.profile_url,
                 created_at: new Date().toISOString()
               }));
               
@@ -1720,7 +1726,7 @@ export default function Influencers() {
         const mappedSocialLinks = socialLinks.map(link => ({
           platform_id: link.platform_id,
           handle: link.handle,
-          url: link.profile_url
+          profile_url: link.profile_url
         }));
         
         console.log('Mapped social links for form:', mappedSocialLinks);
