@@ -18,9 +18,14 @@ const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
 const Signup = lazy(() => import('@/pages/Signup'));
 const Platforms = lazy(() => import('@/pages/Platforms'));
-const PasswordResetCallback = lazy(() => import('@/pages/PasswordResetCallback'));
+const PasswordResetCallback = lazy(() => import('@/pages/PasswordResetCallback').then(module => {
+  console.log('🔍 PasswordResetCallback module loaded:', module);
+  return module;
+}));
 
 export default function App() {
+  console.log('🔍 App component mounted, routes configured');
+  
   return (
     <ErrorBoundary>
       <ThemeProvider>
