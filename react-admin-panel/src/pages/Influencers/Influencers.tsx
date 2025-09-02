@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, KeyOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { PasswordResetModal } from '@/components/PasswordResetModal';
 import Cropper from 'react-easy-crop';
 import { Modal as AntdModal, Slider } from 'antd';
 
@@ -29,6 +30,11 @@ export default function Influencers() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [passwordResetModal, setPasswordResetModal] = useState({
+    isOpen: false,
+    email: '',
+    name: ''
+  });
 
   // Countries list with currency codes
   const countries = [
@@ -987,6 +993,22 @@ export default function Influencers() {
     }
   };
 
+  const handlePasswordReset = (email: string, name: string) => {
+    setPasswordResetModal({
+      isOpen: true,
+      email,
+      name
+    });
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetModal({
+      isOpen: false,
+      email: '',
+      name: ''
+    });
+  };
+
   // Fetch media and social links for influencer
   const openDetail = async (record: any) => {
     setDetailOpen(true);
@@ -1070,6 +1092,14 @@ export default function Influencers() {
             onClick={() => handleEditInfluencer(record)}
           >
             Edit
+          </Button>
+          <Button 
+            type="default" 
+            size="small"
+            icon={<KeyOutlined />}
+            onClick={() => handlePasswordReset(record.email, record.name)}
+          >
+            Reset Password
           </Button>
           <Popconfirm
             title="Delete Influencer"
@@ -2127,6 +2157,13 @@ export default function Influencers() {
           </div>
         )}
       </Drawer>
+
+      <PasswordResetModal
+        isOpen={passwordResetModal.isOpen}
+        onClose={closePasswordResetModal}
+        userEmail={passwordResetModal.email}
+        userName={passwordResetModal.name}
+      />
     </Card>
   );
 } 

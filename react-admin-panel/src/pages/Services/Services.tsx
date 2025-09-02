@@ -98,30 +98,7 @@ export default function Services() {
     primary_influencer_id: undefined
   });
 
-  // Debug function to log Supabase client state
-  const debugSupabaseState = async () => {
-    console.log('🔍 === SUPABASE DEBUG INFO ===');
-    console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-    console.log('Supabase Anon Key:', import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing');
-    
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log('Current Session:', sessionData);
-      
-      const { data: userData } = await supabase.auth.getUser();
-      console.log('Current User:', userData);
-      
-      // Test basic connection
-      const { data: testData, error: testError } = await supabase
-        .from('social_media_platforms')
-        .select('count', { count: 'exact', head: true });
-      console.log('Platforms Test Query:', { data: testData, error: testError });
-      
-    } catch (error) {
-      console.error('Debug Error:', error);
-    }
-    console.log('🔍 === END DEBUG INFO ===');
-  };
+
 
   // Fetch services from Supabase
   const fetchServices = async () => {
@@ -211,7 +188,6 @@ export default function Services() {
 
   useEffect(() => { 
     console.log('🚀 Services component mounted, fetching data...');
-    debugSupabaseState();
     fetchServices(); 
     fetchCategories();
     fetchInfluencers();
@@ -629,24 +605,6 @@ export default function Services() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Services</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button 
-            type="default" 
-            onClick={() => {
-              console.log('🔍 Current services in table:', services);
-              console.log('🔍 Services with flash deals:', services.filter(s => s.is_flash_deal));
-              console.log('🔍 Services with flash type:', services.filter(s => s.service_type === 'flash'));
-            }}
-            style={{ borderColor: '#1890ff', color: '#1890ff' }}
-          >
-            🔍 Debug Services Table
-          </Button>
-          <Button 
-            type="default" 
-            onClick={debugSupabaseState}
-            style={{ borderColor: '#1890ff', color: '#1890ff' }}
-          >
-            🔍 Debug Supabase
-          </Button>
           <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { 
             setModalOpen(true); 
             form.resetFields(); 
@@ -966,24 +924,7 @@ export default function Services() {
              <>
                <Divider>Flash Deal Settings</Divider>
                
-               {/* Debug button */}
-               <Button 
-                 type="dashed" 
-                 size="small" 
-                 onClick={() => {
-                   const flashFrom = form.getFieldValue('flash_from');
-                   const flashTo = form.getFieldValue('flash_to');
-                   console.log('🔍 Flash Deal Debug:');
-                   console.log('Flash From:', flashFrom);
-                   console.log('Flash From type:', typeof flashFrom);
-                   console.log('Flash To:', flashTo);
-                   console.log('Flash To type:', typeof flashTo);
-                   console.log('Is Flash Deal:', form.getFieldValue('is_flash_deal'));
-                 }}
-                 style={{ marginBottom: 16 }}
-               >
-                 Debug: Check Flash Deal Dates
-               </Button>
+
                
                <Row gutter={16}>
                  <Col span={12}>
@@ -1342,26 +1283,7 @@ export default function Services() {
              <>
                <Divider>Flash Deal Settings</Divider>
                
-               {/* Debug button for edit modal */}
-               <Button 
-                 type="dashed" 
-                 size="small" 
-                 onClick={() => {
-                   const flashFrom = editForm.getFieldValue('flash_from');
-                   const flashTo = editForm.getFieldValue('flash_to');
-                   const serviceType = editForm.getFieldValue('service_type');
-                   const isFlashDeal = editForm.getFieldValue('is_flash_deal');
-                   console.log('🔍 Edit Modal Flash Deal Debug:');
-                   console.log('Flash From:', flashFrom);
-                   console.log('Flash To:', flashTo);
-                   console.log('Service Type:', serviceType);
-                   console.log('Is Flash Deal:', isFlashDeal);
-                   console.log('Original Service:', editingService);
-                 }}
-                 style={{ marginBottom: 16 }}
-               >
-                 Debug: Check Edit Form Values
-               </Button>
+
                
                <Row gutter={16}>
                  <Col span={12}>

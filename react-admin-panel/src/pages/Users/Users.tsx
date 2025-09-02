@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Tag, Space, Avatar, message } from 'antd';
-import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { PasswordResetModal } from '@/components/PasswordResetModal';
 
 interface Customer {
   id: string;
@@ -15,78 +16,7 @@ interface Customer {
   created_at: string;
 }
 
-const columns = [
-  {
-    title: 'Profile',
-    key: 'profile',
-    render: (record: Customer) => (
-      <Space>
-        <Avatar 
-          src={record.profile_image_url} 
-          size={40}
-          style={{ backgroundColor: record.profile_image_url ? 'transparent' : '#1890ff' }}
-        >
-          {record.name?.charAt(0)?.toUpperCase()}
-        </Avatar>
-        <div>
-          <div style={{ fontWeight: 'bold' }}>{record.name}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{record.email}</div>
-        </div>
-      </Space>
-    ),
-  },
-  {
-    title: 'Status',
-    key: 'status',
-    render: (record: Customer) => (
-      <Space>
-        {record.is_verified && <Tag color="green">Verified</Tag>}
-        {record.is_suspended && <Tag color="red">Suspended</Tag>}
-        {!record.is_verified && !record.is_suspended && <Tag color="default">Pending</Tag>}
-      </Space>
-    ),
-  },
-  {
-    title: 'Bio',
-    dataIndex: 'bio',
-    key: 'bio',
-    render: (bio: string) => bio ? (
-      <div style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {bio}
-      </div>
-    ) : (
-      <span style={{ color: '#999' }}>No bio</span>
-    ),
-  },
-  {
-    title: 'Joined',
-    dataIndex: 'created_at',
-    key: 'created_at',
-    render: (date: string) => new Date(date).toLocaleDateString(),
-  },
-  {
-    title: 'Actions',
-    key: 'actions',
-    render: (record: Customer) => (
-      <Space>
-        <Button type="link" icon={<EyeOutlined />} size="small">
-          View
-        </Button>
-        <Button type="link" icon={<EditOutlined />} size="small">
-          Edit
-        </Button>
-        <Button 
-          type="link" 
-          icon={<DeleteOutlined />} 
-          size="small"
-          danger
-        >
-          Suspend
-        </Button>
-      </Space>
-    ),
-  },
-];
+
 
 export default function Users() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -94,6 +24,11 @@ export default function Users() {
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [passwordResetModal, setPasswordResetModal] = useState({
+    isOpen: false,
+    email: '',
+    name: ''
+  });
 
   useEffect(() => {
     fetchCustomers();
@@ -136,28 +71,134 @@ export default function Users() {
     setPageSize(pagination.pageSize);
   };
 
+  const handlePasswordReset = (email: string, name: string) => {
+    setPasswordResetModal({
+      isOpen: true,
+      email,
+      name
+    });
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetModal({
+      isOpen: false,
+      email: '',
+      name: ''
+    });
+  };
+
+  const columns = [
+    {
+      title: 'Profile',
+      key: 'profile',
+      render: (record: Customer) => (
+        <Space>
+          <Avatar 
+            src={record.profile_image_url} 
+            size={40}
+            style={{ backgroundColor: record.profile_image_url ? 'transparent' : '#1890ff' }}
+          >
+            {record.name?.charAt(0)?.toUpperCase()}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: 'bold' }}>{record.name}</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>{record.email}</div>
+          </div>
+        </Space>
+      ),
+    },
+    {
+      title: 'Status',
+      key: 'status',
+      render: (record: Customer) => (
+        <Space>
+          {record.is_verified && <Tag color="green">Verified</Tag>}
+          {record.is_suspended && <Tag color="red">Suspended</Tag>}
+          {!record.is_verified && !record.is_suspended && <Tag color="default">Pending</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: 'Bio',
+      dataIndex: 'bio',
+      key: 'bio',
+      render: (bio: string) => bio ? (
+        <div style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {bio}
+        </div>
+      ) : (
+        <span style={{ color: '#999' }}>No bio</span>
+      ),
+    },
+    {
+      title: 'Joined',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleDateString(),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (record: Customer) => (
+        <Space>
+          <Button type="link" icon={<EyeOutlined />} size="small">
+            View
+          </Button>
+          <Button type="link" icon={<EditOutlined />} size="small">
+            Edit
+          </Button>
+          <Button 
+            type="link" 
+            icon={<KeyOutlined />} 
+            size="small"
+            onClick={() => handlePasswordReset(record.email, record.name)}
+          >
+            Reset Password
+          </Button>
+          <Button 
+            type="link" 
+            icon={<DeleteOutlined />} 
+            size="small"
+            danger
+          >
+            Suspend
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   return (
-    <Card style={{ margin: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Customers</Typography.Title>
-        <Button type="primary" icon={<UserAddOutlined />}>Add Customer</Button>
-      </div>
-      
-      <Table 
-        columns={columns} 
-        dataSource={customers} 
-        rowKey="id"
-        loading={loading}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: total,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} customers`,
-        }}
-        onChange={handleTableChange}
+    <>
+      <Card style={{ margin: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Typography.Title level={4} style={{ margin: 0 }}>Customers</Typography.Title>
+          <Button type="primary" icon={<UserAddOutlined />}>Add Customer</Button>
+        </div>
+        
+        <Table 
+          columns={columns} 
+          dataSource={customers} 
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} customers`,
+          }}
+          onChange={handleTableChange}
+        />
+      </Card>
+
+      <PasswordResetModal
+        isOpen={passwordResetModal.isOpen}
+        onClose={closePasswordResetModal}
+        userEmail={passwordResetModal.email}
+        userName={passwordResetModal.name}
       />
-    </Card>
+    </>
   );
 } 
