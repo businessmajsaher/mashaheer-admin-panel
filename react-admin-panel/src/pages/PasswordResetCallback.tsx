@@ -10,11 +10,17 @@ export default function PasswordResetCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('🔍 PasswordResetCallback: Component mounted');
+    console.log('🔍 PasswordResetCallback: Current URL:', window.location.href);
+    console.log('🔍 PasswordResetCallback: Search params:', window.location.search);
+    
     const handlePasswordReset = async () => {
       try {
         // Get the code from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
+        
+        console.log('🔍 PasswordResetCallback: Code from URL:', code);
         
         if (!code) {
           setStatus('error');
@@ -73,6 +79,8 @@ export default function PasswordResetCallback() {
     }
   };
 
+  console.log('🔍 PasswordResetCallback: Rendering component with status:', status);
+  
   return (
     <div style={{ 
       display: 'flex', 

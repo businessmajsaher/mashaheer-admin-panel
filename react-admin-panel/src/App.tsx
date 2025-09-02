@@ -109,6 +109,8 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/password-reset-callback" element={<PasswordResetCallback />} />
+              {/* Catch-all route for SPA routing */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </Suspense>
         </Router>
