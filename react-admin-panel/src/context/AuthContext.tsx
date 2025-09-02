@@ -30,13 +30,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isMounted) {
         console.warn('⚠️ AuthContext: Session check timed out after 10 seconds');
         setLoading(false);
+        console.log('🔍 AuthContext: Forcing loading to false due to timeout');
       }
-    }, 10000);
+    }, 5000); // Reduced timeout to 5 seconds for faster debugging
     
     // Check session on mount
     const checkSession = async () => {
       try {
         console.log('🔍 AuthContext: Calling getSession...');
+        console.log('🔍 AuthContext: Supabase client:', supabase);
+        console.log('🔍 AuthContext: Environment check:', {
+          url: import.meta.env.VITE_SUPABASE_URL,
+          key: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing'
+        });
+        
         const { data, error } = await supabase.auth.getSession();
         console.log('🔍 AuthContext getSession result:', { data, error });
         
@@ -78,6 +85,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🔍 AuthContext: Setting loading to false');
         clearTimeout(timeoutId);
         setLoading(false);
+        
+        // Force loading to false after a short delay to prevent hanging
+        setTimeout(() => {
+          if (isMounted && loading) {
+            console.log('🔍 AuthContext: Force setting loading to false');
+            setLoading(false);
+          }
+        }, 1000);
       } catch (err) {
         if (isMounted) {
           console.error('❌ AuthContext getSession catch error:', err);

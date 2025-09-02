@@ -31,12 +31,21 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       }}>
         <Spin size="large" />
         <div>Loading authentication...</div>
+        <div style={{ fontSize: '12px', color: '#666' }}>
+          Debug: loading={loading.toString()}, user={user ? 'present' : 'null'}
+        </div>
         <Alert
           message="If this takes too long, please refresh the page"
           type="info"
           showIcon
           style={{ maxWidth: '400px' }}
         />
+        <button 
+          onClick={() => window.location.reload()} 
+          style={{ padding: '8px 16px', cursor: 'pointer' }}
+        >
+          Force Refresh
+        </button>
       </div>
     );
   }

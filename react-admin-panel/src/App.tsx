@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { MainLayout } from '@/layouts/MainLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const Dashboard = lazy(() => import('@/pages/Dashboard/Dashboard'));
 const Users = lazy(() => import('@/pages/Users/Users'));
@@ -17,14 +18,17 @@ const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
 const Signup = lazy(() => import('@/pages/Signup'));
 const Platforms = lazy(() => import('@/pages/Platforms'));
+const PasswordResetCallback = lazy(() => import('@/pages/PasswordResetCallback'));
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <Suspense fallback={<div>Loading...</div>}>
-            <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <Router>
+            <Suspense fallback={<div>Loading...</div>}>
+              <Routes>
+              <Route path="/test" element={<div style={{padding: '20px', textAlign: 'center'}}><h1>Test Route Working!</h1><p>If you can see this, routing is working.</p></div>} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/" element={
@@ -104,10 +108,12 @@ export default function App() {
                   </MainLayout>
                 </ProtectedRoute>
               } />
+              <Route path="/password-reset-callback" element={<PasswordResetCallback />} />
             </Routes>
           </Suspense>
         </Router>
       </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
