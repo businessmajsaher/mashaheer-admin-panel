@@ -1,1 +1,17 @@
 /*    /index.html   200
+
+# Explicit routes for SPA
+/login    /index.html   200
+/signup    /index.html   200
+/password-reset-callback    /index.html   200
+/routing-test    /index.html   200
+/dashboard    /index.html   200
+/users    /index.html   200
+/influencers    /index.html   200
+/categories    /index.html   200
+/services    /index.html   200
+/wallets    /index.html   200
+/reviews    /index.html   200
+/bookings    /index.html   200
+/settings    /index.html   200
+/platforms    /index.html   200
