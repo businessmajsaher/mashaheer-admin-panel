@@ -34,6 +34,7 @@ export default function App() {
             <Suspense fallback={<div>Loading...</div>}>
               <Routes>
               <Route path="/test" element={<div style={{padding: '20px', textAlign: 'center'}}><h1>Test Route Working!</h1><p>If you can see this, routing is working.</p></div>} />
+              <Route path="/routing-test" element={<div style={{padding: '20px', textAlign: 'center'}}><h1>Routing Test</h1><p>Route: {window.location.pathname}</p><p>Full URL: {window.location.href}</p></div>} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/" element={
@@ -114,6 +115,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/password-reset-callback" element={<PasswordResetCallback />} />
+              <Route path="/password-reset-callback/*" element={<PasswordResetCallback />} />
               {/* Catch-all route for SPA routing */}
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
