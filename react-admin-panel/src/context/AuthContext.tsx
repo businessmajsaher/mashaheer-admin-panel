@@ -20,15 +20,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  console.log('🔍 AuthProvider: Component rendered, loading:', loading, 'user:', user);
+
   useEffect(() => {
     console.log('🔍 AuthContext: Starting session check...');
     
     let isMounted = true;
     
+    // Check if Supabase is properly configured
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('❌ AuthContext: Supabase not configured, skipping session check');
+      setLoading(false);
+      return;
+    }
+    
     // Add a timeout to prevent hanging
     const timeoutId = setTimeout(() => {
       if (isMounted) {
-        console.warn('⚠️ AuthContext: Session check timed out after 10 seconds');
+        console.warn('⚠️ AuthContext: Session check timed out after 5 seconds');
         setLoading(false);
         console.log('🔍 AuthContext: Forcing loading to false due to timeout');
       }

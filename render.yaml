@@ -12,4 +12,16 @@ services:
     routes:
       - type: rewrite
         source: /*
+        destination: /index.html
+      - type: rewrite
+        source: /password-reset-callback
+        destination: /index.html
+      - type: rewrite
+        source: /routing-test
+        destination: /index.html
+      - type: rewrite
+        source: /login
+        destination: /index.html
+      - type: rewrite
+        source: /signup
         destination: /index.html 

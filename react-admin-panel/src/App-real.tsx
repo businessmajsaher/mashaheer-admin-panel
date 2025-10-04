@@ -1,10 +1,10 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { MockAuthProvider } from '@/context/MockAuthContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { MainLayout } from '@/layouts/MainLayout';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AuthProvider } from '@/context/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import MainLayout from '@/layouts/MainLayout';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Lazy load components
 const Login = lazy(() => import('@/pages/Login'));
@@ -20,12 +20,6 @@ const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
 const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Platforms = lazy(() => import('@/pages/Platforms'));
 const Contracts = lazy(() => import('@/pages/Contracts/Contracts'));
-const LegalNotices = lazy(() => import('@/pages/LegalNotices/LegalNotices'));
-const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('@/pages/TermsOfService/TermsOfService'));
-const ContactSupport = lazy(() => import('@/pages/ContactSupport/ContactSupport'));
-const HelpSupport = lazy(() => import('@/pages/HelpSupport/HelpSupport'));
-const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 
 // Password Reset Callback with console logging
@@ -35,12 +29,12 @@ const PasswordResetCallback = lazy(() => {
 });
 
 export default function App() {
-  console.log('🚀 App component mounted with MOCK authentication');
+  console.log('🚀 App component mounted');
   
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <MockAuthProvider>
+        <AuthProvider>
           <Router>
             <Suspense fallback={
               <div style={{ 
@@ -54,7 +48,7 @@ export default function App() {
                 <div>
                   <div>Loading application...</div>
                   <div style={{ fontSize: '14px', marginTop: '10px' }}>
-                    Using mock authentication for testing
+                    If this takes too long, check the browser console for errors
                   </div>
                 </div>
               </div>
@@ -82,8 +76,6 @@ export default function App() {
                       <h3>Current Location:</h3>
                       <p>Path: {window.location.pathname}</p>
                       <p>Full URL: {window.location.href}</p>
-                      <h3>Authentication:</h3>
-                      <p>Mode: Mock Authentication (for testing)</p>
                       <h3>Actions:</h3>
                       <button onClick={() => window.location.href = '/login'} style={{margin: '5px'}}>
                         Go to Login
@@ -196,56 +188,6 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 
-                {/* Legal and Support routes */}
-                <Route path="/legal-notices" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <LegalNotices />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/privacy-policy" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <PrivacyPolicy />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/terms-of-service" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <TermsOfService />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/contact-support" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <ContactSupport />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/help-support" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <HelpSupport />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                {/* Supabase Connection Test */}
-                <Route path="/supabase-test" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <SupabaseConnectionTest />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-
                 {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 
@@ -254,7 +196,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </Router>
-        </MockAuthProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -1,8 +1,8 @@
 # Supabase Configuration Template
 # Copy this content to a new file named .env in the same directory
 
-VITE_SUPABASE_URL=https://wilshhncdehbnyldsjzs.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpbHNoaG5jZGVoYm55bGRzanpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyNTI3NjEsImV4cCI6MjA2ODgyODc2MX0.sa4OtJemJpWjPm8pkvT8ke5ZNIFLyPLvrtKePhqO8pY
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
 # Instructions:
 # 1. Create a new file named .env in this directory

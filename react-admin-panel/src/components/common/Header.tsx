@@ -1,7 +1,7 @@
 import React from 'react';
 import { Layout, Avatar, Button, Dropdown, Menu, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/context/MockAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from 'antd';
 import type { MenuProps } from 'antd';

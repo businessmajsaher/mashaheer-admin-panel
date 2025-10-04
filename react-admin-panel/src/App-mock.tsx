@@ -2,9 +2,9 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { MockAuthProvider } from '@/context/MockAuthContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { MainLayout } from '@/layouts/MainLayout';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import MainLayout from '@/layouts/MainLayout';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Lazy load components
 const Login = lazy(() => import('@/pages/Login'));
@@ -20,12 +20,6 @@ const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
 const Settings = lazy(() => import('@/pages/Settings/Settings'));
 const Platforms = lazy(() => import('@/pages/Platforms'));
 const Contracts = lazy(() => import('@/pages/Contracts/Contracts'));
-const LegalNotices = lazy(() => import('@/pages/LegalNotices/LegalNotices'));
-const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('@/pages/TermsOfService/TermsOfService'));
-const ContactSupport = lazy(() => import('@/pages/ContactSupport/ContactSupport'));
-const HelpSupport = lazy(() => import('@/pages/HelpSupport/HelpSupport'));
-const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 
 // Password Reset Callback with console logging
@@ -196,56 +190,6 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 
-                {/* Legal and Support routes */}
-                <Route path="/legal-notices" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <LegalNotices />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/privacy-policy" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <PrivacyPolicy />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/terms-of-service" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <TermsOfService />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/contact-support" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <ContactSupport />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/help-support" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <HelpSupport />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-                
-                {/* Supabase Connection Test */}
-                <Route path="/supabase-test" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <SupabaseConnectionTest />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
-
                 {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 
