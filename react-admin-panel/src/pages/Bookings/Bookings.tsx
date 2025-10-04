@@ -80,7 +80,8 @@ const Bookings: React.FC = () => {
       duration_days: record.duration_days,
       total_amount: record.total_amount,
       location: record.location,
-      special_requirements: record.special_requirements
+      special_requirements: record.special_requirements,
+      script_content: record.script_content || ''
     });
     setModalVisible(true);
   };
@@ -117,6 +118,7 @@ const Bookings: React.FC = () => {
       case 'approved': return 'blue';
       case 'completed': return 'green';
       case 'canceled': return 'red';
+      case 'script_for_approval': return 'purple';
       default: return 'default';
     }
   };
@@ -210,6 +212,7 @@ const Bookings: React.FC = () => {
           >
             <Option value="pending">Pending</Option>
             <Option value="approved">Approved</Option>
+            <Option value="script_for_approval">Script for Approval</Option>
             <Option value="completed">Completed</Option>
             <Option value="canceled">Canceled</Option>
           </Select>
@@ -243,6 +246,7 @@ const Bookings: React.FC = () => {
             >
               <Option value="pending">Pending</Option>
               <Option value="approved">Approved</Option>
+              <Option value="script_for_approval">Script for Approval</Option>
               <Option value="completed">Completed</Option>
               <Option value="canceled">Canceled</Option>
             </Select>
@@ -290,6 +294,11 @@ const Bookings: React.FC = () => {
         >
           {selectedBooking && (
             <div>
+              <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                <Tag color={getStatusColor(selectedBooking.status)} style={{ fontSize: '16px', padding: '8px 16px' }}>
+                  {selectedBooking.status === 'script_for_approval' ? 'Script for Your Approval' : selectedBooking.status.toUpperCase()}
+                </Tag>
+              </div>
               <Descriptions title="Booking Information" bordered>
                 <Descriptions.Item label="Service" span={3}>
                   {selectedBooking.service?.title}
@@ -315,6 +324,9 @@ const Bookings: React.FC = () => {
                 <Descriptions.Item label="Special Requirements" span={3}>
                   {selectedBooking.special_requirements || 'None'}
                 </Descriptions.Item>
+                <Descriptions.Item label="Script Content" span={3}>
+                  {selectedBooking.script_content || 'No script provided'}
+                </Descriptions.Item>
               </Descriptions>
 
               <Divider />
@@ -334,6 +346,7 @@ const Bookings: React.FC = () => {
                       <Select>
                         <Option value="pending">Pending</Option>
                         <Option value="approved">Approved</Option>
+                        <Option value="script_for_approval">Script for Approval</Option>
                         <Option value="completed">Completed</Option>
                         <Option value="canceled">Canceled</Option>
                       </Select>
@@ -385,11 +398,23 @@ const Bookings: React.FC = () => {
                   <TextArea rows={3} placeholder="Enter special requirements" />
                 </Form.Item>
 
+                <Form.Item
+                  name="script_content"
+                  label="Script Content"
+                >
+                  <TextArea rows={4} placeholder="Enter script content" />
+                </Form.Item>
+
                 <Form.Item>
                   <Space>
                     <Button type="primary" htmlType="submit">
                       Update Booking
                     </Button>
+                    {selectedBooking?.status !== 'script_for_approval' && (
+                      <Button type="default" icon={<EditOutlined />}>
+                        Edit Script
+                      </Button>
+                    )}
                     <Button onClick={() => setModalVisible(false)}>
                       Cancel
                     </Button>
