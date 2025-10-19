@@ -74,14 +74,14 @@ export default function LegalNotices() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={2}>Legal Notices</Title>
-      <Paragraph>
-        Manage legal notices and disclaimers displayed to users. These notices help protect your platform and inform users about important legal information.
+      <Title level={2} style={{ color: '#000' }}>الإشعارات القانونية</Title>
+      <Paragraph style={{ color: '#333' }}>
+        إدارة الإشعارات القانونية والإخلاءات المعروضة للمستخدمين. تساعد هذه الإشعارات في حماية منصتك وإعلام المستخدمين بمعلومات قانونية مهمة.
       </Paragraph>
 
       <Alert
-        message="Legal Notice Management"
-        description="You can edit the HTML content of each legal notice below. Changes are saved automatically to local storage for this demo. In production, this would connect to your backend database."
+        message="إدارة الإشعارات القانونية"
+        description="يمكنك تعديل محتوى HTML لكل إشعار قانوني أدناه. يتم حفظ التغييرات تلقائياً في قاعدة البيانات."
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
@@ -96,7 +96,7 @@ export default function LegalNotices() {
                 <span>{content.title}</span>
                 <Space>
                   <small style={{ color: '#666' }}>
-                    Last updated: {new Date(content.last_updated).toLocaleDateString()}
+                    آخر تحديث: {new Date(content.last_updated).toLocaleDateString()}
                   </small>
                   {editingId !== content.id && (
                     <Button
@@ -104,8 +104,9 @@ export default function LegalNotices() {
                       icon={<EditOutlined />}
                       size="small"
                       onClick={() => handleEdit(content)}
+                      style={{ backgroundColor: '#000', borderColor: '#000' }}
                     >
-                      Edit
+                      تعديل
                     </Button>
                   )}
                 </Space>
@@ -116,8 +117,8 @@ export default function LegalNotices() {
             {editingId === content.id ? (
               <div>
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-                    HTML Content:
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#000' }}>
+                    محتوى HTML:
                   </label>
                   <textarea
                     value={editContent}
@@ -132,7 +133,7 @@ export default function LegalNotices() {
                       fontSize: '14px',
                       resize: 'vertical'
                     }}
-                    placeholder="Enter HTML content here..."
+                    placeholder="أدخل محتوى HTML هنا..."
                   />
                 </div>
                 <Space>
@@ -141,14 +142,16 @@ export default function LegalNotices() {
                     icon={<SaveOutlined />}
                     loading={saving}
                     onClick={handleSave}
+                    style={{ backgroundColor: '#000', borderColor: '#000' }}
                   >
-                    Save Changes
+                    حفظ التغييرات
                   </Button>
                   <Button
                     icon={<UndoOutlined />}
                     onClick={handleCancel}
+                    style={{ color: '#000', borderColor: '#000' }}
                   >
-                    Cancel
+                    إلغاء
                   </Button>
                 </Space>
               </div>

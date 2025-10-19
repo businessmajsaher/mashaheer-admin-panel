@@ -9,9 +9,9 @@ export const bookingService = {
       .select(`
         *,
         service:services(title, thumbnail),
-        primary_influencer:profiles!primary_influencer_id(name, email),
+        influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
-        status:booking_statuses(name)
+        status:booking_statuses(id, name, description)
       `, { count: 'exact' });
 
     // Apply filters
@@ -19,7 +19,7 @@ export const bookingService = {
       query = query.eq('service_id', filters.service_id);
     }
     if (filters?.influencer_id) {
-      query = query.eq('primary_influencer_id', filters.influencer_id);
+      query = query.eq('influencer_id', filters.influencer_id);
     }
     if (filters?.status) {
       query = query.eq('status_id', filters.status);
@@ -55,9 +55,9 @@ export const bookingService = {
       .select(`
         *,
         service:services(title, thumbnail, description),
-        primary_influencer:profiles!primary_influencer_id(name, email),
+        influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
-        status:booking_statuses(name)
+        status:booking_statuses(id, name, description)
       `)
       .eq('id', id)
       .single();
@@ -66,17 +66,28 @@ export const bookingService = {
     return data as Booking;
   },
 
+  // Get all booking statuses
+  async getBookingStatuses() {
+    const { data, error } = await supabase
+      .from('booking_statuses')
+      .select('*')
+      .order('order', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
+
   // Create new booking
   async createBooking(bookingData: CreateBookingData) {
     const { data, error } = await supabase
       .from('bookings')
       .insert({
         service_id: bookingData.service_id,
-        primary_influencer_id: bookingData.influencer_id,
+        influencer_id: bookingData.influencer_id,
         customer_id: bookingData.customer_id,
-        status_id: 'pending', // You'll need to get the actual status ID
-        scheduled_time: bookingData.booking_date,
-        notes: bookingData.special_requirements
+        status_id: bookingData.status_id,
+        scheduled_time: bookingData.scheduled_time,
+        notes: bookingData.notes
       })
       .select()
       .single();
@@ -88,9 +99,12 @@ export const bookingService = {
   // Update booking
   async updateBooking(id: string, bookingData: UpdateBookingData) {
     const updateData: any = {};
-    if (bookingData.status !== undefined) updateData.status_id = bookingData.status;
-    if (bookingData.booking_date !== undefined) updateData.scheduled_time = bookingData.booking_date;
-    if (bookingData.special_requirements !== undefined) updateData.notes = bookingData.special_requirements;
+    if (bookingData.status_id !== undefined) updateData.status_id = bookingData.status_id;
+    if (bookingData.scheduled_time !== undefined) updateData.scheduled_time = bookingData.scheduled_time;
+    if (bookingData.completed_time !== undefined) updateData.completed_time = bookingData.completed_time;
+    if (bookingData.notes !== undefined) updateData.notes = bookingData.notes;
+    if (bookingData.script !== undefined) updateData.script = bookingData.script;
+    if (bookingData.feedback !== undefined) updateData.feedback = bookingData.feedback;
 
     const { data, error } = await supabase
       .from('bookings')
@@ -104,18 +118,10 @@ export const bookingService = {
   },
 
   // Update booking status
-  async updateBookingStatus(id: string, status: 'pending' | 'approved' | 'completed' | 'canceled') {
-    // You'll need to map status strings to actual status IDs
-    const statusMap = {
-      'pending': 'status_id_1',
-      'approved': 'status_id_2', 
-      'completed': 'status_id_3',
-      'canceled': 'status_id_4'
-    };
-
+  async updateBookingStatus(id: string, status_id: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .update({ status_id: statusMap[status] })
+      .update({ status_id })
       .eq('id', id)
       .select()
       .single();
@@ -134,4 +140,4 @@ export const bookingService = {
     if (error) throw error;
     return true;
   }
-}; 
+};

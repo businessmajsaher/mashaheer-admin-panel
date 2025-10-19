@@ -8,7 +8,6 @@ import {
   AppstoreOutlined,
   ShoppingOutlined,
   FileTextOutlined,
-  WalletOutlined,
   StarOutlined,
   CalendarOutlined,
   SettingOutlined,
@@ -17,6 +16,8 @@ import {
   QuestionCircleOutlined,
   PhoneOutlined,
   BookOutlined,
+  GiftOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -61,11 +62,6 @@ export const Sidebar: React.FC = () => {
       label: 'Contracts',
     },
     {
-      key: '/wallets',
-      icon: <WalletOutlined />,
-      label: 'Wallets',
-    },
-    {
       key: '/reviews',
       icon: <StarOutlined />,
       label: 'Reviews',
@@ -79,6 +75,21 @@ export const Sidebar: React.FC = () => {
       key: '/platforms',
       icon: <GlobalOutlined />,
       label: 'Platforms',
+    },
+    {
+      key: 'discounts',
+      icon: <GiftOutlined />,
+      label: 'Discounts',
+      children: [
+        {
+          key: '/discounts',
+          label: 'Manage Coupons',
+        },
+        {
+          key: '/discounts/analytics',
+          label: 'Analytics',
+        },
+      ],
     },
     {
       type: 'divider',
@@ -147,6 +158,7 @@ export const Sidebar: React.FC = () => {
       <Menu
         mode="inline"
         selectedKeys={[location.pathname]}
+        defaultOpenKeys={location.pathname.startsWith('/discounts') ? ['discounts'] : []}
         items={menuItems}
         onClick={handleMenuClick}
         style={{

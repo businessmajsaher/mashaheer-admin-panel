@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { MockAuthProvider } from '@/context/MockAuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { MainLayout } from '@/layouts/MainLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -14,7 +14,6 @@ const Users = lazy(() => import('@/pages/Users/Users'));
 const Influencers = lazy(() => import('@/pages/Influencers/Influencers'));
 const Categories = lazy(() => import('@/pages/Categories/Categories'));
 const Services = lazy(() => import('@/pages/Services/Services'));
-const Wallets = lazy(() => import('@/pages/Wallets/Wallets'));
 const Reviews = lazy(() => import('@/pages/Reviews/Reviews'));
 const Bookings = lazy(() => import('@/pages/Bookings/Bookings'));
 const Settings = lazy(() => import('@/pages/Settings/Settings'));
@@ -25,6 +24,8 @@ const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('@/pages/TermsOfService/TermsOfService'));
 const ContactSupport = lazy(() => import('@/pages/ContactSupport/ContactSupport'));
 const HelpSupport = lazy(() => import('@/pages/HelpSupport/HelpSupport'));
+const Discounts = lazy(() => import('@/pages/Discounts/Discounts'));
+const DiscountAnalytics = lazy(() => import('@/pages/Discounts/Analytics'));
 const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 
@@ -35,13 +36,13 @@ const PasswordResetCallback = lazy(() => {
 });
 
 export default function App() {
-  console.log('🚀 App component mounted with MOCK authentication');
+  console.log('🚀 App component mounted with Supabase authentication');
   
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <MockAuthProvider>
-          <Router>
+        <AuthProvider>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Suspense fallback={
               <div style={{ 
                 display: 'flex', 
@@ -54,7 +55,7 @@ export default function App() {
                 <div>
                   <div>Loading application...</div>
                   <div style={{ fontSize: '14px', marginTop: '10px' }}>
-                    Using mock authentication for testing
+                    Using Supabase authentication
                   </div>
                 </div>
               </div>
@@ -83,7 +84,7 @@ export default function App() {
                       <p>Path: {window.location.pathname}</p>
                       <p>Full URL: {window.location.href}</p>
                       <h3>Authentication:</h3>
-                      <p>Mode: Mock Authentication (for testing)</p>
+                      <p>Mode: Supabase Authentication</p>
                       <h3>Actions:</h3>
                       <button onClick={() => window.location.href = '/login'} style={{margin: '5px'}}>
                         Go to Login
@@ -156,13 +157,6 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 
-                <Route path="/wallets" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Wallets />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
                 
                 <Route path="/reviews" element={
                   <ProtectedRoute>
@@ -192,6 +186,22 @@ export default function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <Platforms />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/discounts" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Discounts />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/discounts/analytics" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <DiscountAnalytics />
                     </MainLayout>
                   </ProtectedRoute>
                 } />
@@ -254,7 +264,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </Router>
-        </MockAuthProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

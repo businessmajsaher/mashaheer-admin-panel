@@ -20,7 +20,7 @@ import {
 import { EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { bookingService } from '../../services/bookingService';
 import { serviceService } from '../../services/serviceService';
-import { Booking, BookingFilters } from '../../types/booking';
+import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
 import dayjs from 'dayjs';
 
@@ -30,6 +30,7 @@ const { Option } = Select;
 const Bookings: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [bookingStatuses, setBookingStatuses] = useState<BookingStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -52,6 +53,7 @@ const Bookings: React.FC = () => {
         total: result.total
       }));
     } catch (error) {
+      console.error('Error fetching bookings:', error);
       message.error('Failed to fetch bookings');
     } finally {
       setLoading(false);
@@ -67,28 +69,36 @@ const Bookings: React.FC = () => {
     }
   };
 
+  const fetchBookingStatuses = async () => {
+    try {
+      const statuses = await bookingService.getBookingStatuses();
+      setBookingStatuses(statuses);
+    } catch (error) {
+      message.error('Failed to fetch booking statuses');
+    }
+  };
+
   useEffect(() => {
     fetchBookings();
     fetchServices();
+    fetchBookingStatuses();
   }, [filters]);
 
   const handleViewDetails = (record: Booking) => {
     setSelectedBooking(record);
     form.setFieldsValue({
-      status: record.status,
-      booking_date: dayjs(record.booking_date),
-      duration_days: record.duration_days,
-      total_amount: record.total_amount,
-      location: record.location,
-      special_requirements: record.special_requirements,
-      script_content: record.script_content || ''
+      status_id: record.status_id,
+      scheduled_time: record.scheduled_time ? dayjs(record.scheduled_time) : null,
+      notes: record.notes || '',
+      script: record.script || '',
+      feedback: record.feedback || ''
     });
     setModalVisible(true);
   };
 
-  const handleUpdateStatus = async (bookingId: string, status: string) => {
+  const handleUpdateStatus = async (bookingId: string, statusId: string) => {
     try {
-      await bookingService.updateBookingStatus(bookingId, status as any);
+      await bookingService.updateBookingStatus(bookingId, statusId);
       message.success('Booking status updated successfully');
       fetchBookings(pagination.current);
     } catch (error) {
@@ -102,7 +112,7 @@ const Bookings: React.FC = () => {
     try {
       await bookingService.updateBooking(selectedBooking.id, {
         ...values,
-        booking_date: values.booking_date?.toISOString()
+        scheduled_time: values.scheduled_time?.toISOString()
       });
       message.success('Booking updated successfully');
       setModalVisible(false);
@@ -112,15 +122,14 @@ const Bookings: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'orange';
-      case 'approved': return 'blue';
-      case 'completed': return 'green';
-      case 'canceled': return 'red';
-      case 'script_for_approval': return 'purple';
-      default: return 'default';
-    }
+  const getStatusColor = (statusName: string) => {
+    const lowerStatus = statusName?.toLowerCase() || '';
+    if (lowerStatus.includes('pending')) return 'orange';
+    if (lowerStatus.includes('approved') || lowerStatus.includes('confirmed')) return 'blue';
+    if (lowerStatus.includes('completed')) return 'green';
+    if (lowerStatus.includes('cancel')) return 'red';
+    if (lowerStatus.includes('script')) return 'purple';
+    return 'default';
   };
 
   const columns = [
@@ -130,7 +139,7 @@ const Bookings: React.FC = () => {
       key: 'service',
       render: (service: any) => (
         <div>
-          <div style={{ fontWeight: 'bold' }}>{service?.title}</div>
+          <div style={{ fontWeight: 'bold' }}>{service?.title || 'N/A'}</div>
           {service?.thumbnail && (
             <Image
               src={service.thumbnail}
@@ -149,8 +158,8 @@ const Bookings: React.FC = () => {
       key: 'customer',
       render: (customer: any) => (
         <div>
-          <div>{customer?.name}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{customer?.email}</div>
+          <div>{customer?.name || 'N/A'}</div>
+          <div style={{ fontSize: '12px', color: '#666' }}>{customer?.email || ''}</div>
         </div>
       )
     },
@@ -160,36 +169,24 @@ const Bookings: React.FC = () => {
       key: 'influencer',
       render: (influencer: any) => (
         <div>
-          <div>{influencer?.name}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>{influencer?.email}</div>
+          <div>{influencer?.name || 'N/A'}</div>
+          <div style={{ fontSize: '12px', color: '#666' }}>{influencer?.email || ''}</div>
         </div>
       )
     },
     {
-      title: 'Booking Date',
-      dataIndex: 'booking_date',
-      key: 'booking_date',
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD')
-    },
-    {
-      title: 'Duration',
-      dataIndex: 'duration_days',
-      key: 'duration_days',
-      render: (days: number) => `${days} days`
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      render: (amount: number) => `$${amount}`
+      title: 'Scheduled Time',
+      dataIndex: 'scheduled_time',
+      key: 'scheduled_time',
+      render: (date: string) => date ? dayjs(date).format('YYYY-MM-DD HH:mm') : 'N/A'
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>
-          {status.toUpperCase()}
+      render: (status: any) => (
+        <Tag color={getStatusColor(status?.name || '')}>
+          {status?.name?.toUpperCase() || 'N/A'}
         </Tag>
       )
     },
@@ -206,15 +203,15 @@ const Bookings: React.FC = () => {
             View Details
           </Button>
           <Select
-            value={record.status}
-            style={{ width: 120 }}
+            value={record.status_id}
+            style={{ width: 150 }}
             onChange={(value) => handleUpdateStatus(record.id, value)}
           >
-            <Option value="pending">Pending</Option>
-            <Option value="approved">Approved</Option>
-            <Option value="script_for_approval">Script for Approval</Option>
-            <Option value="completed">Completed</Option>
-            <Option value="canceled">Canceled</Option>
+            {bookingStatuses.map(status => (
+              <Option key={status.id} value={status.id}>
+                {status.name}
+              </Option>
+            ))}
           </Select>
         </Space>
       )
@@ -244,11 +241,9 @@ const Bookings: React.FC = () => {
               allowClear
               onChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
             >
-              <Option value="pending">Pending</Option>
-              <Option value="approved">Approved</Option>
-              <Option value="script_for_approval">Script for Approval</Option>
-              <Option value="completed">Completed</Option>
-              <Option value="canceled">Canceled</Option>
+              {bookingStatuses.map(status => (
+                <Option key={status.id} value={status.id}>{status.name}</Option>
+              ))}
             </Select>
           </Col>
           <Col span={6}>
@@ -295,37 +290,43 @@ const Bookings: React.FC = () => {
           {selectedBooking && (
             <div>
               <div style={{ marginBottom: 16, textAlign: 'center' }}>
-                <Tag color={getStatusColor(selectedBooking.status)} style={{ fontSize: '16px', padding: '8px 16px' }}>
-                  {selectedBooking.status === 'script_for_approval' ? 'Script for Your Approval' : selectedBooking.status.toUpperCase()}
+                <Tag color={getStatusColor(selectedBooking.status?.name || '')} style={{ fontSize: '16px', padding: '8px 16px' }}>
+                  {selectedBooking.status?.name?.toUpperCase() || 'N/A'}
                 </Tag>
               </div>
               <Descriptions title="Booking Information" bordered>
                 <Descriptions.Item label="Service" span={3}>
-                  {selectedBooking.service?.title}
+                  {selectedBooking.service?.title || 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Customer" span={3}>
-                  {selectedBooking.customer?.name} ({selectedBooking.customer?.email})
+                  {selectedBooking.customer?.name || 'N/A'} ({selectedBooking.customer?.email || 'N/A'})
                 </Descriptions.Item>
                 <Descriptions.Item label="Influencer" span={3}>
-                  {selectedBooking.influencer?.name} ({selectedBooking.influencer?.email})
+                  {selectedBooking.influencer?.name || 'N/A'} ({selectedBooking.influencer?.email || 'N/A'})
                 </Descriptions.Item>
-                <Descriptions.Item label="Booking Date">
-                  {dayjs(selectedBooking.booking_date).format('YYYY-MM-DD')}
+                <Descriptions.Item label="Scheduled Time" span={3}>
+                  {selectedBooking.scheduled_time ? dayjs(selectedBooking.scheduled_time).format('YYYY-MM-DD HH:mm') : 'N/A'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Duration">
-                  {selectedBooking.duration_days} days
+                <Descriptions.Item label="Completed Time" span={3}>
+                  {selectedBooking.completed_time ? dayjs(selectedBooking.completed_time).format('YYYY-MM-DD HH:mm') : 'Not completed'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Total Amount">
-                  ${selectedBooking.total_amount}
+                <Descriptions.Item label="Notes" span={3}>
+                  {selectedBooking.notes || 'None'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Location" span={3}>
-                  {selectedBooking.location || 'Not specified'}
+                <Descriptions.Item label="Script" span={3}>
+                  {selectedBooking.script || 'No script provided'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Special Requirements" span={3}>
-                  {selectedBooking.special_requirements || 'None'}
+                <Descriptions.Item label="Script Created At" span={3}>
+                  {selectedBooking.script_created_at ? dayjs(selectedBooking.script_created_at).format('YYYY-MM-DD HH:mm') : 'N/A'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Script Content" span={3}>
-                  {selectedBooking.script_content || 'No script provided'}
+                <Descriptions.Item label="Script Approved At" span={3}>
+                  {selectedBooking.script_approved_at ? dayjs(selectedBooking.script_approved_at).format('YYYY-MM-DD HH:mm') : 'N/A'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Script Rejected Count" span={3}>
+                  {selectedBooking.script_rejected_count || 0}
+                </Descriptions.Item>
+                <Descriptions.Item label="Feedback" span={3}>
+                  {selectedBooking.feedback || 'No feedback'}
                 </Descriptions.Item>
               </Descriptions>
 
@@ -336,73 +337,51 @@ const Bookings: React.FC = () => {
                 layout="vertical"
                 onFinish={handleSubmit}
               >
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="status"
-                      label="Status"
-                      rules={[{ required: true, message: 'Please select status' }]}
-                    >
-                      <Select>
-                        <Option value="pending">Pending</Option>
-                        <Option value="approved">Approved</Option>
-                        <Option value="script_for_approval">Script for Approval</Option>
-                        <Option value="completed">Completed</Option>
-                        <Option value="canceled">Canceled</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="booking_date"
-                      label="Booking Date"
-                      rules={[{ required: true, message: 'Please select booking date' }]}
-                    >
-                      <DatePicker style={{ width: '100%' }} />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="duration_days"
-                      label="Duration (Days)"
-                      rules={[{ required: true, message: 'Please enter duration' }]}
-                    >
-                      <Input type="number" min={1} />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="total_amount"
-                      label="Total Amount"
-                      rules={[{ required: true, message: 'Please enter total amount' }]}
-                    >
-                      <Input type="number" min={0} step={0.01} />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
                 <Form.Item
-                  name="location"
-                  label="Location"
+                  name="status_id"
+                  label="Status"
+                  rules={[{ required: true, message: 'Please select status' }]}
                 >
-                  <Input placeholder="Enter location" />
+                  <Select>
+                    {bookingStatuses.map(status => (
+                      <Option key={status.id} value={status.id}>
+                        {status.name}
+                      </Option>
+                    ))}
+                  </Select>
                 </Form.Item>
 
                 <Form.Item
-                  name="special_requirements"
-                  label="Special Requirements"
+                  name="scheduled_time"
+                  label="Scheduled Time"
+                  rules={[{ required: true, message: 'Please select scheduled time' }]}
                 >
-                  <TextArea rows={3} placeholder="Enter special requirements" />
+                  <DatePicker 
+                    showTime 
+                    style={{ width: '100%' }} 
+                    format="YYYY-MM-DD HH:mm"
+                  />
                 </Form.Item>
 
                 <Form.Item
-                  name="script_content"
-                  label="Script Content"
+                  name="notes"
+                  label="Notes"
+                >
+                  <TextArea rows={3} placeholder="Enter notes" />
+                </Form.Item>
+
+                <Form.Item
+                  name="script"
+                  label="Script"
                 >
                   <TextArea rows={4} placeholder="Enter script content" />
+                </Form.Item>
+
+                <Form.Item
+                  name="feedback"
+                  label="Feedback"
+                >
+                  <TextArea rows={3} placeholder="Enter feedback" />
                 </Form.Item>
 
                 <Form.Item>
@@ -410,11 +389,6 @@ const Bookings: React.FC = () => {
                     <Button type="primary" htmlType="submit">
                       Update Booking
                     </Button>
-                    {selectedBooking?.status !== 'script_for_approval' && (
-                      <Button type="default" icon={<EditOutlined />}>
-                        Edit Script
-                      </Button>
-                    )}
                     <Button onClick={() => setModalVisible(false)}>
                       Cancel
                     </Button>
@@ -429,4 +403,4 @@ const Bookings: React.FC = () => {
   );
 };
 
-export default Bookings; 
+export default Bookings;

@@ -89,6 +89,19 @@ export interface SupportCategory {
   created_at: string;
 }
 
+export interface TermsOfServiceSection {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  order_index: number;
+  is_active: boolean;
+  version: number;
+  last_updated: string;
+  created_at: string;
+  updated_by?: string;
+}
+
 // Legal Notices Service
 export const legalNoticesService = {
   // Get all active legal notices
@@ -571,6 +584,87 @@ export const supportCategoriesService = {
       .from('support_categories')
       .delete()
       .eq('id', id);
+
+    if (error) throw error;
+  }
+};
+
+// Terms of Service Service
+export const termsOfServiceService = {
+  // Get all active terms sections
+  async getActiveSections(): Promise<TermsOfServiceSection[]> {
+    const { data, error } = await supabase
+      .from('legal_notices')
+      .select('*')
+      .eq('category', 'terms-of-service')
+      .eq('is_active', true)
+      .order('order_index', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get all terms sections (admin only)
+  async getAllSections(): Promise<TermsOfServiceSection[]> {
+    const { data, error } = await supabase
+      .from('legal_notices')
+      .select('*')
+      .eq('category', 'terms-of-service')
+      .order('order_index', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get terms section by ID
+  async getSectionById(id: string): Promise<TermsOfServiceSection | null> {
+    const { data, error } = await supabase
+      .from('legal_notices')
+      .select('*')
+      .eq('id', id)
+      .eq('category', 'terms-of-service')
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create new terms section
+  async createSection(section: Omit<TermsOfServiceSection, 'id' | 'created_at' | 'last_updated'>): Promise<TermsOfServiceSection> {
+    const { data, error } = await supabase
+      .from('legal_notices')
+      .insert([{
+        ...section,
+        category: 'terms-of-service'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update terms section
+  async updateSection(id: string, updates: Partial<TermsOfServiceSection>): Promise<TermsOfServiceSection> {
+    const { data, error } = await supabase
+      .from('legal_notices')
+      .update(updates)
+      .eq('id', id)
+      .eq('category', 'terms-of-service')
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Delete terms section
+  async deleteSection(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('legal_notices')
+      .delete()
+      .eq('id', id)
+      .eq('category', 'terms-of-service');
 
     if (error) throw error;
   }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload } from 'antd';
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { uploadPlatformIcon } from '@/services/storageService';
 
 export default function Platforms() {
   const [platforms, setPlatforms] = useState<any[]>([]);
@@ -38,11 +39,9 @@ export default function Platforms() {
     try {
       let icon_url = values.icon_url;
       if (iconFile) {
-        const filePath = `platform-icons/${Date.now()}-${iconFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('platforms').upload(filePath, iconFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('platforms').getPublicUrl(filePath);
-        icon_url = publicUrlData?.publicUrl;
+        console.log('📤 Starting platform icon upload...');
+        icon_url = await uploadPlatformIcon(iconFile);
+        console.log('✅ Platform icon uploaded successfully:', icon_url);
       }
       const { error } = await supabase.from('social_media_platforms').insert([
         {

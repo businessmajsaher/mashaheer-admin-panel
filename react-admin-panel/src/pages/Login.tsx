@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useAuth } from '@/context/MockAuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,12 +14,12 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      console.log('Attempting mock signIn with:', values.email);
+      console.log('Attempting signIn with:', values.email);
       await signIn(values.email, values.password);
-      console.log('Mock SignIn successful, navigating to /dashboard');
+      console.log('SignIn successful, navigating to /dashboard');
       navigate('/dashboard');
     } catch (err: any) {
-      console.error('Mock SignIn error:', err);
+      console.error('SignIn error:', err);
       let msg = err?.message || 'Login failed';
       setError(msg);
     } finally {

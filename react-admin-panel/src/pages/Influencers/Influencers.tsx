@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, KeyOutlined } from '@ant-design/icons';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber, Progress } from 'antd';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
-import { PasswordResetModal } from '@/components/PasswordResetModal';
+import { uploadInfluencerProfileImage } from '@/services/storageService';
+import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
 import Cropper from 'react-easy-crop';
 import { Modal as AntdModal, Slider } from 'antd';
 
@@ -30,11 +31,121 @@ export default function Influencers() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
-  const [passwordResetModal, setPasswordResetModal] = useState({
-    isOpen: false,
-    email: '',
-    name: ''
-  });
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handler for profile image upload
+  const handleProfileImageUpload = async (file: File) => {
+    console.log('🚀 handleProfileImageUpload called with file:', file.name, file.size, file.type);
+    setProfileImageUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      console.log('📤 Starting profile image upload...');
+      
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + Math.random() * 15;
+        });
+      }, 200);
+      
+      // Use the storage service for authenticated upload
+      const url = await uploadInfluencerProfileImage(file);
+      
+      // Complete the progress
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      if (url) {
+        form.setFieldsValue({ profile_image_url: url });
+        // Update preview with the uploaded URL (replaces the local blob URL)
+        setProfileImagePreview(url);
+        console.log('✅ Profile image uploaded successfully:', url);
+        
+        // Show success message
+        message.success('Profile image uploaded successfully!');
+        // Reset the file input after successful upload
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } else {
+        throw new Error('No URL returned from upload');
+      }
+    } catch (err: any) {
+      console.error('❌ Upload error:', err);
+      
+      // Show specific error messages based on error type
+      let errorMessage = 'Failed to upload profile image';
+      if (err.message?.includes('StorageApiError')) {
+        errorMessage = 'Storage error: Please check your permissions';
+      } else if (err.message?.includes('network')) {
+        errorMessage = 'Network error: Please check your connection';
+      } else if (err.message?.includes('size')) {
+        errorMessage = 'File too large: Please choose a smaller image';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      message.error(errorMessage);
+      
+      // Clear the preview if upload fails
+      setProfileImagePreview(null);
+      form.setFieldsValue({ profile_image_url: null });
+    } finally {
+      setProfileImageUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Handle drag and drop events
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+          message.error('File size must be less than 5MB');
+          return;
+        }
+        
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          message.error('Please select a valid image file (JPG, PNG, GIF)');
+          return;
+        }
+        
+        // Show immediate preview
+        const previewUrl = URL.createObjectURL(file);
+        setProfileImagePreview(previewUrl);
+        console.log('📁 Drag & drop: About to call handleProfileImageUpload');
+        // Then upload the file
+        handleProfileImageUpload(file);
+      } else {
+        message.error('Please drop a valid image file');
+      }
+    }
+  };
 
   // Countries list with currency codes
   const countries = [
@@ -219,10 +330,45 @@ export default function Influencers() {
       return;
     }
     
+    // Check if email already exists (only for new influencers)
+    if (!editingInfluencer) {
+      console.log('6a. Checking if email already exists...');
+      try {
+        const { data: existingUser, error: checkError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('email', values.email)
+          .single();
+        
+        if (existingUser && !checkError) {
+          console.log('6b. Email already exists:', existingUser);
+          setFormError(`An influencer with email "${values.email}" already exists. Please use a different email address or edit the existing influencer.`);
+          setFormLoading(false);
+          return;
+        }
+        console.log('6c. Email is available for new influencer');
+      } catch (checkErr: any) {
+        // If it's a "not found" error, that's good - email is available
+        if (checkErr.code === 'PGRST116') {
+          console.log('6d. Email is available (no existing user found)');
+        } else {
+          console.error('6e. Error checking email availability:', checkErr);
+          // Continue anyway - let the Edge Function handle it
+        }
+      }
+    }
+    
     // Get current form values again after validation
     const currentFormValues = form.getFieldsValue();
     console.log('7. Current form values after validation:', currentFormValues);
     console.log('8. Current form values keys:', Object.keys(currentFormValues));
+    
+    // Generate random password for the influencer (only for new influencers)
+    let randomPassword = null;
+    if (!editingInfluencer) {
+      randomPassword = generateRandomPassword(12);
+      console.log('🔐 Generated random password for influencer:', randomPassword);
+    }
     
     setFormLoading(true);
     setFormError(null);
@@ -545,7 +691,7 @@ export default function Influencers() {
           // Prepare all data for the comprehensive Edge Function
           const influencerData = {
             email: values.email,
-            password: 'test@pass', // Default password
+            password: randomPassword || 'existing_password', // Use random password for new, existing for updates
             name: values.name,
             bio: values.bio || null,
             country: values.country,
@@ -553,7 +699,7 @@ export default function Influencers() {
             is_verified: values.is_verified || false,
             social_links: values.social_links || [],
             media_files: uploadedMediaFiles,
-            is_update: false
+            is_update: !!editingInfluencer
           };
           
           console.log('17. Sending complete data to Edge Function:', influencerData);
@@ -582,7 +728,15 @@ export default function Influencers() {
           
           if (!response.ok && response.status !== 201) {
             console.error('22. Edge Function error response:', result);
-            throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
+            
+            // Handle specific error cases
+            if (result.error === 'Failed to create user in authentication system' && result.details?.includes('already been registered')) {
+              throw new Error(`An influencer with email "${values.email}" already exists. Please use a different email address or edit the existing influencer.`);
+            } else if (result.error === 'Failed to create user in authentication system') {
+              throw new Error(`Failed to create user account: ${result.details || 'Authentication system error'}`);
+            } else {
+              throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
+            }
           }
           
           // Get the user ID from Edge Function response
@@ -608,7 +762,42 @@ export default function Influencers() {
         } else {
           console.log('25. Success! Influencer created');
           message.success('Influencer created successfully!');
-          message.info('🔑 Default password: test@pass - Influencer can login with this password');
+          
+          // Send welcome email to the influencer (only for new influencers)
+          if (randomPassword) {
+            console.log('📧 Sending welcome email to influencer...');
+            console.log('📧 Email details:', {
+              email: values.email,
+              name: values.name,
+              password: randomPassword
+            });
+            
+            try {
+              const emailResult = await sendWelcomeEmail(
+                values.email, 
+                values.name, 
+                randomPassword
+              );
+              
+              console.log('📧 Email result:', emailResult);
+              
+              if (emailResult.success) {
+                message.success('📧 Welcome email sent to influencer!');
+                console.log('✅ Welcome email sent successfully');
+              } else {
+                message.warning('⚠️ Influencer created but email failed to send. Please contact them manually.');
+                console.error('❌ Email sending failed:', emailResult.error);
+              }
+            } catch (emailError: any) {
+              console.error('❌ Email sending error:', emailError);
+              message.warning('⚠️ Influencer created but email failed to send. Please contact them manually.');
+            }
+            
+            // Show password info to admin
+            message.info(`🔑 Influencer password: ${randomPassword} - Please share this with the influencer`);
+          } else {
+            console.log('📧 No random password generated, skipping welcome email');
+          }
           
           // Refresh the influencers list to show the newly created one
           console.log('26. Refreshing influencers list...');
@@ -645,6 +834,10 @@ export default function Influencers() {
         setProfileImagePreview(null);
         setEditingInfluencer(null);
         setInfluencerCreated(false);
+        // Reset the file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       } else {
         console.error('28. No influencer ID available');
         throw new Error('Failed to create or update influencer');
@@ -993,21 +1186,6 @@ export default function Influencers() {
     }
   };
 
-  const handlePasswordReset = (email: string, name: string) => {
-    setPasswordResetModal({
-      isOpen: true,
-      email,
-      name
-    });
-  };
-
-  const closePasswordResetModal = () => {
-    setPasswordResetModal({
-      isOpen: false,
-      email: '',
-      name: ''
-    });
-  };
 
   // Fetch media and social links for influencer
   const openDetail = async (record: any) => {
@@ -1092,14 +1270,6 @@ export default function Influencers() {
             onClick={() => handleEditInfluencer(record)}
           >
             Edit
-          </Button>
-          <Button 
-            type="default" 
-            size="small"
-            icon={<KeyOutlined />}
-            onClick={() => handlePasswordReset(record.email, record.name)}
-          >
-            Reset Password
           </Button>
           <Popconfirm
             title="Delete Influencer"
@@ -1356,77 +1526,167 @@ export default function Influencers() {
           
           <Form.Item
             name="profile_image_url"
-            label={<span style={{ fontWeight: '600', color: '#262626' }}>Profile Image</span>}
+            label={<span style={{ fontWeight: '600', color: '#262626', fontSize: '16px' }}>Profile Image</span>}
           >
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <Button 
-                  onClick={() => document.getElementById('profile-upload')?.click()}
-                  icon={profileImageUploading ? <Spin size="small" /> : <UploadOutlined />}
-                  loading={profileImageUploading}
-                  size="large"
-                  style={{
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-                    border: 'none',
-                    boxShadow: '0 4px 15px rgba(24, 144, 255, 0.4)',
-                    transition: 'all 0.3s ease',
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
+            <div 
+              style={{ 
+                border: `2px dashed ${isDragOver ? '#1890ff' : '#d9d9d9'}`, 
+                borderRadius: '12px', 
+                padding: '24px', 
+                textAlign: 'center',
+                background: isDragOver ? '#f0f8ff' : '#fafafa',
+                transition: 'all 0.3s ease',
+                position: 'relative',
+                minHeight: '200px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {profileImagePreview ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img 
+                    src={profileImagePreview} 
+                    alt="Profile preview" 
+                    style={{ 
+                      width: '120px', 
+                      height: '120px', 
+                      objectFit: 'cover', 
+                      borderRadius: '50%',
+                      border: '4px solid #fff',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
+                    }}
+                  />
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-8px', 
+                    right: '-8px',
+                    background: '#ff4d4f',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(255, 77, 79, 0.4)'
                   }}
-                >
-                  {profileImageUploading ? 'Uploading...' : 'Upload Image'}
-                </Button>
-                {profileImagePreview && (
-                  <Button 
-                    danger 
-                    size="large"
-                    onClick={() => {
-                      setProfileImagePreview(null);
-                      form.setFieldsValue({ profile_image_url: null });
-                    }}
-                    style={{
-                      borderRadius: '12px',
-                      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)',
-                      border: 'none',
-                      boxShadow: '0 4px 15px rgba(255, 107, 107, 0.4)',
-                      transition: 'all 0.3s ease',
-                      fontWeight: '600',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-                                           <input
+                  onClick={() => {
+                    setProfileImagePreview(null);
+                    form.setFieldsValue({ profile_image_url: null });
+                    // Reset the file input
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}>
+                    <DeleteOutlined style={{ color: 'white', fontSize: '14px' }} />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    fontSize: '48px', 
+                    color: '#d9d9d9', 
+                    marginBottom: '16px',
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }}>
+                    <PictureOutlined />
+                  </div>
+                  <Typography.Title level={4} style={{ color: '#8c8c8c', margin: '0 0 8px 0' }}>
+                    Upload Profile Image
+                  </Typography.Title>
+                  <Typography.Text style={{ color: '#8c8c8c', display: 'block', marginBottom: '16px' }}>
+                    {isDragOver ? 'Drop your image here!' : 'Drag & drop an image here, or click to browse'}
+                  </Typography.Text>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <Button 
+                      type="primary"
+                      icon={profileImageUploading ? <Spin size="small" /> : <UploadOutlined />}
+                      loading={profileImageUploading}
+                      size="large"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        borderRadius: '8px',
+                        height: '40px',
+                        paddingLeft: '20px',
+                        paddingRight: '20px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      {profileImageUploading ? 'Uploading...' : 'Choose Image'}
+                    </Button>
+                  </div>
+                  <Typography.Text style={{ 
+                    color: '#8c8c8c', 
+                    fontSize: '12px', 
+                    display: 'block', 
+                    marginTop: '8px' 
+                  }}>
+                    Supports: JPG, PNG, GIF (Max 5MB)
+                  </Typography.Text>
+                  {profileImageUploading && (
+                    <div style={{ width: '100%', marginTop: '16px' }}>
+                      <Progress 
+                        percent={uploadProgress} 
+                        status="active"
+                        strokeColor={{
+                          '0%': '#108ee9',
+                          '100%': '#87d068',
+                        }}
+                        style={{ marginBottom: '8px' }}
+                      />
+                      <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                        Uploading... {uploadProgress}%
+                      </Typography.Text>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <input
+                ref={fileInputRef}
+                key={profileImagePreview ? 'has-image' : 'no-image'}
                 id="profile-upload"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/gif"
                 style={{ display: 'none' }}
                 onChange={(e) => {
+                  console.log('📁 File input onChange triggered');
                   const file = e.target.files?.[0];
+                  console.log('📁 Selected file:', file);
                   if (file) {
+                    // Validate file size (5MB max)
+                    if (file.size > 5 * 1024 * 1024) {
+                      message.error('File size must be less than 5MB');
+                      // Reset the input only on error
+                      e.target.value = '';
+                      return;
+                    }
+                    
+                    // Validate file type
+                    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                    if (!allowedTypes.includes(file.type)) {
+                      message.error('Please select a valid image file (JPG, PNG, GIF)');
+                      // Reset the input only on error
+                      e.target.value = '';
+                      return;
+                    }
+                    
                     // Show immediate preview
                     const previewUrl = URL.createObjectURL(file);
                     setProfileImagePreview(previewUrl);
+                    console.log('📁 File input: About to call handleProfileImageUpload');
                     // Then upload the file
                     handleProfileImageUpload(file);
                   }
                 }}
               />
-              {profileImagePreview && (
-                <div className="mt-3 inline-block">
-                  <img 
-                    src={profileImagePreview} 
-                    alt="Profile preview" 
-                    className="w-12 h-12 object-cover rounded-full border-2 border-white shadow-lg"
-                    style={{ maxWidth: '48px', maxHeight: '48px' }}
-                  />
-                </div>
-              )}
             </div>
           </Form.Item>
         </div>
@@ -1435,90 +1695,173 @@ export default function Influencers() {
     {
       title: 'Social Media',
       content: (
-        <div className="space-y-6">
+        <div style={{ padding: '24px 0' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Typography.Title level={4} style={{ margin: '0 0 8px 0', color: '#262626' }}>
+              Social Media Profiles
+            </Typography.Title>
+            <Typography.Text style={{ color: '#8c8c8c', fontSize: '14px' }}>
+              Add the influencer's social media profiles with follower counts to showcase their reach
+            </Typography.Text>
+          </div>
+          
           <Form.List name="social_links">
             {(fields, { add, remove }) => (
               <>
+                {fields.length === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '48px 24px',
+                    border: '2px dashed #d9d9d9',
+                    borderRadius: '12px',
+                    background: '#fafafa',
+                    marginBottom: '24px'
+                  }}>
+                    <div style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }}>
+                      <PlusOutlined />
+                    </div>
+                    <Typography.Title level={4} style={{ color: '#8c8c8c', margin: '0 0 8px 0' }}>
+                      No Social Media Links Added
+                    </Typography.Title>
+                    <Typography.Text style={{ color: '#8c8c8c', display: 'block', marginBottom: '16px' }}>
+                      Click the button below to add social media profiles
+                    </Typography.Text>
+                  </div>
+                )}
+                
                 {fields.map(({ key, name, ...restField }) => (
-                  <div key={key} className="flex items-center space-x-4 p-6 rounded-xl bg-gray-50">
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'platform_id']}
-                      rules={[{ required: true, message: 'Missing platform' }]}
-                      className="flex-1"
-                    >
-                      <Select 
-                        placeholder="Select platform"
-                        size="large"
-                        style={{
-                          borderRadius: '8px',
-                          border: 'none',
-                          padding: '16px 20px',
-                          fontSize: '16px',
-                          transition: 'all 0.3s ease',
-                          height: '56px'
-                        }}
+                  <div key={key} style={{
+                    background: '#fff',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '16px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                      <div style={{ 
+                        width: '8px', 
+                        height: '8px', 
+                        borderRadius: '50%', 
+                        background: '#52c41a' 
+                      }} />
+                      <Typography.Text style={{ fontWeight: '500', color: '#262626' }}>
+                        Social Media Profile #{name + 1}
+                      </Typography.Text>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'platform_id']}
+                        rules={[
+                          { required: true, message: 'Please select a platform' },
+                        ]}
+                        style={{ margin: 0 }}
                       >
-                        {platforms.map((platform) => (
-                          <Select.Option key={platform.id} value={platform.id}>
-                            {platform.name}
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'handle']}
-                      rules={[{ required: true, message: 'Missing handle' }]}
-                      className="flex-1"
-                    >
-                      <Input 
-                        placeholder="Enter handle (e.g., @username)" 
-                        size="large"
-                        style={{
-                          borderRadius: '8px',
-                          border: '1px solid #d9d9d9',
-                          padding: '16px 20px',
-                          fontSize: '16px',
-                          transition: 'all 0.3s ease',
-                          height: '56px'
-                        }}
-                      />
-                    </Form.Item>
+                        <Select 
+                          placeholder="Select Platform"
+                          size="large"
+                          style={{
+                            borderRadius: '8px',
+                            height: '48px'
+                          }}
+                          showSearch
+                          filterOption={(input, option) =>
+                            (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                          }
+                        >
+                          {platforms.map((platform) => (
+                            <Select.Option key={platform.id} value={platform.id}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {platform.icon_url && (
+                                  <img 
+                                    src={platform.icon_url} 
+                                    alt={platform.name}
+                                    style={{ width: '20px', height: '20px', borderRadius: '4px' }}
+                                  />
+                                )}
+                                <span>{platform.name}</span>
+                              </div>
+                            </Select.Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                      
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'handle']}
+                        rules={[
+                          { required: true, message: 'Please enter follower count' },
+                          { 
+                            pattern: /^[0-9,]+$/, 
+                            message: 'Please enter a valid number (e.g., 1000, 1,000, 1000000)' 
+                          }
+                        ]}
+                        style={{ margin: 0 }}
+                      >
+                        <Input 
+                          placeholder="Follower count (e.g., 1000, 1,000, 1000000)" 
+                          size="large"
+                          style={{
+                            borderRadius: '8px',
+                            height: '48px'
+                          }}
+                          prefix={<span style={{ color: '#8c8c8c' }}>👥</span>}
+                          onChange={(e) => {
+                            // Format number with commas as user types
+                            const value = e.target.value.replace(/[^0-9]/g, '');
+                            const formatted = value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            e.target.value = formatted;
+                          }}
+                        />
+                      </Form.Item>
+                    </div>
+                    
                     <Form.Item
                       {...restField}
                       name={[name, 'profile_url']}
-                      className="flex-1"
+                      style={{ margin: 0 }}
                     >
                       <Input 
-                        placeholder="Profile URL (optional)" 
+                        placeholder="Full profile URL (optional)" 
                         size="large"
                         style={{
                           borderRadius: '8px',
-                          border: '1px solid #d9d9d9',
-                          padding: '16px 20px',
-                          fontSize: '16px',
-                          transition: 'all 0.3s ease',
-                          height: '56px'
+                          height: '48px'
                         }}
+                        prefix={<span style={{ color: '#8c8c8c' }}>🔗</span>}
                       />
                     </Form.Item>
-                    <Button 
-                      danger 
-                      onClick={() => remove(name)}
-                      icon={<DeleteOutlined />}
-                      size="large"
-                      style={{
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 8px rgba(255, 77, 79, 0.2)',
-                        transition: 'all 0.3s ease',
-                        height: '56px',
-                        width: '56px'
-                      }}
-                    />
+                    
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'flex-end', 
+                      marginTop: '16px',
+                      paddingTop: '16px',
+                      borderTop: '1px solid #f0f0f0'
+                    }}>
+                      <Button 
+                        danger 
+                        onClick={() => remove(name)}
+                        icon={<DeleteOutlined />}
+                        size="middle"
+                        style={{
+                          borderRadius: '8px',
+                          height: '36px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
                 ))}
-                <Form.Item>
+                
+                <div style={{ marginTop: '24px' }}>
                   <Button 
                     type="dashed" 
                     onClick={() => add()} 
@@ -1526,18 +1869,27 @@ export default function Influencers() {
                     icon={<PlusOutlined />}
                     size="large"
                     style={{
-                      borderRadius: '8px',
+                      borderRadius: '12px',
                       border: '2px dashed #1890ff',
                       color: '#1890ff',
-                      height: '48px',
-                      fontSize: '14px',
+                      height: '56px',
+                      fontSize: '16px',
                       fontWeight: '500',
+                      background: '#f0f8ff',
                       transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#e6f7ff';
+                      e.currentTarget.style.borderColor = '#40a9ff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#f0f8ff';
+                      e.currentTarget.style.borderColor = '#1890ff';
                     }}
                   >
                     Add Social Media Link
                   </Button>
-                </Form.Item>
+                </div>
               </>
             )}
           </Form.List>
@@ -1547,39 +1899,235 @@ export default function Influencers() {
     {
       title: 'Additional Media',
       content: (
-        <div className="space-y-6">
+        <div style={{ padding: '24px 0' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Typography.Title level={4} style={{ margin: '0 0 8px 0', color: '#262626' }}>
+              Media Gallery
+            </Typography.Title>
+            <Typography.Text style={{ color: '#8c8c8c', fontSize: '14px' }}>
+              Upload images and videos to showcase the influencer's work and portfolio
+            </Typography.Text>
+          </div>
+          
           <Form.Item
             name="media_files"
-            label={<span style={{ fontWeight: '600', color: '#262626' }}>Upload Media Files</span>}
+            style={{ margin: 0 }}
           >
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <Button 
-                  onClick={() => document.getElementById('media-upload')?.click()}
-                  icon={<UploadOutlined />}
-                  size="large"
-                  style={{
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-                    border: 'none',
-                    boxShadow: '0 4px 15px rgba(24, 144, 255, 0.4)',
-                    transition: 'all 0.3s ease',
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}
-                >
-                  {mediaFiles.length > 0 ? `Add More Media (${mediaFiles.length} uploaded)` : 'Upload Multiple Media'}
-                </Button>
-                <span style={{ color: '#666', fontSize: '14px' }}>
-                  Upload multiple images or videos to showcase your work (you can select multiple files)
-                </span>
-              </div>
+            <div style={{ 
+              border: '2px dashed #d9d9d9', 
+              borderRadius: '12px', 
+              padding: '32px', 
+              textAlign: 'center',
+              background: '#fafafa',
+              transition: 'all 0.3s ease',
+              position: 'relative',
+              minHeight: '200px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = '#1890ff';
+              e.currentTarget.style.background = '#f0f8ff';
+            }}
+            onDragLeave={(e) => {
+              e.currentTarget.style.borderColor = '#d9d9d9';
+              e.currentTarget.style.background = '#fafafa';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = '#d9d9d9';
+              e.currentTarget.style.background = '#fafafa';
+              
+              const files = Array.from(e.dataTransfer.files);
+              if (files.length > 0) {
+                handleMediaFilesUpload(files);
+              }
+            }}
+            >
+              {mediaFiles.length === 0 ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    fontSize: '64px', 
+                    color: '#d9d9d9', 
+                    marginBottom: '20px',
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }}>
+                    <UploadOutlined />
+                  </div>
+                  <Typography.Title level={3} style={{ color: '#8c8c8c', margin: '0 0 12px 0' }}>
+                    Upload Media Files
+                  </Typography.Title>
+                  <Typography.Text style={{ color: '#8c8c8c', display: 'block', marginBottom: '20px', fontSize: '16px' }}>
+                    Drag & drop files here, or click to browse
+                  </Typography.Text>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <Button 
+                      type="primary"
+                      icon={<UploadOutlined />}
+                      size="large"
+                      onClick={() => document.getElementById('media-upload')?.click()}
+                      style={{
+                        borderRadius: '8px',
+                        height: '48px',
+                        paddingLeft: '24px',
+                        paddingRight: '24px',
+                        fontWeight: '500',
+                        fontSize: '16px'
+                      }}
+                    >
+                      Choose Files
+                    </Button>
+                  </div>
+                  <Typography.Text style={{ 
+                    color: '#8c8c8c', 
+                    fontSize: '12px', 
+                    display: 'block', 
+                    marginTop: '12px' 
+                  }}>
+                    Supports: JPG, PNG, GIF, MP4, MOV (Max 10MB each)
+                  </Typography.Text>
+                </div>
+              ) : (
+                <div style={{ width: '100%' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginBottom: '20px' 
+                  }}>
+                    <Typography.Title level={4} style={{ margin: 0, color: '#262626' }}>
+                      Media Files ({mediaFiles.length})
+                    </Typography.Title>
+                    <Button 
+                      type="primary"
+                      icon={<UploadOutlined />}
+                      onClick={() => document.getElementById('media-upload')?.click()}
+                      style={{
+                        borderRadius: '8px',
+                        height: '36px'
+                      }}
+                    >
+                      Add More
+                    </Button>
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
+                    gap: '16px',
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    padding: '8px'
+                  }}>
+                    {mediaFiles.map((file, index) => (
+                      <div key={index} style={{
+                        position: 'relative',
+                        background: '#fff',
+                        borderRadius: '8px',
+                        border: '1px solid #f0f0f0',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      >
+                        {file.type.startsWith('image/') ? (
+                          <img 
+                            src={file.preview} 
+                            alt={`Media ${index + 1}`}
+                            style={{ 
+                              width: '100%', 
+                              height: '80px', 
+                              objectFit: 'cover',
+                              borderRadius: '8px 8px 0 0'
+                            }}
+                          />
+                        ) : (
+                          <div style={{ 
+                            width: '100%', 
+                            height: '80px', 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px 8px 0 0'
+                          }}>
+                            <VideoCameraOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                          </div>
+                        )}
+                        
+                        <div style={{ padding: '8px' }}>
+                          <div style={{ 
+                            fontSize: '10px', 
+                            color: '#8c8c8c', 
+                            marginBottom: '4px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {file.name}
+                          </div>
+                          <div style={{ 
+                            fontSize: '10px', 
+                            color: file.type.startsWith('image/') ? '#52c41a' : '#1890ff',
+                            fontWeight: '500'
+                          }}>
+                            {file.type.startsWith('image/') ? '📷 Image' : '🎥 Video'}
+                          </div>
+                        </div>
+                        
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newFiles = mediaFiles.filter((_, i) => i !== index);
+                            setMediaFiles(newFiles);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '4px',
+                            right: '4px',
+                            background: 'rgba(255, 255, 255, 0.9)',
+                            borderRadius: '50%',
+                            width: '24px',
+                            height: '24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: 0,
+                            transition: 'opacity 0.3s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = '1';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = '0';
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <input
                 id="media-upload"
                 type="file"
-                accept="image/*,video/*"
+                accept="image/jpeg,image/jpg,image/png,image/gif,video/mp4,video/mov,video/avi"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
@@ -1587,60 +2135,10 @@ export default function Influencers() {
                   if (files.length > 0) {
                     handleMediaFilesUpload(files);
                   }
+                  // Reset the input
+                  e.target.value = '';
                 }}
               />
-              
-              {mediaFiles.length > 0 && (
-                <div className="mt-4">
-                  <Typography.Text strong style={{ display: 'block', marginBottom: '12px' }}>
-                    Selected Media ({mediaFiles.length} files):
-                  </Typography.Text>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {mediaFiles.map((file, index) => (
-                      <div key={index} className="relative group">
-                        {file.type.startsWith('image/') ? (
-                          <img 
-                            src={file.preview} 
-                            alt={`Media ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                          />
-                        ) : (
-                          <div className="w-full h-24 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
-                            <VideoCameraOutlined style={{ fontSize: '24px', color: '#666' }} />
-                          </div>
-                        )}
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            const newFiles = mediaFiles.filter((_, i) => i !== index);
-                            setMediaFiles(newFiles);
-                          }}
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.9)',
-                            borderRadius: '50%',
-                            width: '24px',
-                            height: '24px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                        />
-                        <div className="text-xs text-gray-500 mt-1 truncate">
-                          {file.name}
-                        </div>
-                        <div className="text-xs text-blue-500 mt-1">
-                          {file.type.startsWith('image/') ? '📷 Image' : '🎥 Video'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
             </div>
           </Form.Item>
         </div>
@@ -1851,35 +2349,6 @@ export default function Influencers() {
     setMediaFiles(prev => [...prev, ...newFiles]);
   };
 
-  // Handler for profile image upload
-  const handleProfileImageUpload = async (file: File) => {
-    setProfileImageUploading(true);
-    try {
-      const ext = file.name.split('.').pop();
-      const filePath = `influencers/profile/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage.from('influencer-profile').upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      
-      const { data: publicUrlData } = supabase.storage.from('influencer-profile').getPublicUrl(filePath);
-      const url = publicUrlData?.publicUrl;
-      
-      if (url) {
-        form.setFieldsValue({ profile_image_url: url });
-        // Update preview with the uploaded URL (replaces the local blob URL)
-        setProfileImagePreview(url);
-      }
-    } catch (err: any) {
-      console.error('Upload error:', err);
-      message.error(err.message || 'Failed to upload profile image');
-      // Clear the preview if upload fails
-      setProfileImagePreview(null);
-      form.setFieldsValue({ profile_image_url: null });
-    } finally {
-      setProfileImageUploading(false);
-    }
-  };
-
   // Helper to get cropped image blob
   async function getCroppedImg(imageSrc: string, cropPixels: any) {
     const image = await createImage(imageSrc);
@@ -1949,7 +2418,7 @@ export default function Influencers() {
           setProfileImagePreview(null);
         }}
         width="100vw"
-        bodyStyle={{ background: '#f7f8fa', minHeight: '100vh', padding: isMobile ? 8 : 32, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' }}
+        styles={{ body: { background: '#f7f8fa', minHeight: '100vh', padding: isMobile ? 8 : 32, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' } }}
         closeIcon
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16, maxWidth: 600 }} />}
@@ -1970,7 +2439,7 @@ export default function Influencers() {
           </div>
           
           <Divider style={{ margin: '16px 0 32px 0' }} />
-          <AntCard style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} bodyStyle={{ padding: 0 }}>
+          <AntCard style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} styles={{ body: { padding: 0 } }}>
             <Form
               key={editingInfluencer?.id || 'new'}
               form={form}
@@ -2158,12 +2627,6 @@ export default function Influencers() {
         )}
       </Drawer>
 
-      <PasswordResetModal
-        isOpen={passwordResetModal.isOpen}
-        onClose={closePasswordResetModal}
-        userEmail={passwordResetModal.email}
-        userName={passwordResetModal.name}
-      />
     </Card>
   );
 } 

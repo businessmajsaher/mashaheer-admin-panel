@@ -137,14 +137,14 @@ export default function HelpSupport() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={2}>Help & Support Center</Title>
-      <Paragraph>
-        Manage your help documentation, FAQs, and support resources to help users find answers quickly.
+      <Title level={2} style={{ color: '#000' }}>مركز المساعدة والدعم</Title>
+      <Paragraph style={{ color: '#333' }}>
+        إدارة وثائق المساعدة والأسئلة الشائعة وموارد الدعم لمساعدة المستخدمين في العثور على الإجابات بسرعة.
       </Paragraph>
 
       <Alert
-        message="Help & Support Management"
-        description="Edit help sections and FAQ items. Users can search and filter content by category. Changes are saved to local storage for this demo."
+        message="إدارة المساعدة والدعم"
+        description="تعديل أقسام المساعدة وعناصر الأسئلة الشائعة. يمكن للمستخدمين البحث والتصفية حسب الفئة. يتم حفظ التغييرات في قاعدة البيانات."
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
@@ -155,7 +155,7 @@ export default function HelpSupport() {
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} md={12}>
             <Search
-              placeholder="Search help articles and FAQs..."
+              placeholder="البحث في مقالات المساعدة والأسئلة الشائعة..."
               allowClear
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -184,7 +184,7 @@ export default function HelpSupport() {
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={16}>
           {/* Help Sections */}
-          <Card title="Help Articles" style={{ marginBottom: 24 }}>
+          <Card title="مقالات المساعدة" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               {filteredHelpSections.map((section) => (
                 <Card
@@ -203,8 +203,9 @@ export default function HelpSupport() {
                             icon={<EditOutlined />}
                             size="small"
                             onClick={() => handleEdit(section)}
+                            style={{ backgroundColor: '#000', borderColor: '#000' }}
                           >
-                            Edit
+                            تعديل
                           </Button>
                         )}
                       </Space>
@@ -214,8 +215,8 @@ export default function HelpSupport() {
                   {editingId === section.id ? (
                     <div>
                       <div style={{ marginBottom: 16 }}>
-                        <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-                          HTML Content:
+                        <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#000' }}>
+                          محتوى HTML:
                         </label>
                         <textarea
                           value={editContent}
@@ -230,7 +231,7 @@ export default function HelpSupport() {
                             fontSize: '14px',
                             resize: 'vertical'
                           }}
-                          placeholder="Enter HTML content here..."
+                          placeholder="أدخل محتوى HTML هنا..."
                         />
                       </div>
                       <Space>
@@ -239,14 +240,16 @@ export default function HelpSupport() {
                           icon={<SaveOutlined />}
                           loading={saving}
                           onClick={handleSave}
+                          style={{ backgroundColor: '#000', borderColor: '#000' }}
                         >
-                          Save Changes
+                          حفظ التغييرات
                         </Button>
                         <Button
                           icon={<UndoOutlined />}
                           onClick={handleCancel}
+                          style={{ color: '#000', borderColor: '#000' }}
                         >
-                          Cancel
+                          إلغاء
                         </Button>
                       </Space>
                     </div>
@@ -265,7 +268,7 @@ export default function HelpSupport() {
           </Card>
 
           {/* FAQ Section */}
-          <Card title="Frequently Asked Questions">
+          <Card title="الأسئلة الشائعة">
             <Collapse accordion>
               {filteredFAQItems.map((item) => (
                 <Panel
@@ -294,11 +297,12 @@ export default function HelpSupport() {
                         size="small" 
                         onClick={() => handleFAQHelpful(item.id)}
                         icon="👍"
+                        style={{ color: '#000', borderColor: '#000' }}
                       >
-                        Helpful ({item.helpful_count})
+                        مفيد ({item.helpful_count})
                       </Button>
                       <span style={{ fontSize: '12px', color: '#666' }}>
-                        👁️ {item.view_count} views
+                        👁️ {item.view_count} مشاهدة
                       </span>
                     </div>
                   </div>
@@ -310,40 +314,40 @@ export default function HelpSupport() {
 
         <Col xs={24} lg={8}>
           {/* Quick Links */}
-          <Card title="Quick Links" style={{ marginBottom: 24 }}>
+          <Card title="روابط سريعة" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Button type="link" icon={<BookOutlined />} block style={{ textAlign: 'left' }}>
-                User Guide & Tutorials
+              <Button type="link" icon={<BookOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
+                دليل المستخدم والدروس التعليمية
               </Button>
-              <Button type="link" icon={<VideoCameraOutlined />} block style={{ textAlign: 'left' }}>
-                Video Tutorials
+              <Button type="link" icon={<VideoCameraOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
+                دروس الفيديو
               </Button>
-              <Button type="link" icon={<FileTextOutlined />} block style={{ textAlign: 'left' }}>
-                API Documentation
+              <Button type="link" icon={<FileTextOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
+                وثائق API
               </Button>
-              <Button type="link" icon={<QuestionCircleOutlined />} block style={{ textAlign: 'left' }}>
-                Contact Support
+              <Button type="link" icon={<QuestionCircleOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
+                اتصل بالدعم
               </Button>
             </Space>
           </Card>
 
           {/* Statistics */}
-          <Card title="Help Center Stats">
+          <Card title="إحصائيات مركز المساعدة">
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>
                     {helpSections.length}
                   </div>
-                  <Text type="secondary">Help Articles</Text>
+                  <Text type="secondary">مقالات المساعدة</Text>
                 </div>
               </Col>
               <Col span={12}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>
                     {faqItems.length}
                   </div>
-                  <Text type="secondary">FAQ Items</Text>
+                  <Text type="secondary">عناصر الأسئلة الشائعة</Text>
                 </div>
               </Col>
             </Row>
