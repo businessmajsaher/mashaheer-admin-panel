@@ -2081,9 +2081,17 @@ export default function Influencers() {
                           <div style={{ 
                             fontSize: '10px', 
                             color: file.type.startsWith('image/') ? '#52c41a' : '#1890ff',
-                            fontWeight: '500'
+                            fontWeight: '500',
+                            marginBottom: '2px'
                           }}>
                             {file.type.startsWith('image/') ? '📷 Image' : '🎥 Video'}
+                          </div>
+                          <div style={{ 
+                            fontSize: '9px', 
+                            color: '#bfbfbf',
+                            fontWeight: '400'
+                          }}>
+                            {(file.size / (1024 * 1024)).toFixed(1)}MB
                           </div>
                         </div>
                         
@@ -2339,14 +2347,38 @@ export default function Influencers() {
 
   // Handler for media files upload
   const handleMediaFilesUpload = (files: File[]) => {
-    const newFiles = files.map(file => ({
-      file,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-    }));
-    setMediaFiles(prev => [...prev, ...newFiles]);
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    const validFiles: File[] = [];
+    const invalidFiles: string[] = [];
+
+    // Check file sizes
+    files.forEach(file => {
+      if (file.size > maxSize) {
+        invalidFiles.push(`${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    // Show error for oversized files
+    if (invalidFiles.length > 0) {
+      message.error(
+        `Files exceed 10MB limit: ${invalidFiles.join(', ')}. Please select smaller files.`,
+        8
+      );
+    }
+
+    // Only process valid files
+    if (validFiles.length > 0) {
+      const newFiles = validFiles.map(file => ({
+        file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+      }));
+      setMediaFiles(prev => [...prev, ...newFiles]);
+    }
   };
 
   // Helper to get cropped image blob

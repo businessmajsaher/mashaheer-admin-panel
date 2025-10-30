@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload } from 'antd';
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { mapDeleteErrorToFriendlyMessage } from '@/utils/errorMessages';
 
 const { TextArea } = Input;
 
@@ -253,7 +254,8 @@ export default function Categories() {
       message.success('Category deleted!');
       fetchCategories();
     } catch (err: any) {
-      message.error(err.message || 'Failed to delete category');
+      const friendly = mapDeleteErrorToFriendlyMessage('category', err);
+      message.error(friendly);
     }
   };
 
