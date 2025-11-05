@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { Dialog } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Input, Button, Alert, message } from 'antd';
 import { resetPassword } from '@/services/authService';
 
 interface PasswordResetModalProps {
@@ -16,106 +15,122 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
   userEmail = '',
   userName = ''
 }) => {
-  const [email, setEmail] = useState(userEmail);
+  const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
+  useEffect(() => {
+    if (isOpen && userEmail) {
+      form.setFieldsValue({ email: userEmail });
+    }
+    if (!isOpen) {
+      form.resetFields();
+      setSuccess(false);
+      setError(null);
+    }
+  }, [isOpen, userEmail, form]);
+
+  const handleSubmit = async (values: any) => {
+    const email = values.email.trim();
+    if (!email) return;
 
     setLoading(true);
     setError(null);
 
     try {
       // Use the password reset callback page as redirect URL
-      const redirectUrl = `${window.location.origin}/password-reset-callback.html`;
+      const redirectUrl = `${window.location.origin}/reset-password`;
       
-      await resetPassword(email.trim(), redirectUrl);
+      await resetPassword(email, redirectUrl);
       setSuccess(true);
+      message.success('Password reset email sent successfully!');
     } catch (err: any) {
-      setError(err.message || 'Failed to send password reset email');
+      const errorMessage = err.message || 'Failed to send password reset email';
+      setError(errorMessage);
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    setEmail(userEmail);
+    form.resetFields();
     setSuccess(false);
     setError(null);
     onClose();
   };
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose}>
-      <div className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Reset Password</h2>
-        
-        {success ? (
-          <div className="space-y-4">
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-green-800">
-                Password reset email sent successfully to <strong>{email}</strong>
-              </p>
-            </div>
-            <p className="text-sm text-gray-600">
-              The user will receive an email with a link to reset their password. 
-              When they click the link, they'll be redirected to the Mashaheer app.
-            </p>
-            <div className="flex justify-end">
-              <Button onClick={handleClose}>Close</Button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter user's email address"
-                required
-                disabled={loading}
-              />
-              {userName && (
-                <p className="text-sm text-gray-500 mt-1">
-                  User: {userName}
-                </p>
-              )}
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800 text-sm">{error}</p>
-              </div>
-            )}
-
-            <div className="flex justify-end space-x-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={loading || !email.trim()}
-              >
-                {loading ? 'Sending...' : 'Send Reset Email'}
-              </Button>
-            </div>
-          </form>
+    <Modal
+      title="Reset Password"
+      open={isOpen}
+      onCancel={handleClose}
+      footer={null}
+      destroyOnHidden
+    >
+      <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ display: success ? 'none' : 'block' }}>
+        {userName && (
+          <Alert
+            message={`Resetting password for: ${userName}`}
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
         )}
-      </div>
-    </Dialog>
+        
+        <Form.Item
+          name="email"
+          label="Email Address"
+          rules={[
+            { required: true, message: 'Please enter email address' },
+            { type: 'email', message: 'Please enter a valid email' }
+          ]}
+        >
+          <Input placeholder="Enter user's email address" disabled={loading} />
+        </Form.Item>
+
+        {error && (
+          <Alert
+            message={error}
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+          <Button onClick={handleClose} style={{ marginRight: 8 }} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="primary" htmlType="submit" loading={loading}>
+            Send Reset Email
+          </Button>
+        </Form.Item>
+      </Form>
+      
+      {success && (
+        <div>
+          <Alert
+            message="Password Reset Email Sent"
+            description={
+              <div>
+                <p>A password reset email has been sent to <strong>{form.getFieldValue('email')}</strong></p>
+                <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+                  The user will receive an email with a link to reset their password.
+                </p>
+              </div>
+            }
+            type="success"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          <div style={{ textAlign: 'right' }}>
+            <Button onClick={handleClose}>Close</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 };
 

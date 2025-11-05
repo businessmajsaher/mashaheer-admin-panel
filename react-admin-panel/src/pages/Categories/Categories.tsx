@@ -381,7 +381,7 @@ export default function Categories() {
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setThumbnailFile(null); form.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form form={form} layout="vertical" onFinish={handleAddCategory}>

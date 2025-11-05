@@ -228,7 +228,7 @@ export default function Platforms() {
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setIconFile(null); form.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form form={form} layout="vertical" onFinish={handleAddPlatform}>
@@ -279,7 +279,7 @@ export default function Platforms() {
         open={editModalOpen}
         onCancel={() => { setEditModalOpen(false); setEditingPlatform(null); setEditIconFile(null); editForm.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form key={editingPlatform?.id || 'new'} form={editForm} layout="vertical" onFinish={handleEditPlatform}>

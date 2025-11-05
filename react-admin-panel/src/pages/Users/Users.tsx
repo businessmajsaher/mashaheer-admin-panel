@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Typography, Tag, Space, Avatar, message } from 'antd';
-import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Form, Input, Alert, Switch, Upload, Popconfirm } from 'antd';
+import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { PasswordResetModal } from '@/components/PasswordResetModal';
 
@@ -29,10 +29,44 @@ export default function Users() {
     email: '',
     name: ''
   });
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [editFormLoading, setEditFormLoading] = useState(false);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
+  const [profileImageFile, setProfileImageFile] = useState<any>(null);
+  const [editProfileImageFile, setEditProfileImageFile] = useState<any>(null);
+  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCustomers();
   }, [currentPage, pageSize]);
+
+  // Populate edit form when modal opens
+  useEffect(() => {
+    if (editModalOpen && editingCustomer) {
+      editForm.resetFields();
+      editForm.setFieldsValue({
+        name: editingCustomer.name,
+        email: editingCustomer.email,
+        bio: editingCustomer.bio || '',
+        is_verified: editingCustomer.is_verified,
+        is_suspended: editingCustomer.is_suspended,
+        profile_image_url: editingCustomer.profile_image_url,
+      });
+      setEditProfileImageFile(null);
+      setCurrentProfileImageUrl(editingCustomer.profile_image_url || null);
+    }
+    if (!editModalOpen) {
+      editForm.resetFields();
+      setEditProfileImageFile(null);
+      setCurrentProfileImageUrl(null);
+    }
+  }, [editModalOpen, editingCustomer, editForm]);
 
   const fetchCustomers = async () => {
     try {
@@ -85,6 +119,181 @@ export default function Users() {
       email: '',
       name: ''
     });
+  };
+
+  // Handle suspend/unsuspend customer
+  const handleSuspendCustomer = async (customer: Customer) => {
+    try {
+      const newSuspendedStatus = !customer.is_suspended;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_suspended: newSuspendedStatus })
+        .eq('id', customer.id);
+
+      if (error) throw error;
+
+      message.success(
+        newSuspendedStatus 
+          ? `Customer ${customer.name} has been suspended` 
+          : `Customer ${customer.name} has been unsuspended`
+      );
+      fetchCustomers();
+    } catch (err: any) {
+      message.error(err.message || 'Failed to update suspension status');
+    }
+  };
+
+  // Handle add customer
+  const handleAddCustomer = async (values: any) => {
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      let profile_image_url = values.profile_image_url;
+      
+      // Upload profile image if provided
+      if (profileImageFile) {
+        const filePath = `customer-profiles/${Date.now()}-${profileImageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        // Try influencer-profile bucket first (common bucket), fallback to profiles
+        let uploadError = null;
+        let bucket = 'influencer-profile';
+        
+        const { error: err1 } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, profileImageFile, { upsert: true });
+        
+        if (err1) {
+          // Try profiles bucket as fallback
+          bucket = 'profiles';
+          const { error: err2 } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, profileImageFile, { upsert: true });
+          uploadError = err2;
+        }
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(filePath);
+        profile_image_url = publicUrlData?.publicUrl;
+      }
+
+      // First create auth user using signUp
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password || 'TempPassword123!',
+        options: {
+          data: {
+            role: 'customer',
+            name: values.name,
+          },
+          emailRedirectTo: undefined, // Skip email confirmation redirect
+        },
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Failed to create user');
+
+      // Then create profile
+      const { error: profileError } = await supabase.from('profiles').insert([
+        {
+          id: authData.user.id,
+          name: values.name,
+          email: values.email,
+          bio: values.bio || null,
+          profile_image_url: profile_image_url || null,
+          role: 'customer',
+          is_verified: values.is_verified || false,
+          is_suspended: values.is_suspended || false,
+        },
+      ]);
+
+      if (profileError) {
+        // Note: Can't delete auth user from client side, but profile creation failure is logged
+        throw profileError;
+      }
+
+      message.success('Customer added successfully!');
+      setAddModalOpen(false);
+      form.resetFields();
+      setProfileImageFile(null);
+      fetchCustomers();
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to add customer');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  // Handle edit customer
+  const handleEditCustomer = async (values: any) => {
+    setEditFormLoading(true);
+    setEditFormError(null);
+    try {
+      if (!editingCustomer) return;
+
+      let profile_image_url = editingCustomer.profile_image_url;
+      
+      // Upload new profile image if provided
+      if (editProfileImageFile) {
+        const filePath = `customer-profiles/${Date.now()}-${editProfileImageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        // Try influencer-profile bucket first (common bucket), fallback to profiles
+        let uploadError = null;
+        let bucket = 'influencer-profile';
+        
+        const { error: err1 } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, editProfileImageFile, { upsert: true });
+        
+        if (err1) {
+          // Try profiles bucket as fallback
+          bucket = 'profiles';
+          const { error: err2 } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, editProfileImageFile, { upsert: true });
+          uploadError = err2;
+        }
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(filePath);
+        profile_image_url = publicUrlData?.publicUrl;
+      }
+
+      // Update profile
+      const updatePayload: any = {
+        name: values.name,
+        email: values.email,
+        bio: values.bio || null,
+        is_verified: values.is_verified || false,
+        is_suspended: values.is_suspended || false,
+      };
+
+      // Only update profile_image_url if it changed
+      if (profile_image_url !== editingCustomer.profile_image_url) {
+        updatePayload.profile_image_url = profile_image_url || null;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updatePayload)
+        .eq('id', editingCustomer.id);
+
+      if (error) throw error;
+
+      message.success('Customer updated successfully!');
+      setEditModalOpen(false);
+      setEditingCustomer(null);
+      setEditProfileImageFile(null);
+      setCurrentProfileImageUrl(null);
+      fetchCustomers();
+    } catch (err: any) {
+      setEditFormError(err.message || 'Failed to update customer');
+    } finally {
+      setEditFormLoading(false);
+    }
   };
 
   const columns = [
@@ -144,7 +353,15 @@ export default function Users() {
           <Button type="link" icon={<EyeOutlined />} size="small">
             View
           </Button>
-          <Button type="link" icon={<EditOutlined />} size="small">
+          <Button 
+            type="link" 
+            icon={<EditOutlined />} 
+            size="small"
+            onClick={() => {
+              setEditingCustomer(record);
+              setEditModalOpen(true);
+            }}
+          >
             Edit
           </Button>
           <Button 
@@ -155,14 +372,24 @@ export default function Users() {
           >
             Reset Password
           </Button>
-          <Button 
-            type="link" 
-            icon={<DeleteOutlined />} 
-            size="small"
-            danger
+          <Popconfirm
+            title={record.is_suspended ? "Unsuspend this customer?" : "Suspend this customer?"}
+            description={record.is_suspended 
+              ? "This customer will be able to access their account again." 
+              : "This customer will be unable to access their account."}
+            onConfirm={() => handleSuspendCustomer(record)}
+            okText="Yes"
+            cancelText="No"
           >
-            Suspend
-          </Button>
+            <Button 
+              type="link" 
+              icon={<DeleteOutlined />} 
+              size="small"
+              danger={!record.is_suspended}
+            >
+              {record.is_suspended ? 'Unsuspend' : 'Suspend'}
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -173,7 +400,17 @@ export default function Users() {
       <Card style={{ margin: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Typography.Title level={4} style={{ margin: 0 }}>Customers</Typography.Title>
-          <Button type="primary" icon={<UserAddOutlined />}>Add Customer</Button>
+          <Button 
+            type="primary" 
+            icon={<UserAddOutlined />}
+            onClick={() => {
+              setAddModalOpen(true);
+              form.resetFields();
+              setProfileImageFile(null);
+            }}
+          >
+            Add Customer
+          </Button>
         </div>
         
         <Table 
@@ -199,6 +436,186 @@ export default function Users() {
         userEmail={passwordResetModal.email}
         userName={passwordResetModal.name}
       />
+
+      {/* Add Customer Modal */}
+      <Modal
+        title="Add Customer"
+        open={addModalOpen}
+        onCancel={() => {
+          setAddModalOpen(false);
+          form.resetFields();
+          setProfileImageFile(null);
+        }}
+        footer={null}
+        destroyOnHidden
+      >
+        {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
+        <Form form={form} layout="vertical" onFinish={handleAddCustomer}>
+          <Form.Item
+            name="name"
+            label="Name"
+            rules={[{ required: true, message: 'Please enter customer name' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Please enter email' },
+              { type: 'email', message: 'Please enter a valid email' }
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="Password"
+            rules={[{ required: true, message: 'Please enter password' }]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="bio" label="Bio">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label="Profile Image">
+            <div>
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  if (!file.type.startsWith('image/')) {
+                    message.error('Only image files are allowed.');
+                    return false;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    message.error('Image must be smaller than 5MB');
+                    return false;
+                  }
+                  setProfileImageFile(file);
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>Upload Profile Image</Button>
+              </Upload>
+              {profileImageFile && (
+                <div style={{ marginTop: 8 }}>
+                  <img
+                    src={URL.createObjectURL(profileImageFile)}
+                    alt="preview"
+                    style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '4px' }}
+                  />
+                </div>
+              )}
+            </div>
+          </Form.Item>
+          <Form.Item name="is_verified" valuePropName="checked" initialValue={false}>
+            <Switch checkedChildren="Verified" unCheckedChildren="Not Verified" />
+          </Form.Item>
+          <Form.Item name="is_suspended" valuePropName="checked" initialValue={false}>
+            <Switch checkedChildren="Suspended" unCheckedChildren="Active" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" block loading={formLoading}>
+              Add Customer
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Edit Customer Modal */}
+      <Modal
+        title="Edit Customer"
+        open={editModalOpen}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingCustomer(null);
+          editForm.resetFields();
+          setEditProfileImageFile(null);
+          setCurrentProfileImageUrl(null);
+        }}
+        footer={null}
+        destroyOnHidden
+      >
+        {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
+        <Form
+          key={editingCustomer?.id || 'new'}
+          form={editForm}
+          layout="vertical"
+          onFinish={handleEditCustomer}
+        >
+          <Form.Item
+            name="name"
+            label="Name"
+            rules={[{ required: true, message: 'Please enter customer name' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Please enter email' },
+              { type: 'email', message: 'Please enter a valid email' }
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="bio" label="Bio">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label="Profile Image">
+            <div>
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  if (!file.type.startsWith('image/')) {
+                    message.error('Only image files are allowed.');
+                    return false;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    message.error('Image must be smaller than 5MB');
+                    return false;
+                  }
+                  setEditProfileImageFile(file);
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>Upload New Profile Image</Button>
+              </Upload>
+              {(editProfileImageFile || currentProfileImageUrl) && (
+                <div style={{ marginTop: 8 }}>
+                  <img
+                    src={
+                      editProfileImageFile
+                        ? URL.createObjectURL(editProfileImageFile)
+                        : currentProfileImageUrl || ''
+                    }
+                    alt="preview"
+                    style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '4px' }}
+                    onError={(e) => {
+                      console.error('Image load error:', e);
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </Form.Item>
+          <Form.Item name="is_verified" valuePropName="checked">
+            <Switch checkedChildren="Verified" unCheckedChildren="Not Verified" />
+          </Form.Item>
+          <Form.Item name="is_suspended" valuePropName="checked">
+            <Switch checkedChildren="Suspended" unCheckedChildren="Active" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" block loading={editFormLoading}>
+              Update Customer
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 } 
