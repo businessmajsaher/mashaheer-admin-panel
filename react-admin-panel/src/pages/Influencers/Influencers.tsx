@@ -518,18 +518,67 @@ export default function Influencers() {
                     return null;
                   }
                   
+                  // Validate file before upload
+                  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                  const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+                  const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+                  
+                  if (!allAllowedTypes.includes(file.type)) {
+                    const errorMsg = `File ${file.name} has invalid type: ${file.type || 'unknown'}`;
+                    console.error(`15g1. ${errorMsg}`);
+                    throw new Error(errorMsg);
+                  }
+                  
+                  const maxImageSize = 10 * 1024 * 1024; // 10MB
+                  const maxVideoSize = 100 * 1024 * 1024; // 100MB
+                  const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
+                  
+                  if (file.size > maxSize) {
+                    const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
+                    console.error(`15g2. ${errorMsg}`);
+                    throw new Error(errorMsg);
+                  }
+                  
+                  if (file.size === 0) {
+                    const errorMsg = `File ${file.name} appears to be empty or corrupted`;
+                    console.error(`15g3. ${errorMsg}`);
+                    throw new Error(errorMsg);
+                  }
+                  
                   const filePath = `influencer-media/${Date.now()}-${file.name}`;
                   
                   console.log(`15h. Uploading file ${index + 1} to path:`, filePath);
                   
-                  // Upload to storage
-                  const { error: uploadError } = await supabase.storage
-                    .from('influencer-media')
-                    .upload(filePath, file, { upsert: true });
+                  // Upload to storage with better error handling
+                  let uploadError;
+                  try {
+                    const uploadResult = await supabase.storage
+                      .from('influencer-media')
+                      .upload(filePath, file, { upsert: true });
+                    uploadError = uploadResult.error;
+                  } catch (storageError: any) {
+                    console.error(`15h1. Storage upload exception for file ${index + 1}:`, storageError);
+                    throw new Error(`Storage upload failed: ${storageError.message || 'Unknown error'}`);
+                  }
                   
                   if (uploadError) {
                     console.error(`15i. Upload error for file ${index + 1}:`, uploadError);
-                    throw uploadError;
+                    
+                    // Provide specific error messages
+                    let errorMessage = `Failed to upload ${file.name}`;
+                    if (uploadError.message?.includes('duplicate') || uploadError.message?.includes('already exists')) {
+                      errorMessage = `File ${file.name} already exists. Please rename the file.`;
+                    } else if (uploadError.message?.includes('size') || uploadError.message?.includes('too large')) {
+                      errorMessage = `File ${file.name} is too large. Maximum size: ${file.type.startsWith('image/') ? '10MB' : '100MB'}`;
+                    } else if (uploadError.message?.includes('permission') || uploadError.message?.includes('access')) {
+                      errorMessage = `Permission denied for ${file.name}. Please check storage permissions.`;
+                    } else if (uploadError.message?.includes('network') || uploadError.message?.includes('timeout')) {
+                      errorMessage = `Network error uploading ${file.name}. Please check your connection and try again.`;
+                    } else {
+                      errorMessage = `Failed to upload ${file.name}: ${uploadError.message || 'Unknown error'}`;
+                    }
+                    
+                    throw new Error(errorMessage);
                   }
                   
                   console.log(`15j. File ${index + 1} uploaded successfully to storage`);
@@ -647,18 +696,68 @@ export default function Influencers() {
               const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
                 console.log(`15b. Processing media file ${index + 1}:`, mediaFile);
                 const file = mediaFile.file;
+                
+                // Validate file before upload
+                const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+                const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+                
+                if (!allAllowedTypes.includes(file.type)) {
+                  const errorMsg = `File ${file.name} has invalid type: ${file.type || 'unknown'}`;
+                  console.error(`15b1. ${errorMsg}`);
+                  throw new Error(errorMsg);
+                }
+                
+                const maxImageSize = 10 * 1024 * 1024; // 10MB
+                const maxVideoSize = 100 * 1024 * 1024; // 100MB
+                const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
+                
+                if (file.size > maxSize) {
+                  const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
+                  console.error(`15b2. ${errorMsg}`);
+                  throw new Error(errorMsg);
+                }
+                
+                if (file.size === 0) {
+                  const errorMsg = `File ${file.name} appears to be empty or corrupted`;
+                  console.error(`15b3. ${errorMsg}`);
+                  throw new Error(errorMsg);
+                }
+                
                 const filePath = `influencer-media/${Date.now()}-${file.name}`;
                 
                 console.log(`15c. Uploading file ${index + 1} to path:`, filePath);
                 
-                // Upload to storage
-                const { error: uploadError } = await supabase.storage
-                  .from('influencer-media')
-                  .upload(filePath, file, { upsert: true });
+                // Upload to storage with better error handling
+                let uploadError;
+                try {
+                  const uploadResult = await supabase.storage
+                    .from('influencer-media')
+                    .upload(filePath, file, { upsert: true });
+                  uploadError = uploadResult.error;
+                } catch (storageError: any) {
+                  console.error(`15c1. Storage upload exception for file ${index + 1}:`, storageError);
+                  throw new Error(`Storage upload failed: ${storageError.message || 'Unknown error'}`);
+                }
                 
                 if (uploadError) {
                   console.error(`15d. Upload error for file ${index + 1}:`, uploadError);
-                  throw uploadError;
+                  
+                  // Provide specific error messages
+                  let errorMessage = `Failed to upload ${file.name}`;
+                  if (uploadError.message?.includes('duplicate') || uploadError.message?.includes('already exists')) {
+                    errorMessage = `File ${file.name} already exists. Please rename the file.`;
+                  } else if (uploadError.message?.includes('size') || uploadError.message?.includes('too large')) {
+                    errorMessage = `File ${file.name} is too large. Maximum size: ${file.type.startsWith('image/') ? '10MB' : '100MB'}`;
+                  } else if (uploadError.message?.includes('permission') || uploadError.message?.includes('access')) {
+                    errorMessage = `Permission denied for ${file.name}. Please check storage permissions.`;
+                  } else if (uploadError.message?.includes('network') || uploadError.message?.includes('timeout')) {
+                    errorMessage = `Network error uploading ${file.name}. Please check your connection and try again.`;
+                  } else {
+                    errorMessage = `Failed to upload ${file.name}: ${uploadError.message || 'Unknown error'}`;
+                  }
+                  
+                  throw new Error(errorMessage);
                 }
                 
                 console.log(`15e. File ${index + 1} uploaded successfully to storage`);
@@ -1988,7 +2087,7 @@ export default function Influencers() {
                     display: 'block', 
                     marginTop: '12px' 
                   }}>
-                    Supports: JPG, PNG, GIF, MP4, MOV (Max 10MB each)
+                    Supports: Images (JPG, PNG, GIF, WEBP - Max 10MB) | Videos (MP4, MOV, AVI, WEBM - Max 100MB, 5 min)
                   </Typography.Text>
                 </div>
               ) : (
@@ -2135,7 +2234,7 @@ export default function Influencers() {
               <input
                 id="media-upload"
                 type="file"
-                accept="image/jpeg,image/jpg,image/png,image/gif,video/mp4,video/mov,video/avi"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/quicktime,video/x-msvideo,video/webm"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
@@ -2346,26 +2445,82 @@ export default function Influencers() {
   }, [drawerOpen, editingInfluencer]);
 
   // Handler for media files upload
-  const handleMediaFilesUpload = (files: File[]) => {
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+  const handleMediaFilesUpload = async (files: File[]) => {
+    const maxImageSize = 10 * 1024 * 1024; // 10MB for images
+    const maxVideoSize = 100 * 1024 * 1024; // 100MB for videos
+    const maxVideoDuration = 300; // 5 minutes in seconds
+    
     const validFiles: File[] = [];
-    const invalidFiles: string[] = [];
+    const errors: Array<{ file: string; reason: string }> = [];
 
-    // Check file sizes
-    files.forEach(file => {
-      if (file.size > maxSize) {
-        invalidFiles.push(`${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+    // Allowed file types
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+    const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+
+    // Validate each file
+    for (const file of files) {
+      const fileErrors: string[] = [];
+
+      // Check file type
+      if (!allAllowedTypes.includes(file.type)) {
+        fileErrors.push(`Invalid file type. Allowed: Images (JPG, PNG, GIF, WEBP) or Videos (MP4, MOV, AVI, WEBM)`);
+      }
+
+      // Check file size based on type
+      if (file.type.startsWith('image/')) {
+        if (file.size > maxImageSize) {
+          fileErrors.push(`Image size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 10MB limit`);
+        }
+      } else if (file.type.startsWith('video/')) {
+        if (file.size > maxVideoSize) {
+          fileErrors.push(`Video size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 100MB limit`);
+        }
+        
+        // Validate video duration
+        try {
+          const duration = await getVideoDuration(file);
+          if (duration > maxVideoDuration) {
+            fileErrors.push(`Video duration (${Math.round(duration)}s) exceeds 5 minute limit`);
+          }
+        } catch (durationError) {
+          console.warn('Could not read video duration:', durationError);
+          // Don't block upload if we can't read duration, but log it
+        }
+      }
+
+      // Check if file is corrupted (has size but no type)
+      if (file.size === 0) {
+        fileErrors.push('File appears to be empty or corrupted');
+      }
+
+      if (fileErrors.length > 0) {
+        errors.push({
+          file: file.name,
+          reason: fileErrors.join('; ')
+        });
       } else {
         validFiles.push(file);
       }
-    });
+    }
 
-    // Show error for oversized files
-    if (invalidFiles.length > 0) {
-      message.error(
-        `Files exceed 10MB limit: ${invalidFiles.join(', ')}. Please select smaller files.`,
-        8
-      );
+    // Show detailed error messages
+    if (errors.length > 0) {
+      const errorMessages = errors.map(e => `• ${e.file}: ${e.reason}`).join('\n');
+      message.error({
+        content: (
+          <div>
+            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+              {errors.length} file(s) failed validation:
+            </div>
+            <div style={{ fontSize: '12px', whiteSpace: 'pre-line' }}>
+              {errorMessages}
+            </div>
+          </div>
+        ),
+        duration: 10,
+        style: { marginTop: '20vh' }
+      });
     }
 
     // Only process valid files
@@ -2378,7 +2533,31 @@ export default function Influencers() {
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
       }));
       setMediaFiles(prev => [...prev, ...newFiles]);
+      
+      if (validFiles.length > 0) {
+        message.success(`${validFiles.length} file(s) added successfully`);
+      }
     }
+  };
+
+  // Helper function to get video duration
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      
+      video.onerror = () => {
+        window.URL.revokeObjectURL(video.src);
+        reject(new Error('Could not load video metadata'));
+      };
+      
+      video.src = URL.createObjectURL(file);
+    });
   };
 
   // Helper to get cropped image blob

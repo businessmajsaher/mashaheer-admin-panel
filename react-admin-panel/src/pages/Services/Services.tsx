@@ -100,12 +100,19 @@ export default function Services() {
 
 
 
-  // Fetch services from Supabase
+  // Fetch services from Supabase with category information
   const fetchServices = async () => {
     console.log('🔄 Fetching services...');
     setLoading(true);
     try {
-      let query = supabase.from('services').select('*, profiles!primary_influencer_id(country)').order('created_at', { ascending: false });
+      let query = supabase.from('services').select(`
+        *,
+        profiles!primary_influencer_id(country),
+        service_categories!category_id (
+          id,
+          name
+        )
+      `).order('created_at', { ascending: false });
       
       if (filters.category_id) {
         query = query.eq('category_id', filters.category_id);
@@ -475,6 +482,20 @@ export default function Services() {
           {type?.toUpperCase() || '-'}
         </span>
       )
+    },
+    { 
+      title: 'Category', 
+      dataIndex: 'category_id', 
+      key: 'category',
+      render: (categoryId: string, record: any) => {
+        const category = record.service_categories;
+        if (category && typeof category === 'object' && !Array.isArray(category)) {
+          return <span style={{ color: '#1890ff', fontWeight: '500' }}>{category.name}</span>;
+        }
+        // Fallback: find category from categories list
+        const cat = categories.find(c => c.id === categoryId);
+        return cat ? <span style={{ color: '#1890ff', fontWeight: '500' }}>{cat.name}</span> : '-';
+      }
     },
     { 
       title: 'Duration', 

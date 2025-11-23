@@ -178,39 +178,41 @@ export default function Users() {
         profile_image_url = publicUrlData?.publicUrl;
       }
 
-      // First create auth user using signUp
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password || 'TempPassword123!',
-        options: {
-          data: {
-            role: 'customer',
-            name: values.name,
-          },
-          emailRedirectTo: undefined, // Skip email confirmation redirect
+      // Get session token for authorization
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session. Please log in again.');
+      }
+      const token = sessionData.session.access_token;
+
+      // Call edge function to create customer using admin API
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-customer`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
-
-      // Then create profile
-      const { error: profileError } = await supabase.from('profiles').insert([
-        {
-          id: authData.user.id,
-          name: values.name,
+        body: JSON.stringify({
           email: values.email,
+          password: values.password || 'TempPassword123!',
+          name: values.name,
           bio: values.bio || null,
           profile_image_url: profile_image_url || null,
-          role: 'customer',
           is_verified: values.is_verified || false,
           is_suspended: values.is_suspended || false,
-        },
-      ]);
+        })
+      });
 
-      if (profileError) {
-        // Note: Can't delete auth user from client side, but profile creation failure is logged
-        throw profileError;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to create customer' }));
+        throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to create customer`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create customer');
       }
 
       message.success('Customer added successfully!');
@@ -381,14 +383,14 @@ export default function Users() {
             okText="Yes"
             cancelText="No"
           >
-            <Button 
-              type="link" 
-              icon={<DeleteOutlined />} 
-              size="small"
+          <Button 
+            type="link" 
+            icon={<DeleteOutlined />} 
+            size="small"
               danger={!record.is_suspended}
-            >
+          >
               {record.is_suspended ? 'Unsuspend' : 'Suspend'}
-            </Button>
+          </Button>
           </Popconfirm>
         </Space>
       ),

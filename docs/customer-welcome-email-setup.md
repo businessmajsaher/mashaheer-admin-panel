@@ -1,0 +1,1 @@
+https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/send-customer-welcome-email

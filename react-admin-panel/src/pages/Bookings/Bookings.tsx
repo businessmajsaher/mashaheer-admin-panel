@@ -17,7 +17,7 @@ import {
   Image,
   Divider
 } from 'antd';
-import { EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import { bookingService } from '../../services/bookingService';
 import { serviceService } from '../../services/serviceService';
 import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
@@ -35,6 +35,7 @@ const Bookings: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [form] = Form.useForm();
+  const [filterForm] = Form.useForm();
   const [filters, setFilters] = useState<BookingFilters>({});
   const [pagination, setPagination] = useState({
     current: 1,
@@ -120,6 +121,23 @@ const Bookings: React.FC = () => {
     } catch (error) {
       message.error('Failed to update booking');
     }
+  };
+
+  const handleResetFilters = () => {
+    filterForm.resetFields();
+    setFilters({});
+    setPagination(prev => ({ ...prev, current: 1 }));
+  };
+
+  const handleFilterChange = (changedValues: any, allValues: any) => {
+    const newFilters: BookingFilters = {
+      service_id: allValues.service_id,
+      status: allValues.status,
+      date_from: allValues.date_from?.toISOString(),
+      date_to: allValues.date_to?.toISOString()
+    };
+    setFilters(newFilters);
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
 
   const getStatusColor = (statusName: string) => {
@@ -221,52 +239,66 @@ const Bookings: React.FC = () => {
   return (
     <div style={{ padding: '24px' }}>
       <Card title="Bookings">
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col span={6}>
-            <Select
-              placeholder="Filter by service"
-              style={{ width: '100%' }}
-              allowClear
-              onChange={(value) => setFilters(prev => ({ ...prev, service_id: value }))}
-            >
-              {services.map(service => (
-                <Option key={service.id} value={service.id}>{service.title}</Option>
-              ))}
-            </Select>
-          </Col>
-          <Col span={6}>
-            <Select
-              placeholder="Filter by status"
-              style={{ width: '100%' }}
-              allowClear
-              onChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
-            >
-              {bookingStatuses.map(status => (
-                <Option key={status.id} value={status.id}>{status.name}</Option>
-              ))}
-            </Select>
-          </Col>
-          <Col span={6}>
-            <DatePicker
-              placeholder="Filter by date from"
-              style={{ width: '100%' }}
-              onChange={(date) => setFilters(prev => ({ 
-                ...prev, 
-                date_from: date?.toISOString() 
-              }))}
-            />
-          </Col>
-          <Col span={6}>
-            <DatePicker
-              placeholder="Filter by date to"
-              style={{ width: '100%' }}
-              onChange={(date) => setFilters(prev => ({ 
-                ...prev, 
-                date_to: date?.toISOString() 
-              }))}
-            />
-          </Col>
-        </Row>
+        <Form
+          form={filterForm}
+          onValuesChange={handleFilterChange}
+          layout="inline"
+          style={{ marginBottom: 16 }}
+        >
+          <Row gutter={[16, 16]} style={{ width: '100%' }}>
+            <Col span={5}>
+              <Form.Item name="service_id" style={{ marginBottom: 0, width: '100%' }}>
+                <Select
+                  placeholder="Filter by service"
+                  style={{ width: '100%' }}
+                  allowClear
+                >
+                  {services.map(service => (
+                    <Option key={service.id} value={service.id}>{service.title}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={5}>
+              <Form.Item name="status" style={{ marginBottom: 0, width: '100%' }}>
+                <Select
+                  placeholder="Filter by status"
+                  style={{ width: '100%' }}
+                  allowClear
+                >
+                  {bookingStatuses.map(status => (
+                    <Option key={status.id} value={status.id}>{status.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={5}>
+              <Form.Item name="date_from" style={{ marginBottom: 0, width: '100%' }}>
+                <DatePicker
+                  placeholder="Filter by date from"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={5}>
+              <Form.Item name="date_to" style={{ marginBottom: 0, width: '100%' }}>
+                <DatePicker
+                  placeholder="Filter by date to"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleResetFilters}
+                style={{ width: '100%' }}
+              >
+                Reset
+              </Button>
+            </Col>
+          </Row>
+        </Form>
 
         <Table
           columns={columns}

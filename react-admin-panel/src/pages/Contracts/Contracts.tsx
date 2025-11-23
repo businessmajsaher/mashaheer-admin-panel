@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Select, DatePicker, Divider, Row, Col, Space } from 'antd';
 import { FileTextOutlined, EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { contractService } from '@/services/contractService';
+import { supabase } from '@/services/supabaseClient';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;

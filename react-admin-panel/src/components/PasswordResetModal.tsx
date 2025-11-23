@@ -117,7 +117,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
               <div>
                 <p>A password reset email has been sent to <strong>{form.getFieldValue('email')}</strong></p>
                 <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-                  The user will receive an email with a link to reset their password.
+              The user will receive an email with a link to reset their password. 
                 </p>
               </div>
             }
@@ -128,8 +128,8 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
           <div style={{ textAlign: 'right' }}>
             <Button onClick={handleClose}>Close</Button>
           </div>
-        </div>
-      )}
+            </div>
+        )}
     </Modal>
   );
 };
