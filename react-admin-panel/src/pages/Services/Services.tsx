@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col } from 'antd';
-import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import dayjs from 'dayjs';
 import { getCurrencyByCountry, getCurrencySymbol, formatPrice } from '@/utils/currencyUtils';
@@ -77,6 +77,7 @@ export default function Services() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
+  const [filterForm] = Form.useForm();
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editFormLoading, setEditFormLoading] = useState(false);
@@ -580,6 +581,17 @@ export default function Services() {
 
   const filteredServices = services.filter((s) => s.title?.toLowerCase().includes(search.toLowerCase()));
 
+  const handleResetFilters = () => {
+    filterForm.resetFields();
+    setFilters({
+      category_id: undefined,
+      service_type: undefined,
+      primary_influencer_id: undefined
+    });
+    setSearch('');
+    setCurrentPage(1);
+  };
+
   // Helper to compress and resize image
   async function compressAndResizeImage(file: File, maxSize = 200, quality = 0.7): Promise<{ blob: Blob, type: string, ext: string }> {
     return new Promise((resolve, reject) => {
@@ -637,41 +649,58 @@ export default function Services() {
       </div>
       
       {/* Filters */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Select
-            placeholder="Filter by category"
-            style={{ width: '100%' }}
-            allowClear
-            onChange={(value) => setFilters(prev => ({ ...prev, category_id: value }))}
-          >
-            {categories.map(cat => (
-              <Option key={cat.id} value={cat.id}>{cat.name}</Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={6}>
-          <Select
-            placeholder="Filter by type"
-            style={{ width: '100%' }}
-            allowClear
-            onChange={(value) => setFilters(prev => ({ ...prev, service_type: value }))}
-          >
-            <Option value="normal">Normal</Option>
-            <Option value="dual">Dual</Option>
-            <Option value="flash">Flash</Option>
-          </Select>
-        </Col>
-        <Col span={6}>
-          <Input.Search
-            placeholder="Search services"
-            allowClear
-            style={{ width: '100%' }}
-            value={search}
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-          />
-        </Col>
-      </Row>
+      <Form form={filterForm} layout="inline">
+        <Row gutter={[16, 16]} style={{ marginBottom: 16, width: '100%' }}>
+          <Col span={6}>
+            <Form.Item name="category_id" style={{ margin: 0, width: '100%' }}>
+              <Select
+                placeholder="Filter by category"
+                style={{ width: '100%' }}
+                allowClear
+                onChange={(value) => setFilters(prev => ({ ...prev, category_id: value }))}
+              >
+                {categories.map(cat => (
+                  <Option key={cat.id} value={cat.id}>{cat.name}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item name="service_type" style={{ margin: 0, width: '100%' }}>
+              <Select
+                placeholder="Filter by type"
+                style={{ width: '100%' }}
+                allowClear
+                onChange={(value) => setFilters(prev => ({ ...prev, service_type: value }))}
+              >
+                <Option value="normal">Normal</Option>
+                <Option value="dual">Dual</Option>
+                <Option value="flash">Flash</Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item name="search" style={{ margin: 0, width: '100%' }}>
+              <Input.Search
+                placeholder="Search services"
+                allowClear
+                style={{ width: '100%' }}
+                value={search}
+                onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={handleResetFilters}
+              style={{ width: '100%' }}
+            >
+              Reset
+            </Button>
+          </Col>
+        </Row>
+      </Form>
       
       {loading ? <Spin size="large" /> : (
         <Table
