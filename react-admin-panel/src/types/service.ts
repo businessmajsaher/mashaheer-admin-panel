@@ -14,6 +14,12 @@ export interface Service {
   invited_influencer_id?: string;
   category_id?: string;
   platform_id?: string;
+  price?: number;
+  offer_price?: number;
+  currency?: string;
+  commission_percentage?: number;
+  payment_gateway_charge_card_percentage?: number;
+  payment_gateway_charge_knet_percentage?: number;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +39,12 @@ export interface CreateServiceData {
   duo_influencer_id?: string;
   category_id?: string;
   platform_id?: string;
+  price?: number;
+  offer_price?: number;
+  currency?: string;
+  commission_percentage?: number;
+  payment_gateway_charge_card_percentage?: number;
+  payment_gateway_charge_knet_percentage?: number;
 }
 
 export interface UpdateServiceData {
@@ -50,6 +62,12 @@ export interface UpdateServiceData {
   duo_influencer_id?: string;
   category_id?: string;
   platform_id?: string;
+  price?: number;
+  offer_price?: number;
+  currency?: string;
+  commission_percentage?: number;
+  payment_gateway_charge_card_percentage?: number;
+  payment_gateway_charge_knet_percentage?: number;
 }
 
 export interface ServiceFilters {

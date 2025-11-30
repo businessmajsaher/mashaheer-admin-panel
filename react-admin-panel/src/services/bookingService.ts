@@ -11,7 +11,8 @@ export const bookingService = {
         service:services(title, thumbnail),
         influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
-        status:booking_statuses(id, name, description)
+        status:booking_statuses(id, name, description),
+        payments:payments(id, amount, currency, status, payment_method, transaction_reference, paid_at)
       `, { count: 'exact' });
 
     // Apply filters
@@ -57,7 +58,9 @@ export const bookingService = {
         service:services(title, thumbnail, description),
         influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
-        status:booking_statuses(id, name, description)
+        status:booking_statuses(id, name, description),
+        payments:payments(id, amount, currency, status, payment_method, transaction_reference, paid_at),
+        refunds:refunds(id, amount, currency, status, reason, created_at)
       `)
       .eq('id', id)
       .single();

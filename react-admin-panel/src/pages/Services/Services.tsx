@@ -298,6 +298,9 @@ export default function Services() {
         price: values.price,
         offer_price: offerPrice,
         currency: values.currency || selectedCurrency,
+        commission_percentage: values.commission_percentage || 0,
+        payment_gateway_charge_card_percentage: values.payment_gateway_charge_card_percentage || 0,
+        payment_gateway_charge_knet_percentage: values.payment_gateway_charge_knet_percentage || 0,
         created_at: new Date().toISOString(),
       };
       
@@ -391,6 +394,9 @@ export default function Services() {
         price: values.price,
         offer_price: offerPrice,
         currency: values.currency || editSelectedCurrency,
+        commission_percentage: values.commission_percentage || 0,
+        payment_gateway_charge_card_percentage: values.payment_gateway_charge_card_percentage || 0,
+        payment_gateway_charge_knet_percentage: values.payment_gateway_charge_knet_percentage || 0,
       };
 
       console.log('📝 Updating service with data:', updateData);
@@ -545,6 +551,111 @@ export default function Services() {
           <span style={{ color: '#8c8c8c' }}>
             {formatPrice(record.price || 0, currency)}
           </span>
+        );
+      }
+    },
+    { 
+      title: 'Commission', 
+      key: 'commission',
+      render: (_: any, record: any) => {
+        const currency = record.currency || 'USD';
+        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
+        const commissionPercentage = record.commission_percentage || 0;
+        const commissionAmount = (servicePrice * commissionPercentage) / 100;
+        return (
+          <div>
+            <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
+              {formatPrice(commissionAmount, currency)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+              ({commissionPercentage}%)
+            </div>
+          </div>
+        );
+      }
+    },
+    { 
+      title: 'Card Charge', 
+      key: 'payment_gateway_charge_card',
+      render: (_: any, record: any) => {
+        const currency = record.currency || 'USD';
+        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
+        const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
+        const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
+        return (
+          <div>
+            <div style={{ fontWeight: 'bold', color: '#f44336' }}>
+              {formatPrice(cardChargeAmount, currency)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+              Card ({cardChargePercentage}%)
+            </div>
+          </div>
+        );
+      }
+    },
+    { 
+      title: 'KNET Charge', 
+      key: 'payment_gateway_charge_knet',
+      render: (_: any, record: any) => {
+        const currency = record.currency || 'USD';
+        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
+        const knetChargePercentage = record.payment_gateway_charge_knet_percentage || 0;
+        const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
+        return (
+          <div>
+            <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
+              {formatPrice(knetChargeAmount, currency)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+              KNET ({knetChargePercentage}%)
+            </div>
+          </div>
+        );
+      }
+    },
+    { 
+      title: 'Influencer Payout', 
+      key: 'influencer_payout',
+      render: (_: any, record: any) => {
+        const currency = record.currency || 'USD';
+        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
+        const commissionPercentage = record.commission_percentage || 0;
+        const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
+        const knetChargePercentage = record.payment_gateway_charge_knet_percentage || 0;
+        const commissionAmount = (servicePrice * commissionPercentage) / 100;
+        const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
+        const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
+        
+        // Calculate payout for both payment methods
+        const payoutWithCard = servicePrice - commissionAmount - cardChargeAmount;
+        const payoutWithKnet = servicePrice - commissionAmount - knetChargeAmount;
+        
+        // Show range if charges differ, otherwise show single value
+        const chargesDiffer = cardChargePercentage !== knetChargePercentage;
+        
+        return (
+          <div>
+            {chargesDiffer ? (
+              <>
+                <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
+                  {formatPrice(Math.min(payoutWithCard, payoutWithKnet), currency)} - {formatPrice(Math.max(payoutWithCard, payoutWithKnet), currency)}
+                </div>
+                <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                  Card: {formatPrice(payoutWithCard, currency)} | KNET: {formatPrice(payoutWithKnet, currency)}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '14px' }}>
+                  {formatPrice(payoutWithCard, currency)}
+                </div>
+                <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                  Net payout
+                </div>
+              </>
+            )}
+          </div>
         );
       }
     },
@@ -856,6 +967,70 @@ export default function Services() {
             </Col>
           </Row>
 
+          <Divider>Charges & Fees</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="commission_percentage"
+                label="Commission Percentage (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'Commission must be between 0 and 100' }
+                ]}
+                tooltip="Platform commission percentage deducted from service price"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 10.5"
+                  suffix="%"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="payment_gateway_charge_card_percentage"
+                label="Card Payment Charge (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'Card charge must be between 0 and 100' }
+                ]}
+                tooltip="Payment gateway charge percentage for card payments (Visa, Mastercard, etc.)"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 2.9"
+                  suffix="%"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="payment_gateway_charge_knet_percentage"
+                label="KNET Payment Charge (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'KNET charge must be between 0 and 100' }
+                ]}
+                tooltip="Payment gateway charge percentage for KNET payments (Kuwait National Payment Network)"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 1.5"
+                  suffix="%"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
                      <Row gutter={16}>
              <Col span={12}>
                <Form.Item
@@ -1120,7 +1295,10 @@ export default function Services() {
             platform_id: editingService.platform_ids || editingService.platform_id,
             price: editingService.price,
             offer_price: editingService.offer_price,
-            currency: editingService.currency || 'USD'
+            currency: editingService.currency || 'USD',
+            commission_percentage: editingService.commission_percentage || 0,
+            payment_gateway_charge_card_percentage: editingService.payment_gateway_charge_card_percentage || 0,
+            payment_gateway_charge_knet_percentage: editingService.payment_gateway_charge_knet_percentage || 0
           } : {}}
         >
           <Row gutter={16}>
@@ -1227,6 +1405,70 @@ export default function Services() {
                   disabled={!editIsFlashDeal}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider>Charges & Fees</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="commission_percentage"
+                label="Commission Percentage (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'Commission must be between 0 and 100' }
+                ]}
+                tooltip="Platform commission percentage deducted from service price"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 10.5"
+                  suffix="%"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="payment_gateway_charge_card_percentage"
+                label="Card Payment Charge (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'Card charge must be between 0 and 100' }
+                ]}
+                tooltip="Payment gateway charge percentage for card payments (Visa, Mastercard, etc.)"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 2.9"
+                  suffix="%"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="payment_gateway_charge_knet_percentage"
+                label="KNET Payment Charge (%)"
+                rules={[
+                  { required: false },
+                  { type: 'number', min: 0, max: 100, message: 'KNET charge must be between 0 and 100' }
+                ]}
+                tooltip="Payment gateway charge percentage for KNET payments (Kuwait National Payment Network)"
+              >
+                <InputNumber 
+                  min={0} 
+                  max={100}
+                  step={0.01} 
+                  style={{ width: '100%' }} 
+                  placeholder="e.g., 1.5"
+                  suffix="%"
                 />
               </Form.Item>
             </Col>

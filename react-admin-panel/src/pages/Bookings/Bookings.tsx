@@ -17,9 +17,10 @@ import {
   Image,
   Divider
 } from 'antd';
-import { EyeOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ReloadOutlined, DollarOutlined } from '@ant-design/icons';
 import { bookingService } from '../../services/bookingService';
 import { serviceService } from '../../services/serviceService';
+import { refundService, RefundRequest } from '../../services/refundService';
 import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
 import dayjs from 'dayjs';
@@ -33,8 +34,11 @@ const Bookings: React.FC = () => {
   const [bookingStatuses, setBookingStatuses] = useState<BookingStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [refundModalVisible, setRefundModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [refundLoading, setRefundLoading] = useState(false);
   const [form] = Form.useForm();
+  const [refundForm] = Form.useForm();
   const [filterForm] = Form.useForm();
   const [filters, setFilters] = useState<BookingFilters>({});
   const [pagination, setPagination] = useState({
@@ -140,6 +144,51 @@ const Bookings: React.FC = () => {
     setPagination(prev => ({ ...prev, current: 1 }));
   };
 
+  const handleInitiateRefund = (booking: Booking) => {
+    setSelectedBooking(booking);
+    // Get completed payment for this booking
+    const completedPayment = (booking as any).payments?.find((p: any) => p.status === 'completed');
+    if (completedPayment) {
+      refundForm.setFieldsValue({
+        amount: completedPayment.amount,
+        reason: ''
+      });
+    }
+    setRefundModalVisible(true);
+  };
+
+  const handleRefundSubmit = async (values: any) => {
+    if (!selectedBooking) return;
+
+    setRefundLoading(true);
+    try {
+      const refundRequest: RefundRequest = {
+        booking_id: selectedBooking.id,
+        amount: values.amount,
+        reason: values.reason
+      };
+
+      const result = await refundService.initiateRefund(refundRequest);
+      
+      if (result.status === 'completed') {
+        message.success('Refund processed successfully');
+      } else if (result.status === 'processing') {
+        message.info('Refund is being processed');
+      } else {
+        message.warning('Refund request submitted but may need manual review');
+      }
+
+      setRefundModalVisible(false);
+      refundForm.resetFields();
+      fetchBookings(pagination.current);
+    } catch (error: any) {
+      console.error('Refund error:', error);
+      message.error(error.message || 'Failed to initiate refund');
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
   const getStatusColor = (statusName: string) => {
     const lowerStatus = statusName?.toLowerCase() || '';
     if (lowerStatus.includes('pending')) return 'orange';
@@ -211,28 +260,43 @@ const Bookings: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Booking) => (
-        <Space>
-          <Button
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetails(record)}
-          >
-            View Details
-          </Button>
-          <Select
-            value={record.status_id}
-            style={{ width: 150 }}
-            onChange={(value) => handleUpdateStatus(record.id, value)}
-          >
-            {bookingStatuses.map(status => (
-              <Option key={status.id} value={status.id}>
-                {status.name}
-              </Option>
-            ))}
-          </Select>
-        </Space>
-      )
+      render: (_: any, record: Booking) => {
+        const completedPayment = (record as any).payments?.find((p: any) => p.status === 'completed');
+        const hasRefund = (record as any).refunds?.some((r: any) => r.status === 'completed' || r.status === 'processing');
+        
+        return (
+          <Space>
+            <Button
+              type="link"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetails(record)}
+            >
+              View Details
+            </Button>
+            {completedPayment && !hasRefund && (
+              <Button
+                type="link"
+                icon={<DollarOutlined />}
+                danger
+                onClick={() => handleInitiateRefund(record)}
+              >
+                Refund
+              </Button>
+            )}
+            <Select
+              value={record.status_id}
+              style={{ width: 150 }}
+              onChange={(value) => handleUpdateStatus(record.id, value)}
+            >
+              {bookingStatuses.map(status => (
+                <Option key={status.id} value={status.id}>
+                  {status.name}
+                </Option>
+              ))}
+            </Select>
+          </Space>
+        );
+      }
     }
   ];
 
@@ -362,6 +426,76 @@ const Bookings: React.FC = () => {
                 </Descriptions.Item>
               </Descriptions>
 
+              {/* Payment Information */}
+              {(selectedBooking as any).payments && (selectedBooking as any).payments.length > 0 && (
+                <>
+                  <Divider>Payment Information</Divider>
+                  <Descriptions bordered>
+                    {(selectedBooking as any).payments.map((payment: any, index: number) => (
+                      <React.Fragment key={payment.id || index}>
+                        <Descriptions.Item label="Amount" span={1}>
+                          {payment.currency || 'USD'} {payment.amount}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Status" span={1}>
+                          <Tag color={payment.status === 'completed' ? 'green' : payment.status === 'pending' ? 'orange' : 'red'}>
+                            {payment.status?.toUpperCase()}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Payment Method" span={1}>
+                          {payment.payment_method || 'N/A'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Transaction Reference" span={3}>
+                          {payment.transaction_reference || 'N/A'}
+                        </Descriptions.Item>
+                        {payment.paid_at && (
+                          <Descriptions.Item label="Paid At" span={3}>
+                            {dayjs(payment.paid_at).format('YYYY-MM-DD HH:mm')}
+                          </Descriptions.Item>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </Descriptions>
+                </>
+              )}
+
+              {/* Refund History */}
+              {(selectedBooking as any).refunds && (selectedBooking as any).refunds.length > 0 && (
+                <>
+                  <Divider>Refund History</Divider>
+                  <Descriptions bordered>
+                    {(selectedBooking as any).refunds.map((refund: any, index: number) => (
+                      <React.Fragment key={refund.id || index}>
+                        <Descriptions.Item label="Amount" span={1}>
+                          {refund.currency || 'USD'} {refund.amount}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Status" span={1}>
+                          <Tag color={
+                            refund.status === 'completed' ? 'green' : 
+                            refund.status === 'processing' ? 'orange' : 
+                            refund.status === 'failed' ? 'red' : 'default'
+                          }>
+                            {refund.status?.toUpperCase()}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Created At" span={1}>
+                          {dayjs(refund.created_at).format('YYYY-MM-DD HH:mm')}
+                        </Descriptions.Item>
+                        {refund.reason && (
+                          <Descriptions.Item label="Reason" span={3}>
+                            {refund.reason}
+                          </Descriptions.Item>
+                        )}
+                        {refund.hesabe_refund_id && (
+                          <Descriptions.Item label="Hesabe Refund ID" span={3}>
+                            {refund.hesabe_refund_id}
+                          </Descriptions.Item>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </Descriptions>
+                </>
+              )}
+
               <Divider />
 
               <Form
@@ -428,6 +562,104 @@ const Bookings: React.FC = () => {
                 </Form.Item>
               </Form>
             </div>
+          )}
+        </Modal>
+
+        {/* Refund Modal */}
+        <Modal
+          title="Initiate Refund"
+          open={refundModalVisible}
+          onCancel={() => {
+            setRefundModalVisible(false);
+            refundForm.resetFields();
+          }}
+          footer={null}
+          width={600}
+        >
+          {selectedBooking && (
+            <Form
+              form={refundForm}
+              layout="vertical"
+              onFinish={handleRefundSubmit}
+            >
+              <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
+                <Descriptions.Item label="Booking ID" span={2}>
+                  {selectedBooking.id}
+                </Descriptions.Item>
+                <Descriptions.Item label="Service" span={2}>
+                  {selectedBooking.service?.title || 'N/A'}
+                </Descriptions.Item>
+                {(selectedBooking as any).payments?.find((p: any) => p.status === 'completed') && (
+                  <>
+                    <Descriptions.Item label="Payment Amount" span={2}>
+                      {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').currency || 'USD'} {' '}
+                      {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').amount}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Transaction Reference" span={2}>
+                      {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').transaction_reference || 'N/A'}
+                    </Descriptions.Item>
+                  </>
+                )}
+              </Descriptions>
+
+              <Form.Item
+                name="amount"
+                label="Refund Amount"
+                rules={[
+                  { required: true, message: 'Please enter refund amount' },
+                  {
+                    validator: (_, value) => {
+                      const completedPayment = (selectedBooking as any).payments?.find((p: any) => p.status === 'completed');
+                      if (completedPayment && value > completedPayment.amount) {
+                        return Promise.reject(new Error('Refund amount cannot exceed payment amount'));
+                      }
+                      if (value <= 0) {
+                        return Promise.reject(new Error('Refund amount must be greater than 0'));
+                      }
+                      return Promise.resolve();
+                    }
+                  }
+                ]}
+              >
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder="Enter refund amount"
+                  prefix={(selectedBooking as any).payments?.find((p: any) => p.status === 'completed')?.currency || 'USD'}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="reason"
+                label="Refund Reason"
+                rules={[{ required: true, message: 'Please enter refund reason' }]}
+              >
+                <TextArea
+                  rows={4}
+                  placeholder="Enter reason for refund (e.g., Customer cancellation, Service not delivered, etc.)"
+                />
+              </Form.Item>
+
+              <Form.Item>
+                <Space>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={refundLoading}
+                    danger
+                  >
+                    Initiate Refund
+                  </Button>
+                  <Button onClick={() => {
+                    setRefundModalVisible(false);
+                    refundForm.resetFields();
+                  }}>
+                    Cancel
+                  </Button>
+                </Space>
+              </Form.Item>
+            </Form>
           )}
         </Modal>
       </Card>
