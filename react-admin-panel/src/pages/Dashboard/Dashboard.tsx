@@ -273,7 +273,7 @@ export default function Dashboard() {
                     align: 'right',
                     render: (_: any, record: PaymentLog) => (
                       <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
-                        {formatPrice(record.amount, record.currency)}
+                        {formatPrice(record.amount, 'KWD')}
                       </span>
                     )
                   },

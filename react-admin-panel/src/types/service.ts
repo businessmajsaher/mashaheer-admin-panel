@@ -20,6 +20,8 @@ export interface Service {
   commission_percentage?: number;
   payment_gateway_charge_card_percentage?: number;
   payment_gateway_charge_knet_percentage?: number;
+  primary_influencer_earnings_percentage?: number;
+  invited_influencer_earnings_percentage?: number;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +47,8 @@ export interface CreateServiceData {
   commission_percentage?: number;
   payment_gateway_charge_card_percentage?: number;
   payment_gateway_charge_knet_percentage?: number;
+  primary_influencer_earnings_percentage?: number;
+  invited_influencer_earnings_percentage?: number;
 }
 
 export interface UpdateServiceData {
@@ -68,6 +72,8 @@ export interface UpdateServiceData {
   commission_percentage?: number;
   payment_gateway_charge_card_percentage?: number;
   payment_gateway_charge_knet_percentage?: number;
+  primary_influencer_earnings_percentage?: number;
+  invited_influencer_earnings_percentage?: number;
 }
 
 export interface ServiceFilters {

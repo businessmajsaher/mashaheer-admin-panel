@@ -23,6 +23,7 @@ import { serviceService } from '../../services/serviceService';
 import { refundService, RefundRequest } from '../../services/refundService';
 import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
+import { formatPrice } from '../../utils/currencyUtils';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
@@ -293,7 +294,7 @@ const Bookings: React.FC = () => {
             </Tag>
             {latestRefund.amount && (
               <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-                {latestRefund.currency || 'USD'} {Number(latestRefund.amount).toFixed(2)}
+                {formatPrice(Number(latestRefund.amount), 'KWD')}
               </div>
             )}
           </div>
@@ -582,7 +583,7 @@ const Bookings: React.FC = () => {
                     {(selectedBooking as any).payments.map((payment: any, index: number) => (
                       <React.Fragment key={payment.id || index}>
                         <Descriptions.Item label="Amount" span={1}>
-                          {payment.currency || 'USD'} {payment.amount}
+                          {formatPrice(Number(payment.amount), 'KWD')}
                         </Descriptions.Item>
                         <Descriptions.Item label="Status" span={1}>
                           <Tag color={payment.status === 'completed' ? 'green' : payment.status === 'pending' ? 'orange' : 'red'}>
@@ -614,7 +615,7 @@ const Bookings: React.FC = () => {
                     {(selectedBooking as any).refunds.map((refund: any, index: number) => (
                       <React.Fragment key={refund.id || index}>
                         <Descriptions.Item label="Amount" span={1}>
-                          {refund.currency || 'USD'} {refund.amount}
+                          {formatPrice(Number(refund.amount), 'KWD')}
                         </Descriptions.Item>
                         <Descriptions.Item label="Status" span={1}>
                           <Tag color={
@@ -740,8 +741,7 @@ const Bookings: React.FC = () => {
                 {(selectedBooking as any).payments?.find((p: any) => p.status === 'completed') && (
                   <>
                     <Descriptions.Item label="Payment Amount" span={2}>
-                      {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').currency || 'USD'} {' '}
-                      {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').amount}
+                      {formatPrice(Number((selectedBooking as any).payments.find((p: any) => p.status === 'completed').amount), 'KWD')}
                     </Descriptions.Item>
                     <Descriptions.Item label="Transaction Reference" span={2}>
                       {(selectedBooking as any).payments.find((p: any) => p.status === 'completed').transaction_reference || 'N/A'}
@@ -774,7 +774,7 @@ const Bookings: React.FC = () => {
                   step="0.01"
                   min={0}
                   placeholder="Enter refund amount"
-                  prefix={(selectedBooking as any).payments?.find((p: any) => p.status === 'completed')?.currency || 'USD'}
+                  prefix="د.ك"
                 />
               </Form.Item>
 

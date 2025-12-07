@@ -298,9 +298,8 @@ export default function Services() {
         price: values.price,
         offer_price: offerPrice,
         currency: values.currency || selectedCurrency,
-        commission_percentage: values.commission_percentage || 0,
-        payment_gateway_charge_card_percentage: values.payment_gateway_charge_card_percentage || 0,
-        payment_gateway_charge_knet_percentage: values.payment_gateway_charge_knet_percentage || 0,
+        primary_influencer_earnings_percentage: values.service_type === 'dual' ? (values.primary_influencer_earnings_percentage || 50) : null,
+        invited_influencer_earnings_percentage: values.service_type === 'dual' ? (values.invited_influencer_earnings_percentage || 50) : null,
         created_at: new Date().toISOString(),
       };
       
@@ -394,9 +393,8 @@ export default function Services() {
         price: values.price,
         offer_price: offerPrice,
         currency: values.currency || editSelectedCurrency,
-        commission_percentage: values.commission_percentage || 0,
-        payment_gateway_charge_card_percentage: values.payment_gateway_charge_card_percentage || 0,
-        payment_gateway_charge_knet_percentage: values.payment_gateway_charge_knet_percentage || 0,
+        primary_influencer_earnings_percentage: values.service_type === 'dual' ? (values.primary_influencer_earnings_percentage || 50) : null,
+        invited_influencer_earnings_percentage: values.service_type === 'dual' ? (values.invited_influencer_earnings_percentage || 50) : null,
       };
 
       console.log('📝 Updating service with data:', updateData);
@@ -525,11 +523,9 @@ export default function Services() {
       dataIndex: 'price', 
       key: 'price',
       render: (price: number, record: any) => {
-        const currency = record.currency || 'USD';
-        const symbol = getCurrencySymbol(currency);
         return (
           <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
-            {formatPrice(price || 0, currency)}
+            {formatPrice(price || 0, 'KWD')}
           </span>
         );
       }
@@ -539,17 +535,16 @@ export default function Services() {
       dataIndex: 'offer_price', 
       key: 'offer_price',
       render: (offerPrice: number, record: any) => {
-        const currency = record.currency || 'USD';
         if (record.is_flash_deal && offerPrice) {
           return (
             <span style={{ fontWeight: 'bold', color: '#ff4d4f' }}>
-              {formatPrice(offerPrice, currency)}
+              {formatPrice(offerPrice, 'KWD')}
             </span>
           );
         }
         return (
           <span style={{ color: '#8c8c8c' }}>
-            {formatPrice(record.price || 0, currency)}
+            {formatPrice(record.price || 0, 'KWD')}
           </span>
         );
       }
@@ -558,14 +553,13 @@ export default function Services() {
       title: 'Commission', 
       key: 'commission',
       render: (_: any, record: any) => {
-        const currency = record.currency || 'USD';
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
         const commissionPercentage = record.commission_percentage || 0;
         const commissionAmount = (servicePrice * commissionPercentage) / 100;
         return (
           <div>
             <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
-              {formatPrice(commissionAmount, currency)}
+              {formatPrice(commissionAmount, 'KWD')}
             </div>
             <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
               ({commissionPercentage}%)
@@ -578,14 +572,13 @@ export default function Services() {
       title: 'Card Charge', 
       key: 'payment_gateway_charge_card',
       render: (_: any, record: any) => {
-        const currency = record.currency || 'USD';
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
         const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
         const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
         return (
           <div>
             <div style={{ fontWeight: 'bold', color: '#f44336' }}>
-              {formatPrice(cardChargeAmount, currency)}
+              {formatPrice(cardChargeAmount, 'KWD')}
             </div>
             <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
               Card ({cardChargePercentage}%)
@@ -598,14 +591,13 @@ export default function Services() {
       title: 'KNET Charge', 
       key: 'payment_gateway_charge_knet',
       render: (_: any, record: any) => {
-        const currency = record.currency || 'USD';
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
         const knetChargePercentage = record.payment_gateway_charge_knet_percentage || 0;
         const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
         return (
           <div>
             <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
-              {formatPrice(knetChargeAmount, currency)}
+              {formatPrice(knetChargeAmount, 'KWD')}
             </div>
             <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
               KNET ({knetChargePercentage}%)
@@ -618,7 +610,6 @@ export default function Services() {
       title: 'Influencer Payout', 
       key: 'influencer_payout',
       render: (_: any, record: any) => {
-        const currency = record.currency || 'USD';
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
         const commissionPercentage = record.commission_percentage || 0;
         const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
@@ -639,16 +630,16 @@ export default function Services() {
             {chargesDiffer ? (
               <>
                 <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
-                  {formatPrice(Math.min(payoutWithCard, payoutWithKnet), currency)} - {formatPrice(Math.max(payoutWithCard, payoutWithKnet), currency)}
+                  {formatPrice(Math.min(payoutWithCard, payoutWithKnet), 'KWD')} - {formatPrice(Math.max(payoutWithCard, payoutWithKnet), 'KWD')}
                 </div>
                 <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                  Card: {formatPrice(payoutWithCard, currency)} | KNET: {formatPrice(payoutWithKnet, currency)}
+                  Card: {formatPrice(payoutWithCard, 'KWD')} | KNET: {formatPrice(payoutWithKnet, 'KWD')}
                 </div>
               </>
             ) : (
               <>
                 <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '14px' }}>
-                  {formatPrice(payoutWithCard, currency)}
+                  {formatPrice(payoutWithCard, 'KWD')}
                 </div>
                 <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
                   Net payout
@@ -856,7 +847,22 @@ export default function Services() {
               >
                 <Select 
                   placeholder="Select service type"
-                  onChange={(value) => setSelectedServiceType(value)}
+                  onChange={(value) => {
+                    setSelectedServiceType(value);
+                    if (value === 'dual') {
+                      // Set default 50/50 split for dual services
+                      form.setFieldsValue({
+                        primary_influencer_earnings_percentage: 50,
+                        invited_influencer_earnings_percentage: 50
+                      });
+                    } else {
+                      // Clear earnings split for non-dual services
+                      form.setFieldsValue({
+                        primary_influencer_earnings_percentage: undefined,
+                        invited_influencer_earnings_percentage: undefined
+                      });
+                    }
+                  }}
                 >
                   <Option value="normal">Normal</Option>
                   <Option value="dual">Dual</Option>
@@ -967,70 +973,6 @@ export default function Services() {
             </Col>
           </Row>
 
-          <Divider>Charges & Fees</Divider>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="commission_percentage"
-                label="Commission Percentage (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'Commission must be between 0 and 100' }
-                ]}
-                tooltip="Platform commission percentage deducted from service price"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 10.5"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="payment_gateway_charge_card_percentage"
-                label="Card Payment Charge (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'Card charge must be between 0 and 100' }
-                ]}
-                tooltip="Payment gateway charge percentage for card payments (Visa, Mastercard, etc.)"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 2.9"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="payment_gateway_charge_knet_percentage"
-                label="KNET Payment Charge (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'KNET charge must be between 0 and 100' }
-                ]}
-                tooltip="Payment gateway charge percentage for KNET payments (Kuwait National Payment Network)"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 1.5"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
                      <Row gutter={16}>
              <Col span={12}>
                <Form.Item
@@ -1078,6 +1020,82 @@ export default function Services() {
                )}
              </Col>
            </Row>
+
+           {selectedServiceType === 'dual' && (
+             <>
+               <Divider>Earnings Split</Divider>
+               <Row gutter={16}>
+                 <Col span={12}>
+                   <Form.Item
+                     name="primary_influencer_earnings_percentage"
+                     label="Primary Influencer Earnings (%)"
+                     rules={[
+                       { required: true, message: 'Please enter primary influencer earnings percentage' },
+                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                       {
+                         validator: (_, value) => {
+                           const invitedPercentage = form.getFieldValue('invited_influencer_earnings_percentage') || 0;
+                           const total = (value || 0) + invitedPercentage;
+                           if (total !== 100) {
+                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                     tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
+                   >
+                     <InputNumber 
+                       min={0} 
+                       max={100}
+                       step={0.01} 
+                       style={{ width: '100%' }} 
+                       placeholder="e.g., 60"
+                       suffix="%"
+                       onChange={() => {
+                         // Trigger validation for invited influencer percentage
+                         form.validateFields(['invited_influencer_earnings_percentage']);
+                       }}
+                     />
+                   </Form.Item>
+                 </Col>
+                 <Col span={12}>
+                   <Form.Item
+                     name="invited_influencer_earnings_percentage"
+                     label="Invited Influencer Earnings (%)"
+                     rules={[
+                       { required: true, message: 'Please enter invited influencer earnings percentage' },
+                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                       {
+                         validator: (_, value) => {
+                           const primaryPercentage = form.getFieldValue('primary_influencer_earnings_percentage') || 0;
+                           const total = primaryPercentage + (value || 0);
+                           if (total !== 100) {
+                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                     tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
+                   >
+                     <InputNumber 
+                       min={0} 
+                       max={100}
+                       step={0.01} 
+                       style={{ width: '100%' }} 
+                       placeholder="e.g., 40"
+                       suffix="%"
+                       onChange={() => {
+                         // Trigger validation for primary influencer percentage
+                         form.validateFields(['primary_influencer_earnings_percentage']);
+                       }}
+                     />
+                   </Form.Item>
+                 </Col>
+               </Row>
+             </>
+           )}
 
                      <Row gutter={16}>
              <Col span={12}>
@@ -1296,9 +1314,8 @@ export default function Services() {
             price: editingService.price,
             offer_price: editingService.offer_price,
             currency: editingService.currency || 'USD',
-            commission_percentage: editingService.commission_percentage || 0,
-            payment_gateway_charge_card_percentage: editingService.payment_gateway_charge_card_percentage || 0,
-            payment_gateway_charge_knet_percentage: editingService.payment_gateway_charge_knet_percentage || 0
+            primary_influencer_earnings_percentage: editingService.primary_influencer_earnings_percentage || 50,
+            invited_influencer_earnings_percentage: editingService.invited_influencer_earnings_percentage || 50
           } : {}}
         >
           <Row gutter={16}>
@@ -1311,7 +1328,26 @@ export default function Services() {
               <Form.Item name="service_type" label="Service Type" rules={[{ required: true, message: 'Please select service type' }]}>
                 <Select 
                   placeholder="Select service type"
-                  onChange={(value) => setSelectedServiceType(value)}
+                  onChange={(value) => {
+                    setSelectedServiceType(value);
+                    if (value === 'dual') {
+                      // Set default 50/50 split for dual services if not already set
+                      const currentPrimary = editForm.getFieldValue('primary_influencer_earnings_percentage');
+                      const currentInvited = editForm.getFieldValue('invited_influencer_earnings_percentage');
+                      if (!currentPrimary || !currentInvited) {
+                        editForm.setFieldsValue({
+                          primary_influencer_earnings_percentage: 50,
+                          invited_influencer_earnings_percentage: 50
+                        });
+                      }
+                    } else {
+                      // Clear earnings split for non-dual services
+                      editForm.setFieldsValue({
+                        primary_influencer_earnings_percentage: undefined,
+                        invited_influencer_earnings_percentage: undefined
+                      });
+                    }
+                  }}
                 >
                   <Option value="normal">Normal</Option>
                   <Option value="dual">Dual</Option>
@@ -1410,70 +1446,6 @@ export default function Services() {
             </Col>
           </Row>
 
-          <Divider>Charges & Fees</Divider>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="commission_percentage"
-                label="Commission Percentage (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'Commission must be between 0 and 100' }
-                ]}
-                tooltip="Platform commission percentage deducted from service price"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 10.5"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="payment_gateway_charge_card_percentage"
-                label="Card Payment Charge (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'Card charge must be between 0 and 100' }
-                ]}
-                tooltip="Payment gateway charge percentage for card payments (Visa, Mastercard, etc.)"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 2.9"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="payment_gateway_charge_knet_percentage"
-                label="KNET Payment Charge (%)"
-                rules={[
-                  { required: false },
-                  { type: 'number', min: 0, max: 100, message: 'KNET charge must be between 0 and 100' }
-                ]}
-                tooltip="Payment gateway charge percentage for KNET payments (Kuwait National Payment Network)"
-              >
-                <InputNumber 
-                  min={0} 
-                  max={100}
-                  step={0.01} 
-                  style={{ width: '100%' }} 
-                  placeholder="e.g., 1.5"
-                  suffix="%"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
                      <Row gutter={16}>
              <Col span={12}>
                <Form.Item name="primary_influencer_id" label="Primary Influencer" rules={[{ required: true, message: 'Please select primary influencer' }]}>
@@ -1514,6 +1486,82 @@ export default function Services() {
                )}
              </Col>
            </Row>
+
+           {selectedServiceType === 'dual' && (
+             <>
+               <Divider>Earnings Split</Divider>
+               <Row gutter={16}>
+                 <Col span={12}>
+                   <Form.Item
+                     name="primary_influencer_earnings_percentage"
+                     label="Primary Influencer Earnings (%)"
+                     rules={[
+                       { required: true, message: 'Please enter primary influencer earnings percentage' },
+                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                       {
+                         validator: (_, value) => {
+                           const invitedPercentage = editForm.getFieldValue('invited_influencer_earnings_percentage') || 0;
+                           const total = (value || 0) + invitedPercentage;
+                           if (total !== 100) {
+                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                     tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
+                   >
+                     <InputNumber 
+                       min={0} 
+                       max={100}
+                       step={0.01} 
+                       style={{ width: '100%' }} 
+                       placeholder="e.g., 60"
+                       suffix="%"
+                       onChange={() => {
+                         // Trigger validation for invited influencer percentage
+                         editForm.validateFields(['invited_influencer_earnings_percentage']);
+                       }}
+                     />
+                   </Form.Item>
+                 </Col>
+                 <Col span={12}>
+                   <Form.Item
+                     name="invited_influencer_earnings_percentage"
+                     label="Invited Influencer Earnings (%)"
+                     rules={[
+                       { required: true, message: 'Please enter invited influencer earnings percentage' },
+                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                       {
+                         validator: (_, value) => {
+                           const primaryPercentage = editForm.getFieldValue('primary_influencer_earnings_percentage') || 0;
+                           const total = primaryPercentage + (value || 0);
+                           if (total !== 100) {
+                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                           }
+                           return Promise.resolve();
+                         }
+                       }
+                     ]}
+                     tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
+                   >
+                     <InputNumber 
+                       min={0} 
+                       max={100}
+                       step={0.01} 
+                       style={{ width: '100%' }} 
+                       placeholder="e.g., 40"
+                       suffix="%"
+                       onChange={() => {
+                         // Trigger validation for primary influencer percentage
+                         editForm.validateFields(['primary_influencer_earnings_percentage']);
+                       }}
+                     />
+                   </Form.Item>
+                 </Col>
+               </Row>
+             </>
+           )}
 
                      <Row gutter={16}>
              <Col span={12}>

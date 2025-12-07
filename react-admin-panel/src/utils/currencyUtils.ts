@@ -165,19 +165,23 @@ export const getCurrencySymbol = (currencyCode: string): string => {
 /**
  * Format price with currency symbol
  * @param amount - Amount to format
- * @param currencyCode - Currency code
- * @param locale - Locale for formatting (default: 'en-US')
+ * @param currencyCode - Currency code (defaults to KWD)
+ * @param locale - Locale for formatting (default: 'en-KW')
  * @returns Formatted price string
  */
-export const formatPrice = (amount: number, currencyCode: string, locale: string = 'en-US'): string => {
+export const formatPrice = (amount: number, currencyCode: string = 'KWD', locale: string = 'en-KW'): string => {
+  // Always format in KWD
+  const displayCurrency = 'KWD';
   try {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: currencyCode,
+      currency: displayCurrency,
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
     }).format(amount);
   } catch (error) {
     // Fallback formatting if Intl is not supported or currency is invalid
-    const symbol = getCurrencySymbol(currencyCode);
-    return `${symbol}${amount.toFixed(2)}`;
+    const symbol = getCurrencySymbol(displayCurrency);
+    return `${symbol}${amount.toFixed(3)}`;
   }
 }; 

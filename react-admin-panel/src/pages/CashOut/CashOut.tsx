@@ -182,7 +182,7 @@ export default function CashOut() {
       dataIndex: 'total_earnings',
       key: 'total_earnings',
       align: 'right',
-      render: (amount, record) => formatCurrency(amount, record.currency),
+      render: (amount, record) => formatCurrency(amount, 'KWD'),
       sorter: (a, b) => a.total_earnings - b.total_earnings,
     },
     {
@@ -191,7 +191,7 @@ export default function CashOut() {
       key: 'total_pg_charges',
       align: 'right',
       render: (amount, record) => (
-        <Text type="warning">-{formatCurrency(amount, record.currency)}</Text>
+        <Text type="warning">-{formatCurrency(amount, 'KWD')}</Text>
       ),
     },
     {
@@ -200,7 +200,7 @@ export default function CashOut() {
       key: 'total_platform_commission',
       align: 'right',
       render: (amount, record) => (
-        <Text type="danger">-{formatCurrency(amount, record.currency)}</Text>
+        <Text type="danger">-{formatCurrency(amount, 'KWD')}</Text>
       ),
     },
     {
@@ -303,7 +303,7 @@ export default function CashOut() {
       dataIndex: 'amount',
       key: 'amount',
       align: 'right',
-      render: (amount, record) => formatCurrency(amount, record.currency),
+      render: (amount, record) => formatCurrency(amount, 'KWD'),
     },
     {
       title: 'PG Charge',
@@ -311,7 +311,7 @@ export default function CashOut() {
       key: 'pg_charge',
       align: 'right',
       render: (amount, record) => (
-        <Text type="warning">-{formatCurrency(amount, record.currency)}</Text>
+        <Text type="warning">-{formatCurrency(amount, 'KWD')}</Text>
       ),
     },
     {
@@ -320,7 +320,7 @@ export default function CashOut() {
       key: 'platform_commission',
       align: 'right',
       render: (amount, record) => (
-        <Text type="danger">-{formatCurrency(amount, record.currency)}</Text>
+        <Text type="danger">-{formatCurrency(amount, 'KWD')}</Text>
       ),
     },
     {
@@ -494,8 +494,6 @@ export default function CashOut() {
               const totalPgCharges = pageData.reduce((sum, record) => sum + record.total_pg_charges, 0);
               const totalCommission = pageData.reduce((sum, record) => sum + record.total_platform_commission, 0);
               const totalNetPayout = pageData.reduce((sum, record) => sum + record.net_payout, 0);
-              const currency = pageData[0]?.currency || 'KWD';
-
               return (
                 <Table.Summary fixed>
                   <Table.Summary.Row>
@@ -503,21 +501,21 @@ export default function CashOut() {
                       <Text strong>Total</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={1} align="right">
-                      <Text strong>{formatCurrency(totalEarnings, currency)}</Text>
+                      <Text strong>{formatCurrency(totalEarnings, 'KWD')}</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={2} align="right">
                       <Text type="warning" strong>
-                        -{formatCurrency(totalPgCharges, currency)}
+                        -{formatCurrency(totalPgCharges, 'KWD')}
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={3} align="right">
                       <Text type="danger" strong>
-                        -{formatCurrency(totalCommission, currency)}
+                        -{formatCurrency(totalCommission, 'KWD')}
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={4} align="right">
                       <Text strong style={{ color: '#52c41a', fontSize: '18px' }}>
-                        {formatCurrency(totalNetPayout, currency)}
+                        {formatCurrency(totalNetPayout, 'KWD')}
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={5} align="center">
@@ -547,21 +545,21 @@ export default function CashOut() {
           <>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: '16px' }}>
               <Descriptions.Item label="Total Earnings">
-                {formatCurrency(selectedInfluencer.total_earnings, selectedInfluencer.currency)}
+                {formatCurrency(selectedInfluencer.total_earnings, 'KWD')}
               </Descriptions.Item>
               <Descriptions.Item label="Total PG Charges">
                 <Text type="warning">
-                  -{formatCurrency(selectedInfluencer.total_pg_charges, selectedInfluencer.currency)}
+                  -{formatCurrency(selectedInfluencer.total_pg_charges, 'KWD')}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label="Platform Commission">
                 <Text type="danger">
-                  -{formatCurrency(selectedInfluencer.total_platform_commission, selectedInfluencer.currency)}
+                  -{formatCurrency(selectedInfluencer.total_platform_commission, 'KWD')}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label="Net Payout">
                 <Text strong style={{ color: '#52c41a', fontSize: '16px' }}>
-                  {formatCurrency(selectedInfluencer.net_payout, selectedInfluencer.currency)}
+                  {formatCurrency(selectedInfluencer.net_payout, 'KWD')}
                 </Text>
               </Descriptions.Item>
             </Descriptions>
