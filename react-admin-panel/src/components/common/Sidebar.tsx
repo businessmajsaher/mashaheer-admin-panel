@@ -18,6 +18,7 @@ import {
   BookOutlined,
   GiftOutlined,
   BarChartOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -70,6 +71,11 @@ export const Sidebar: React.FC = () => {
       key: '/bookings',
       icon: <CalendarOutlined />,
       label: 'Bookings',
+    },
+    {
+      key: '/cash-out',
+      icon: <WalletOutlined />,
+      label: 'Cash Out',
     },
     {
       key: '/platforms',

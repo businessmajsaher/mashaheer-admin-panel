@@ -23,6 +23,7 @@ export default function Settings() {
       if (data) {
         form.setFieldsValue({
           commission_percentage: data.commission_percentage || 0,
+          platform_commission_fixed: data.platform_commission_fixed || 0,
           influencer_approval_hours: data.influencer_approval_hours || 12,
           payment_deadline_hours: data.payment_deadline_hours || 12,
           script_submission_base_hours: data.script_submission_base_hours || 8,
@@ -66,6 +67,7 @@ export default function Settings() {
           onFinish={handleSave}
           initialValues={{
             commission_percentage: 0,
+            platform_commission_fixed: 0,
             influencer_approval_hours: 12,
             payment_deadline_hours: 12,
             script_submission_base_hours: 8,
@@ -95,6 +97,25 @@ export default function Settings() {
                   precision={2}
                   addonAfter="%"
                   placeholder="0.00"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Platform Commission Fixed Amount"
+                name="platform_commission_fixed"
+                tooltip="Fixed commission amount (in KWD) deducted from each influencer payment"
+                rules={[
+                  { required: true, message: 'Please enter fixed commission amount' },
+                  { type: 'number', min: 0, message: 'Must be 0 or greater' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={3}
+                  addonAfter="KWD"
+                  placeholder="0.000"
                 />
               </Form.Item>
             </Col>

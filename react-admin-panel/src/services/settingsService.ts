@@ -14,6 +14,7 @@ export interface AutomationTimingSettings {
 export interface PlatformSettings {
   id: string;
   commission_percentage: number;
+  platform_commission_fixed?: number;
   influencer_approval_hours?: number;
   payment_deadline_hours?: number;
   script_submission_base_hours?: number;
@@ -48,7 +49,7 @@ export const settingsService = {
   },
 
   // Update platform settings
-  async updateSettings(settings: Partial<AutomationTimingSettings & { commission_percentage?: number }>): Promise<PlatformSettings> {
+  async updateSettings(settings: Partial<AutomationTimingSettings & { commission_percentage?: number; platform_commission_fixed?: number }>): Promise<PlatformSettings> {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -79,6 +80,7 @@ export const settingsService = {
         .from('platform_settings')
         .insert({
           commission_percentage: settings.commission_percentage || 0,
+          platform_commission_fixed: settings.platform_commission_fixed || 0,
           influencer_approval_hours: settings.influencer_approval_hours || 12,
           payment_deadline_hours: settings.payment_deadline_hours || 12,
           script_submission_base_hours: settings.script_submission_base_hours || 8,

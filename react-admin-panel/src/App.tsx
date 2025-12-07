@@ -26,6 +26,7 @@ const ContactSupport = lazy(() => import('@/pages/ContactSupport/ContactSupport'
 const HelpSupport = lazy(() => import('@/pages/HelpSupport/HelpSupport'));
 const Discounts = lazy(() => import('@/pages/Discounts/Discounts'));
 const DiscountAnalytics = lazy(() => import('@/pages/Discounts/Analytics'));
+const CashOut = lazy(() => import('@/pages/CashOut/CashOut'));
 const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 
@@ -202,6 +203,14 @@ export default function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <DiscountAnalytics />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/cash-out" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <CashOut />
                     </MainLayout>
                   </ProtectedRoute>
                 } />
