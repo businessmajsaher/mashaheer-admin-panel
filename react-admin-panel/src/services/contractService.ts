@@ -74,8 +74,8 @@ export const contractService = {
       .select(`
         *,
         contract_templates(title, template_type),
-        profiles!customer_id(name, email),
-        profiles!influencer_id(name, email)
+        customer:profiles!contract_instances_customer_id_fkey(name, email),
+        influencer:profiles!contract_instances_influencer_id_fkey(name, email)
       `)
       .order('created_at', { ascending: false });
     

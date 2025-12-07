@@ -11,7 +11,8 @@ export interface Contract {
 
 export interface ContractInstance {
   id: string;
-  contract_id: string;
+  template_id?: string;
+  contract_id?: string;
   customer_id: string;
   influencer_id: string;
   booking_id?: string;
@@ -19,7 +20,20 @@ export interface ContractInstance {
   signed_at?: string;
   completed_at?: string;
   created_at: string;
-  variables_data: Record<string, any>;
+  variables_data?: Record<string, any>;
+  variables?: Record<string, any>;
+  contract_templates?: {
+    title: string;
+    template_type: string;
+  };
+  customer?: {
+    name: string;
+    email: string;
+  };
+  influencer?: {
+    name: string;
+    email: string;
+  };
 }
 
 export interface ContractTemplate {

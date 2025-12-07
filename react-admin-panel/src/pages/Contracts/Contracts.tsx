@@ -413,8 +413,8 @@ export default function Contracts() {
         .select(`
           *,
           contract_templates(title, template_type),
-          profiles!customer_id(name, email),
-          profiles!influencer_id(name, email)
+          customer:profiles!contract_instances_customer_id_fkey(name, email),
+          influencer:profiles!contract_instances_influencer_id_fkey(name, email)
         `)
         .order('created_at', { ascending: false });
       
@@ -612,8 +612,8 @@ export default function Contracts() {
 
   const instanceColumns = [
     { title: 'Contract', dataIndex: ['contract_templates', 'title'], key: 'contract_title' },
-    { title: 'Customer', dataIndex: ['profiles', 'name'], key: 'customer_name' },
-    { title: 'Influencer', dataIndex: ['profiles', 'name'], key: 'influencer_name' },
+    { title: 'Customer', dataIndex: ['customer', 'name'], key: 'customer_name' },
+    { title: 'Influencer', dataIndex: ['influencer', 'name'], key: 'influencer_name' },
     { 
       title: 'Status', 
       dataIndex: 'status', 
@@ -652,7 +652,8 @@ export default function Contracts() {
   const filteredContracts = contracts.filter((c) => c.title?.toLowerCase().includes(search.toLowerCase()));
   const filteredInstances = contractInstances.filter((i) => 
     i.contract_templates?.title?.toLowerCase().includes(search.toLowerCase()) ||
-    i.profiles?.name?.toLowerCase().includes(search.toLowerCase())
+    i.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    i.influencer?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
