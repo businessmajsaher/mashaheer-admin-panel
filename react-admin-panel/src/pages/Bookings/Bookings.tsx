@@ -89,16 +89,23 @@ const Bookings: React.FC = () => {
     fetchBookingStatuses();
   }, [filters]);
 
-  const handleViewDetails = (record: Booking) => {
-    setSelectedBooking(record);
-    form.setFieldsValue({
-      status_id: record.status_id,
-      scheduled_time: record.scheduled_time ? dayjs(record.scheduled_time) : null,
-      notes: record.notes || '',
-      script: record.script || '',
-      feedback: record.feedback || ''
-    });
-    setModalVisible(true);
+  const handleViewDetails = async (record: Booking) => {
+    // Fetch full booking details including refunds
+    try {
+      const fullBooking = await bookingService.getBooking(record.id);
+      setSelectedBooking(fullBooking);
+      form.setFieldsValue({
+        status_id: fullBooking.status_id,
+        scheduled_time: fullBooking.scheduled_time ? dayjs(fullBooking.scheduled_time) : null,
+        notes: fullBooking.notes || '',
+        script: fullBooking.script || '',
+        feedback: fullBooking.feedback || ''
+      });
+      setModalVisible(true);
+    } catch (error) {
+      console.error('Error fetching booking details:', error);
+      message.error('Failed to fetch booking details');
+    }
   };
 
   const handleUpdateStatus = async (bookingId: string, statusId: string) => {
@@ -258,11 +265,49 @@ const Bookings: React.FC = () => {
       )
     },
     {
+      title: 'Refund Status',
+      key: 'refund_status',
+      width: 150,
+      render: (_: any, record: Booking) => {
+        const refunds = (record as any).refunds || [];
+        if (refunds.length === 0) {
+          return <Tag>No Refund</Tag>;
+        }
+        
+        // Get the latest refund
+        const latestRefund = refunds.sort((a: any, b: any) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0];
+        
+        const refundStatus = latestRefund.status;
+        const color = 
+          refundStatus === 'completed' ? 'green' :
+          refundStatus === 'processing' ? 'orange' :
+          refundStatus === 'pending' ? 'blue' :
+          refundStatus === 'failed' ? 'red' : 'default';
+        
+        return (
+          <div>
+            <Tag color={color}>
+              {refundStatus?.toUpperCase() || 'N/A'}
+            </Tag>
+            {latestRefund.amount && (
+              <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                {latestRefund.currency || 'USD'} {Number(latestRefund.amount).toFixed(2)}
+              </div>
+            )}
+          </div>
+        );
+      }
+    },
+    {
       title: 'Actions',
       key: 'actions',
+      width: 300,
       render: (_: any, record: Booking) => {
         const completedPayment = (record as any).payments?.find((p: any) => p.status === 'completed');
-        const hasRefund = (record as any).refunds?.some((r: any) => r.status === 'completed' || r.status === 'processing');
+        const refunds = (record as any).refunds || [];
+        const hasCompletedRefund = refunds.some((r: any) => r.status === 'completed');
         
         return (
           <Space>
@@ -273,14 +318,16 @@ const Bookings: React.FC = () => {
             >
               View Details
             </Button>
-            {completedPayment && !hasRefund && (
+            {completedPayment && (
               <Button
                 type="link"
                 icon={<DollarOutlined />}
-                danger
+                danger={!hasCompletedRefund}
+                disabled={hasCompletedRefund}
                 onClick={() => handleInitiateRefund(record)}
+                title={hasCompletedRefund ? 'Refund already completed' : 'Initiate manual refund'}
               >
-                Refund
+                {hasCompletedRefund ? 'Refunded' : 'Refund'}
               </Button>
             )}
             <Select
@@ -424,6 +471,107 @@ const Bookings: React.FC = () => {
                 <Descriptions.Item label="Feedback" span={3}>
                   {selectedBooking.feedback || 'No feedback'}
                 </Descriptions.Item>
+                <Descriptions.Item label="Days Gap" span={3}>
+                  {selectedBooking.days_gap ? `${selectedBooking.days_gap} days` : 'N/A'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Is Published" span={3}>
+                  {selectedBooking.is_published ? (
+                    <Tag color="green">Yes {selectedBooking.published_at ? `(${dayjs(selectedBooking.published_at).format('YYYY-MM-DD HH:mm')})` : ''}</Tag>
+                  ) : (
+                    <Tag color="red">No</Tag>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+
+              {/* Revision Time Frames (Non-editable) */}
+              <Divider>Revision Time Frames</Divider>
+              <Descriptions bordered size="small">
+                <Descriptions.Item label="Influencer Approval Deadline" span={2}>
+                  {selectedBooking.influencer_approval_deadline ? (
+                    <span style={{ 
+                      color: dayjs(selectedBooking.influencer_approval_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.influencer_approval_deadline).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.influencer_approval_deadline).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  ) : 'Not set'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Payment Deadline" span={2}>
+                  {selectedBooking.payment_deadline ? (
+                    <span style={{ 
+                      color: dayjs(selectedBooking.payment_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.payment_deadline).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.payment_deadline).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  ) : 'Not set'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Script Submission Deadline" span={2}>
+                  {selectedBooking.script_submission_deadline ? (
+                    <span style={{ 
+                      color: dayjs(selectedBooking.script_submission_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.script_submission_deadline).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.script_submission_deadline).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  ) : 'Not set'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Auto-Approval Deadline" span={2}>
+                  {selectedBooking.auto_approval_deadline ? (
+                    <span style={{ 
+                      color: dayjs(selectedBooking.auto_approval_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.auto_approval_deadline).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.auto_approval_deadline).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  ) : 'Not set'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Appointment End Time" span={2}>
+                  {selectedBooking.appointment_end_time ? (
+                    <span style={{ 
+                      color: dayjs(selectedBooking.appointment_end_time).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.appointment_end_time).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.appointment_end_time).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  ) : 'Not set'}
+                </Descriptions.Item>
+                {selectedBooking.influencer_response_deadline && (
+                  <Descriptions.Item label="Influencer Response Deadline" span={2}>
+                    <span style={{ 
+                      color: dayjs(selectedBooking.influencer_response_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#ff9800',
+                      fontWeight: 'bold'
+                    }}>
+                      {dayjs(selectedBooking.influencer_response_deadline).format('YYYY-MM-DD HH:mm')}
+                      {dayjs(selectedBooking.influencer_response_deadline).isBefore(dayjs()) && ' (Expired)'}
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.last_script_submitted_at && (
+                  <Descriptions.Item label="Last Script Submitted" span={2}>
+                    {dayjs(selectedBooking.last_script_submitted_at).format('YYYY-MM-DD HH:mm')}
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.last_script_rejected_at && (
+                  <Descriptions.Item label="Last Script Rejected" span={2}>
+                    {dayjs(selectedBooking.last_script_rejected_at).format('YYYY-MM-DD HH:mm')}
+                    {selectedBooking.last_rejection_reason && (
+                      <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
+                        Reason: {selectedBooking.last_rejection_reason}
+                      </div>
+                    )}
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.is_ai_generated_script && (
+                  <Descriptions.Item label="AI Scripts Generated" span={2}>
+                    <Tag color="purple">{selectedBooking.ai_script_count || 0} AI scripts</Tag>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
 
               {/* Payment Information */}

@@ -12,7 +12,8 @@ export const bookingService = {
         influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
         status:booking_statuses(id, name, description),
-        payments:payments(id, amount, currency, status, payment_method, transaction_reference, paid_at)
+        payments:payments(id, amount, currency, status, payment_method, transaction_reference, paid_at),
+        refunds:refunds(id, amount, currency, status, reason, created_at, hesabe_refund_id)
       `, { count: 'exact' });
 
     // Apply filters
@@ -122,14 +123,72 @@ export const bookingService = {
 
   // Update booking status
   async updateBookingStatus(id: string, status_id: string) {
+    // Get current booking to compare status
+    const { data: currentBooking } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        status:booking_statuses(name),
+        service:services(title),
+        influencer:profiles!bookings_influencer_id_fkey(id, name, email),
+        customer:profiles!bookings_customer_id_fkey(id, name, email)
+      `)
+      .eq('id', id)
+      .single();
+
+    // Update status
     const { data, error } = await supabase
       .from('bookings')
       .update({ status_id })
       .eq('id', id)
-      .select()
+      .select(`
+        *,
+        status:booking_statuses(name)
+      `)
       .single();
 
     if (error) throw error;
+
+    // Send notifications if status changed
+    if (currentBooking && currentBooking.status_id !== status_id) {
+      const newStatusName = (data as any).status?.name || 'Updated';
+      const oldStatusName = currentBooking.status?.name || 'Previous';
+
+      // Import notification service dynamically to avoid circular dependency
+      const { notificationService } = await import('./notificationService');
+
+      const bookingDetails = {
+        service_title: currentBooking.service?.title,
+        scheduled_time: currentBooking.scheduled_time,
+        influencer_name: currentBooking.influencer?.name,
+        customer_name: currentBooking.customer?.name
+      };
+
+      // Send notification to customer
+      if (currentBooking.customer_id) {
+        await notificationService.sendBookingNotification({
+          user_id: currentBooking.customer_id,
+          booking_id: id,
+          notification_type: 'status_change',
+          status_name: newStatusName,
+          message: `Your booking status has been updated from "${oldStatusName}" to "${newStatusName}".`,
+          booking_details: bookingDetails
+        });
+      }
+
+      // Send notification to influencer
+      if (currentBooking.influencer_id) {
+        await notificationService.sendBookingNotification({
+          user_id: currentBooking.influencer_id,
+          booking_id: id,
+          notification_type: 'status_change',
+          status_name: newStatusName,
+          message: `Booking status has been updated from "${oldStatusName}" to "${newStatusName}".`,
+          booking_details: bookingDetails
+        });
+      }
+    }
+
     return data as Booking;
   },
 

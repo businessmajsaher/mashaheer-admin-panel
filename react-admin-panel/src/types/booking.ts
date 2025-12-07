@@ -14,11 +14,27 @@ export interface Booking {
   script_rejected_count?: number;
   created_at: string;
   updated_at: string;
+  // Automation fields
+  influencer_approval_deadline?: string;
+  payment_deadline?: string;
+  script_submission_deadline?: string;
+  auto_approval_deadline?: string;
+  appointment_end_time?: string;
+  last_script_submitted_at?: string;
+  last_script_rejected_at?: string;
+  last_rejection_reason?: string;
+  influencer_response_deadline?: string;
+  is_ai_generated_script?: boolean;
+  ai_script_count?: number;
+  is_published?: boolean;
+  published_at?: string;
+  days_gap?: number;
   // Joined data from queries
   service?: {
     title: string;
     thumbnail?: string;
     description?: string;
+    min_duration_days?: number;
   };
   influencer?: {
     name: string;
