@@ -49,7 +49,7 @@ export const settingsService = {
   },
 
   // Update platform settings
-  async updateSettings(settings: Partial<AutomationTimingSettings & { commission_percentage?: number; platform_commission_fixed?: number }>): Promise<PlatformSettings> {
+  async updateSettings(settings: Partial<AutomationTimingSettings>): Promise<PlatformSettings> {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

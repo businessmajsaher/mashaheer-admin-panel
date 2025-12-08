@@ -95,6 +95,7 @@ serve(async (req: Request) => {
       country,
       profile_image_url, 
       is_verified, 
+      commission_percentage,
       social_links, 
       media_files,
       is_update,
@@ -182,7 +183,8 @@ serve(async (req: Request) => {
           bio: bio || null,
           country: country || null,
           profile_image_url: profile_image_url || null,
-          is_verified: is_verified || false
+          is_verified: is_verified || false,
+          commission_percentage: commission_percentage !== undefined && commission_percentage !== null ? Number(commission_percentage) : 0
         })
         .eq('id', influencer_id);
       
@@ -282,6 +284,7 @@ serve(async (req: Request) => {
           country: country || null,
           profile_image_url: profile_image_url || null,
           is_verified: is_verified || false,
+          commission_percentage: commission_percentage !== undefined && commission_percentage !== null ? Number(commission_percentage) : 0,
           is_suspended: false,
           is_approved: false,
           created_at: new Date().toISOString()

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber, Progress } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber, Progress, Tag } from 'antd';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
@@ -34,6 +34,9 @@ export default function Influencers() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
+  const [commissionsLoading, setCommissionsLoading] = useState(false);
+  const [commissionsData, setCommissionsData] = useState<any[]>([]);
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
@@ -239,7 +242,7 @@ export default function Influencers() {
     setLoading(true);
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, bio, country, profile_image_url, is_verified, created_at')
+      .select('id, name, email, bio, country, profile_image_url, is_verified, commission_percentage, created_at')
       .eq('role', 'influencer')
       .order('created_at', { ascending: false });
     if (error) message.error(error.message);
@@ -390,7 +393,8 @@ export default function Influencers() {
             bio: values.bio || null,
             country: values.country,
             is_verified: values.is_verified || false,
-            profile_image_url: values.profile_image_url || null
+            profile_image_url: values.profile_image_url || null,
+            commission_percentage: values.commission_percentage !== undefined && values.commission_percentage !== null ? Number(values.commission_percentage) : 0
           };
           
           console.log('13a. Profile update data:', profileUpdateData);
@@ -796,6 +800,7 @@ export default function Influencers() {
             country: values.country,
             profile_image_url: values.profile_image_url || null,
             is_verified: values.is_verified || false,
+            commission_percentage: values.commission_percentage !== undefined && values.commission_percentage !== null ? Number(values.commission_percentage) : 0,
             social_links: values.social_links || [],
             media_files: uploadedMediaFiles,
             is_update: !!editingInfluencer
@@ -1624,6 +1629,38 @@ export default function Influencers() {
           </Form.Item>
           
           <Form.Item
+            name="commission_percentage"
+            label={<span style={{ fontWeight: '600', color: '#262626' }}>Commission Percentage (%)</span>}
+            rules={[
+              { 
+                type: 'number', 
+                min: 0, 
+                max: 100, 
+                message: 'Commission must be between 0 and 100%' 
+              }
+            ]}
+            tooltip="The commission percentage (0-100%) that will be deducted from this influencer's earnings. This is specific to this influencer and can be different for each influencer."
+          >
+            <InputNumber 
+              placeholder="Enter commission percentage (0-100)"
+              min={0}
+              max={100}
+              precision={2}
+              size="large"
+              style={{
+                width: '100%',
+                borderRadius: '8px',
+                border: '1px solid #d9d9d9',
+                padding: '12px 16px',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+              formatter={(value) => value ? `${value}%` : ''}
+              parser={(value) => value ? value.replace('%', '') : ''}
+            />
+          </Form.Item>
+          
+          <Form.Item
             name="profile_image_url"
             label={<span style={{ fontWeight: '600', color: '#262626', fontSize: '16px' }}>Profile Image</span>}
           >
@@ -2313,7 +2350,8 @@ export default function Influencers() {
         bio: influencer.bio,
         country: influencer.country,
         is_verified: influencer.is_verified,
-        profile_image_url: influencer.profile_image_url
+        profile_image_url: influencer.profile_image_url,
+        commission_percentage: influencer.commission_percentage !== undefined && influencer.commission_percentage !== null ? Number(influencer.commission_percentage) : 0
       };
       
       console.log('Setting form fields with data:', formData);
@@ -2595,23 +2633,91 @@ export default function Influencers() {
     });
   }
 
+  // Function to open commissions modal
+  const openCommissionsModal = async () => {
+    setCommissionsModalOpen(true);
+    setCommissionsLoading(true);
+    try {
+      // Fetch influencers with commission data
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, commission_percentage')
+        .eq('role', 'influencer')
+        .order('name', { ascending: true });
+      
+      if (error) {
+        message.error('Failed to load commissions');
+        console.error('Error fetching commissions:', error);
+      } else {
+        setCommissionsData(data || []);
+      }
+    } catch (error: any) {
+      message.error('Failed to load commissions');
+      console.error('Error:', error);
+    } finally {
+      setCommissionsLoading(false);
+    }
+  };
+
+  // Columns for commissions table
+  const commissionColumns = [
+    {
+      title: 'Influencer Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string) => <Typography.Text strong>{text}</Typography.Text>
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+    },
+    {
+      title: 'Commission Percentage',
+      dataIndex: 'commission_percentage',
+      key: 'commission_percentage',
+      render: (value: number | null | undefined) => {
+        const commission = value !== null && value !== undefined ? Number(value) : 0;
+        return (
+          <Tag color={commission > 0 ? 'blue' : 'default'} style={{ fontSize: '14px', padding: '4px 12px' }}>
+            {commission.toFixed(2)}%
+          </Tag>
+        );
+      },
+      sorter: (a: any, b: any) => {
+        const aVal = a.commission_percentage !== null && a.commission_percentage !== undefined ? Number(a.commission_percentage) : 0;
+        const bVal = b.commission_percentage !== null && b.commission_percentage !== undefined ? Number(b.commission_percentage) : 0;
+        return aVal - bVal;
+      }
+    }
+  ];
+
   return (
     <Card style={{ margin: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Influencers</Typography.Title>
-        <Button type="primary" icon={<UserAddOutlined />} onClick={() => {
-          // Reset all state for new influencer creation
-          setEditingInfluencer(null);
-          setInfluencerCreated(false);
-          setMediaFiles([]);
-          setProfileImagePreview(null);
-          setCurrentStep(0);
-          setFormError(null);
-          form.resetFields();
-          setDrawerOpen(true);
-        }}>
-          Add Influencer
-        </Button>
+        <Space>
+          <Button 
+            icon={<DollarOutlined />} 
+            onClick={openCommissionsModal}
+            style={{ borderRadius: '6px' }}
+          >
+            View Commissions
+          </Button>
+          <Button type="primary" icon={<UserAddOutlined />} onClick={() => {
+            // Reset all state for new influencer creation
+            setEditingInfluencer(null);
+            setInfluencerCreated(false);
+            setMediaFiles([]);
+            setProfileImagePreview(null);
+            setCurrentStep(0);
+            setFormError(null);
+            form.resetFields();
+            setDrawerOpen(true);
+          }}>
+            Add Influencer
+          </Button>
+        </Space>
       </div>
       {loading ? <Spin size="large" /> : <Table columns={columns} dataSource={influencers} rowKey="id" onRow={(record: any) => ({ onClick: () => openDetail(record) })} />}
       <Drawer
@@ -2837,6 +2943,45 @@ export default function Influencers() {
           </div>
         )}
       </Drawer>
+
+      {/* Commissions Modal */}
+      <Modal
+        title={
+          <Space>
+            <DollarOutlined />
+            <span>Influencer Commissions</span>
+          </Space>
+        }
+        open={commissionsModalOpen}
+        onCancel={() => setCommissionsModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setCommissionsModalOpen(false)}>
+            Close
+          </Button>
+        ]}
+        width={800}
+      >
+        <div style={{ marginTop: 16 }}>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            View and manage commission percentages for each influencer. Commissions are set individually per influencer.
+          </Typography.Paragraph>
+          <Spin spinning={commissionsLoading}>
+            <Table
+              columns={commissionColumns}
+              dataSource={commissionsData}
+              rowKey="id"
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} influencers`,
+              }}
+              locale={{
+                emptyText: 'No influencers found'
+              }}
+            />
+          </Spin>
+        </div>
+      </Modal>
 
     </Card>
   );
