@@ -28,6 +28,40 @@ export interface PlatformSettings {
 }
 
 export const settingsService = {
+  // Get app settings (key-value pairs)
+  async getAppSettings(): Promise<Record<string, string>> {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('key, value');
+
+    if (error) {
+      console.error('Error fetching app_settings:', error);
+      return {};
+    }
+
+    const settings: Record<string, string> = {};
+    data?.forEach((item: { key: string; value: string }) => {
+      settings[item.key] = item.value;
+    });
+
+    return settings;
+  },
+
+  // Update app setting
+  async updateAppSetting(key: string, value: string): Promise<void> {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'key'
+      });
+
+    if (error) throw error;
+  },
+
   // Get platform settings
   async getSettings(): Promise<PlatformSettings | null> {
     const { data, error } = await supabase

@@ -885,9 +885,12 @@ export default function Services() {
               <Form.Item
                 name="min_duration_days"
                 label="Minimum Duration (Days)"
-                rules={[{ required: true, message: 'Please enter minimum duration' }]}
+                rules={[
+                  { required: true, message: 'Please enter minimum duration' },
+                  { type: 'number', min: 2, message: 'Minimum duration must be greater than 1 day' }
+                ]}
               >
-                <InputNumber min={1} style={{ width: '100%' }} />
+                <InputNumber min={2} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -983,9 +986,19 @@ export default function Services() {
                  <Select 
                    placeholder="Select primary influencer"
                    showSearch
-                   filterOption={(input, option) =>
-                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                   }
+                   filterOption={(input, option) => {
+                     const searchText = input.toLowerCase();
+                     const influencer = influencers.find(inf => inf.id === option?.value);
+                     if (!influencer) return false;
+                     
+                     const name = influencer.name?.toLowerCase() || '';
+                     const email = influencer.email?.toLowerCase() || '';
+                     const country = influencer.country?.toLowerCase() || '';
+                     
+                     return name.includes(searchText) || 
+                            email.includes(searchText) || 
+                            country.includes(searchText);
+                   }}
                    onChange={(value) => handleInfluencerChange(value, false)}
                  >
                    {influencers.map(influencer => (
@@ -1006,9 +1019,19 @@ export default function Services() {
                      placeholder="Select invited influencer" 
                      allowClear
                      showSearch
-                     filterOption={(input, option) =>
-                       String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                     }
+                     filterOption={(input, option) => {
+                       const searchText = input.toLowerCase();
+                       const influencer = influencers.find(inf => inf.id === option?.value);
+                       if (!influencer) return false;
+                       
+                       const name = influencer.name?.toLowerCase() || '';
+                       const email = influencer.email?.toLowerCase() || '';
+                       const country = influencer.country?.toLowerCase() || '';
+                       
+                       return name.includes(searchText) || 
+                              email.includes(searchText) || 
+                              country.includes(searchText);
+                     }}
                    >
                      {influencers.map(influencer => (
                        <Option key={influencer.id} value={influencer.id}>
@@ -1363,8 +1386,15 @@ export default function Services() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="min_duration_days" label="Minimum Duration (Days)" rules={[{ required: true, message: 'Please enter minimum duration' }]}>
-                <InputNumber min={1} style={{ width: '100%' }} />
+              <Form.Item 
+                name="min_duration_days" 
+                label="Minimum Duration (Days)" 
+                rules={[
+                  { required: true, message: 'Please enter minimum duration' },
+                  { type: 'number', min: 2, message: 'Minimum duration must be greater than 1 day' }
+                ]}
+              >
+                <InputNumber min={2} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -1452,9 +1482,19 @@ export default function Services() {
                  <Select 
                    placeholder="Select primary influencer"
                    showSearch
-                   filterOption={(input, option) =>
-                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                   }
+                   filterOption={(input, option) => {
+                     const searchText = input.toLowerCase();
+                     const influencer = influencers.find(inf => inf.id === option?.value);
+                     if (!influencer) return false;
+                     
+                     const name = influencer.name?.toLowerCase() || '';
+                     const email = influencer.email?.toLowerCase() || '';
+                     const country = influencer.country?.toLowerCase() || '';
+                     
+                     return name.includes(searchText) || 
+                            email.includes(searchText) || 
+                            country.includes(searchText);
+                   }}
                    onChange={(value) => handleInfluencerChange(value, true)}
                  >
                    {influencers.map(influencer => (
@@ -1472,9 +1512,19 @@ export default function Services() {
                      placeholder="Select invited influencer" 
                      allowClear
                      showSearch
-                     filterOption={(input, option) =>
-                       String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                     }
+                     filterOption={(input, option) => {
+                       const searchText = input.toLowerCase();
+                       const influencer = influencers.find(inf => inf.id === option?.value);
+                       if (!influencer) return false;
+                       
+                       const name = influencer.name?.toLowerCase() || '';
+                       const email = influencer.email?.toLowerCase() || '';
+                       const country = influencer.country?.toLowerCase() || '';
+                       
+                       return name.includes(searchText) || 
+                              email.includes(searchText) || 
+                              country.includes(searchText);
+                     }}
                    >
                      {influencers.map(influencer => (
                        <Option key={influencer.id} value={influencer.id}>

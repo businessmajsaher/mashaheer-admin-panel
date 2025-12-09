@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber, Progress, Tag } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined } from '@ant-design/icons';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
@@ -37,6 +37,7 @@ export default function Influencers() {
   const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
   const [commissionsLoading, setCommissionsLoading] = useState(false);
   const [commissionsData, setCommissionsData] = useState<any[]>([]);
+  const [searchText, setSearchText] = useState('');
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
@@ -2719,7 +2720,50 @@ export default function Influencers() {
           </Button>
         </Space>
       </div>
-      {loading ? <Spin size="large" /> : <Table columns={columns} dataSource={influencers} rowKey="id" onRow={(record: any) => ({ onClick: () => openDetail(record) })} />}
+      
+      {/* Search Input */}
+      <div style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="Search influencers by name, email, bio, or country..."
+          prefix={<SearchOutlined />}
+          allowClear
+          size="large"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{
+            borderRadius: '8px',
+            maxWidth: '500px'
+          }}
+        />
+      </div>
+
+      {/* Filtered Influencers Table */}
+      {loading ? (
+        <Spin size="large" />
+      ) : (
+        <Table 
+          columns={columns} 
+          dataSource={influencers.filter((influencer) => {
+            if (!searchText) return true;
+            const searchLower = searchText.toLowerCase();
+            const name = influencer.name?.toLowerCase() || '';
+            const email = influencer.email?.toLowerCase() || '';
+            const bio = influencer.bio?.toLowerCase() || '';
+            const country = influencer.country?.toLowerCase() || '';
+            const countryLabel = countries.find(c => c.value === influencer.country)?.label.toLowerCase() || '';
+            
+            return (
+              name.includes(searchLower) ||
+              email.includes(searchLower) ||
+              bio.includes(searchLower) ||
+              country.includes(searchLower) ||
+              countryLabel.includes(searchLower)
+            );
+          })} 
+          rowKey="id" 
+          onRow={(record: any) => ({ onClick: () => openDetail(record) })} 
+        />
+      )}
       <Drawer
         title="Add Influencer"
         open={drawerOpen}

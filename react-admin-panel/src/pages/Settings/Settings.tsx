@@ -10,6 +10,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [appSettings, setAppSettings] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchSettings();
@@ -18,8 +19,14 @@ export default function Settings() {
   const fetchSettings = async () => {
     setLoading(true);
     try {
+      // Fetch platform settings
       const data = await settingsService.getSettings();
       setSettings(data);
+      
+      // Fetch app settings
+      const appSettingsData = await settingsService.getAppSettings();
+      setAppSettings(appSettingsData);
+      
       if (data) {
         form.setFieldsValue({
           influencer_approval_hours: data.influencer_approval_hours || 12,
@@ -30,6 +37,7 @@ export default function Settings() {
           auto_approval_minute: data.auto_approval_minute || 30,
           appointment_end_hour: data.appointment_end_hour || 23,
           appointment_end_minute: data.appointment_end_minute || 59,
+          booking_cooldown_days: appSettingsData.booking_cooldown_days ? parseInt(appSettingsData.booking_cooldown_days) : 2,
         });
       }
     } catch (error: any) {
@@ -43,8 +51,17 @@ export default function Settings() {
   const handleSave = async (values: any) => {
     setSaving(true);
     try {
-      const updated = await settingsService.updateSettings(values);
+      // Save platform settings (excluding booking_cooldown_days)
+      const { booking_cooldown_days, ...platformSettings } = values;
+      const updated = await settingsService.updateSettings(platformSettings);
       setSettings(updated);
+      
+      // Save app settings (booking_cooldown_days)
+      if (booking_cooldown_days !== undefined) {
+        await settingsService.updateAppSetting('booking_cooldown_days', booking_cooldown_days.toString());
+        setAppSettings(prev => ({ ...prev, booking_cooldown_days: booking_cooldown_days.toString() }));
+      }
+      
       message.success('Settings saved successfully');
     } catch (error: any) {
       console.error('Error saving settings:', error);
@@ -72,6 +89,7 @@ export default function Settings() {
             auto_approval_minute: 30,
             appointment_end_hour: 23,
             appointment_end_minute: 59,
+            booking_cooldown_days: 2,
           }}
         >
           {/* Automation Timing Settings */}
@@ -258,6 +276,36 @@ export default function Settings() {
                 <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
                   Default: 23:59 (11:59 PM)
                 </Text>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Booking Cooldown Settings */}
+          <Divider orientation="left">
+            <Space>
+              <ClockCircleOutlined />
+              <span>Booking Settings</span>
+            </Space>
+          </Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Booking Cooldown Days"
+                name="booking_cooldown_days"
+                tooltip="Minimum number of days between bookings for the same influencer"
+                rules={[
+                  { required: true, message: 'Please enter cooldown days' },
+                  { type: 'number', min: 0, message: 'Must be 0 or greater' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={0}
+                  addonAfter="days"
+                  placeholder="2"
+                />
               </Form.Item>
             </Col>
           </Row>
