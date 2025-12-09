@@ -176,16 +176,27 @@ serve(async (req: Request) => {
       userId = influencer_id;
       
       // Update profile
+      // Build update data object
+      const updateData: any = {
+        name,
+        bio: bio || null,
+        country: country || null,
+        profile_image_url: profile_image_url || null,
+        is_verified: is_verified || false
+      };
+
+      // Add commission_percentage only if explicitly provided
+      if (commission_percentage !== undefined && commission_percentage !== null && commission_percentage !== '') {
+        try {
+          updateData.commission_percentage = Number(commission_percentage);
+        } catch (e) {
+          console.warn('Could not parse commission_percentage for update, omitting:', e);
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({
-          name,
-          bio: bio || null,
-          country: country || null,
-          profile_image_url: profile_image_url || null,
-          is_verified: is_verified || false,
-          commission_percentage: commission_percentage !== undefined && commission_percentage !== null ? Number(commission_percentage) : 0
-        })
+        .update(updateData)
         .eq('id', influencer_id);
       
       if (updateError) {
@@ -272,10 +283,122 @@ serve(async (req: Request) => {
         console.log('Generated UUID for profile:', userId);
       }
 
-      // Create profile
-      const { error: profileError } = await supabase
+      // Check if profile already exists by ID or email (might be from a previous failed attempt)
+      console.log('Checking for existing profile with ID:', userId, 'or email:', email);
+      
+      const { data: existingProfileById, error: checkByIdError } = await supabase
         .from('profiles')
-        .insert({
+        .select('id, email, role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const { data: existingProfileByEmail, error: checkByEmailError } = await supabase
+        .from('profiles')
+        .select('id, email, role')
+        .eq('email', email)
+        .maybeSingle();
+
+      const existingProfile = existingProfileById || existingProfileByEmail;
+      
+      if (checkByIdError && checkByIdError.code !== 'PGRST116') {
+        console.warn('Error checking existing profile by ID:', checkByIdError);
+      }
+      if (checkByEmailError && checkByEmailError.code !== 'PGRST116') {
+        console.warn('Error checking existing profile by email:', checkByEmailError);
+      }
+
+      if (existingProfile) {
+        console.log('Found existing profile:', existingProfile);
+        
+        // If profile exists with different ID but same email, that's a problem
+        if (existingProfile.id !== userId) {
+          console.error('Profile with email already exists with different ID:', existingProfile.id, 'vs', userId);
+          
+          // If auth user was created, clean it up
+          if (isNewUser) {
+            try {
+              await supabase.auth.admin.deleteUser(userId);
+              console.log('Cleaned up auth user - profile exists with different ID');
+            } catch (cleanupError) {
+              console.error('Failed to cleanup auth user:', cleanupError);
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            error: 'Influencer with this email already exists',
+            details: `An influencer with email "${email}" already exists with ID ${existingProfile.id}. Please edit the existing influencer instead.`,
+            existingProfileId: existingProfile.id
+          }), {
+            status: 409, // Conflict
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      }
+
+      // If profile exists with same ID, update it instead of creating
+      if (existingProfile && existingProfile.id === userId) {
+        console.log('Profile already exists with same ID, updating instead of creating:', existingProfile);
+        
+        // Build update data object
+        const updateData: any = {
+          name,
+          email,
+          role: 'influencer',
+          bio: bio || null,
+          country: country || null,
+          profile_image_url: profile_image_url || null,
+          is_verified: is_verified || false,
+          updated_at: new Date().toISOString()
+        };
+
+        // Add commission_percentage only if explicitly provided
+        if (commission_percentage !== undefined && commission_percentage !== null && commission_percentage !== '') {
+          try {
+            updateData.commission_percentage = Number(commission_percentage);
+          } catch (e) {
+            console.warn('Could not parse commission_percentage, omitting from update:', e);
+          }
+        }
+
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('Profile update error:', updateError);
+          
+          // If auth user was created, clean it up
+          if (isNewUser) {
+            try {
+              await supabase.auth.admin.deleteUser(userId);
+              console.log('Cleaned up auth user after profile update failure');
+            } catch (cleanupError) {
+              console.error('Failed to cleanup auth user:', cleanupError);
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            error: 'Failed to update existing influencer profile',
+            details: updateError.message,
+            code: updateError.code
+          }), {
+            status: 500,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        console.log('Existing profile updated successfully');
+      } else {
+        // Create new profile
+        // Build profile data object
+        const profileData: any = {
           id: userId,
           name,
           email,
@@ -284,38 +407,128 @@ serve(async (req: Request) => {
           country: country || null,
           profile_image_url: profile_image_url || null,
           is_verified: is_verified || false,
-          commission_percentage: commission_percentage !== undefined && commission_percentage !== null ? Number(commission_percentage) : 0,
           is_suspended: false,
           is_approved: false,
           created_at: new Date().toISOString()
-        });
+        };
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        
-        // If auth user was created, clean it up
-        if (isNewUser) {
+        // Add commission_percentage only if explicitly provided and column exists
+        // If migration hasn't been run, this field will be omitted to avoid errors
+        if (commission_percentage !== undefined && commission_percentage !== null && commission_percentage !== '') {
           try {
-            await supabase.auth.admin.deleteUser(userId);
-            console.log('Cleaned up auth user after profile creation failure');
-          } catch (cleanupError) {
-            console.error('Failed to cleanup auth user:', cleanupError);
+            profileData.commission_percentage = Number(commission_percentage);
+          } catch (e) {
+            console.warn('Could not parse commission_percentage, omitting from insert:', e);
           }
         }
-        
-        return new Response(JSON.stringify({
-          error: 'Failed to create influencer profile',
-          details: profileError.message
-        }), {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
 
-      console.log('Profile created successfully');
+        // Try to insert, but if it fails due to duplicate key, update instead
+        let { error: profileError } = await supabase
+          .from('profiles')
+          .insert(profileData);
+
+        // Check if error is due to duplicate key
+        const isDuplicateKey = profileError && (
+          profileError.code === '23505' || 
+          profileError.message?.includes('duplicate key') ||
+          profileError.message?.includes('profiles_pkey')
+        );
+
+        if (isDuplicateKey) {
+          console.log('Duplicate key detected during insert, attempting to update existing profile instead');
+          console.log('Profile ID:', userId);
+          
+          // Try to update instead
+          const updateData: any = {
+            name,
+            email,
+            role: 'influencer',
+            bio: bio || null,
+            country: country || null,
+            profile_image_url: profile_image_url || null,
+            is_verified: is_verified || false,
+            updated_at: new Date().toISOString()
+          };
+
+          if (commission_percentage !== undefined && commission_percentage !== null && commission_percentage !== '') {
+            try {
+              updateData.commission_percentage = Number(commission_percentage);
+            } catch (e) {
+              console.warn('Could not parse commission_percentage:', e);
+            }
+          }
+
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update(updateData)
+            .eq('id', userId);
+
+          if (updateError) {
+            console.error('Profile update error after duplicate key:', updateError);
+            // If auth user was created, clean it up
+            if (isNewUser) {
+              try {
+                await supabase.auth.admin.deleteUser(userId);
+                console.log('Cleaned up auth user after profile update failure');
+              } catch (cleanupError) {
+                console.error('Failed to cleanup auth user:', cleanupError);
+              }
+            }
+            
+            return new Response(JSON.stringify({
+              error: 'Failed to create or update influencer profile',
+              details: `Profile with ID ${userId} already exists but update also failed: ${updateError.message}`,
+              code: updateError.code
+            }), {
+              status: 500,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+              }
+            });
+          } else {
+            console.log('Successfully updated existing profile after duplicate key error');
+            profileError = null; // Clear error so we continue with success flow
+          }
+        }
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          console.error('Error code:', profileError.code);
+          console.error('Error message:', profileError.message);
+          console.error('Error details:', JSON.stringify(profileError, null, 2));
+          console.error('Profile data attempted:', JSON.stringify(profileData, null, 2));
+          
+          // If auth user was created, clean it up
+          if (isNewUser) {
+            try {
+              await supabase.auth.admin.deleteUser(userId);
+              console.log('Cleaned up auth user after profile creation failure');
+            } catch (cleanupError) {
+              console.error('Failed to cleanup auth user:', cleanupError);
+            }
+          }
+          
+          // Check if error is due to missing column
+          const errorMessage = profileError.message || '';
+          const isColumnError = errorMessage.includes('column') && errorMessage.includes('does not exist');
+          
+          return new Response(JSON.stringify({
+            error: 'Failed to create influencer profile',
+            details: profileError.message,
+            code: profileError.code,
+            hint: isColumnError ? 'The commission_percentage column may not exist. Please run the migration: 20241206000000_add_influencer_commission_percentage.sql' : undefined
+          }), {
+            status: 500,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        } else {
+          console.log('Profile created/updated successfully');
+        }
+      }
     }
 
     // Handle social links

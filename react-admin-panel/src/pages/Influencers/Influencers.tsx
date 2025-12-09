@@ -833,12 +833,28 @@ export default function Influencers() {
           
           if (!response.ok && response.status !== 201) {
             console.error('22. Edge Function error response:', result);
+            console.error('22a. Error details:', result.details);
+            console.error('22b. Error code:', result.code);
+            console.error('22c. Error hint:', result.hint);
             
             // Handle specific error cases
             if (result.error === 'Failed to create user in authentication system' && result.details?.includes('already been registered')) {
               throw new Error(`An influencer with email "${values.email}" already exists. Please use a different email address or edit the existing influencer.`);
             } else if (result.error === 'Failed to create user in authentication system') {
               throw new Error(`Failed to create user account: ${result.details || 'Authentication system error'}`);
+            } else if (result.error === 'Failed to create influencer profile') {
+              // Check if it's a duplicate key error
+              if (result.details?.includes('duplicate key') || result.details?.includes('profiles_pkey')) {
+                throw new Error(`An influencer profile with this ID already exists. This may be from a previous failed attempt. Please try again or contact support. Details: ${result.details}`);
+              }
+              // Provide more detailed error message
+              let errorMsg = `Failed to create influencer profile: ${result.details || 'Unknown error'}`;
+              if (result.hint) {
+                errorMsg += `\n\n${result.hint}`;
+              }
+              throw new Error(errorMsg);
+            } else if (result.error === 'Influencer with this email already exists') {
+              throw new Error(result.details || result.error);
             } else {
               throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
             }
