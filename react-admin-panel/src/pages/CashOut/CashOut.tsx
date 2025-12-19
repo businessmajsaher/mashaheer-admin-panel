@@ -373,13 +373,24 @@ export default function CashOut() {
             </Space>
           </Col>
           <Col>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={fetchEarnings}
-              loading={loading}
-            >
-              Refresh
-            </Button>
+            <Space>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={fetchEarnings}
+                loading={loading}
+              >
+                Refresh
+              </Button>
+              <Button
+                onClick={() => {
+                  setStartDate(undefined);
+                  setEndDate(undefined);
+                  fetchEarnings();
+                }}
+              >
+                Show All Payments
+              </Button>
+            </Space>
           </Col>
         </Row>
 
@@ -473,10 +484,12 @@ export default function CashOut() {
                 <ul style={{ textAlign: 'left', display: 'inline-block', marginTop: '8px' }}>
                   <li>Status: "completed", "paid", "success", or "successful"</li>
                   <li>Payee ID set (influencer receiving payment)</li>
-                  <li>Date within the selected period</li>
+                  <li>Date within the selected period (if date range is selected)</li>
                 </ul>
                 <br />
-                Check the browser console for detailed payment information.
+                <Text type="warning" style={{ fontSize: '14px', display: 'block', marginTop: '16px' }}>
+                  💡 Tip: Try clearing the date range filter to see all payments, or check the browser console (F12) for detailed payment information.
+                </Text>
               </Text>
             </div>
           ) : (

@@ -50,26 +50,47 @@ export const cashOutService = {
     endDate?: string
   ): Promise<InfluencerEarning[]> {
     // Calculate date range
-    let periodStart: Date;
-    let periodEnd: Date = new Date();
+    // If explicit dates are provided, use them
+    // Otherwise, calculate based on period type (weekly/monthly)
+    // But if user clears the date range, show ALL payments
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
 
-    if (periodType === 'weekly') {
-      // Get start of current week (Sunday)
-      periodStart = new Date(periodEnd);
-      periodStart.setDate(periodEnd.getDate() - periodEnd.getDay());
-      periodStart.setHours(0, 0, 0, 0);
-    } else {
-      // Get start of current month
-      periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
-      periodStart.setHours(0, 0, 0, 0);
+    // Only calculate default period if no explicit dates are provided
+    // IMPORTANT: By default, show ALL payments (no date filter)
+    // User can select a date range if they want to filter
+    // This ensures payments are visible immediately
+    if (!startDate && !endDate) {
+      // Don't set periodStart and periodEnd - this will show all payments
+      periodStart = null;
+      periodEnd = null;
+      
+      // Optional: Uncomment below if you want to default to current month
+      // periodEnd = new Date();
+      // if (periodType === 'weekly') {
+      //   periodStart = new Date(periodEnd);
+      //   periodStart.setDate(periodEnd.getDate() - periodEnd.getDay());
+      //   periodStart.setHours(0, 0, 0, 0);
+      // } else {
+      //   periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
+      //   periodStart.setHours(0, 0, 0, 0);
+      // }
     }
 
-    // Use provided dates if available
+    // Use provided dates if available (overrides period calculation)
     if (startDate) {
       periodStart = new Date(startDate);
+      periodStart.setHours(0, 0, 0, 0);
     }
     if (endDate) {
       periodEnd = new Date(endDate);
+      periodEnd.setHours(23, 59, 59, 999);
+    }
+    
+    // If both dates are explicitly cleared (empty strings), show all payments
+    if (startDate === '' && endDate === '') {
+      periodStart = null;
+      periodEnd = null;
     }
 
     // Get platform settings for commission
@@ -107,45 +128,109 @@ export const cashOutService = {
     }
 
     // Filter by status - accept multiple possible status values
-    let payments = (allPayments || []).filter(p => 
-      ['completed', 'paid', 'success', 'successful'].includes(p.status?.toLowerCase() || '')
-    );
+    // Include: completed, paid, success, successful (case-insensitive)
+    let payments = (allPayments || []).filter(p => {
+      const status = (p.status || '').toLowerCase().trim();
+      return ['completed', 'paid', 'success', 'successful'].includes(status);
+    });
 
-    // Filter by date range - use paid_at if available, otherwise use created_at
-    if (startDate || endDate) {
-      payments = payments.filter(p => {
-        const paymentDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
-        const start = startDate ? new Date(startDate) : null;
-        const end = endDate ? new Date(endDate) : null;
-        
-        if (start && paymentDate < start) return false;
-        if (end && paymentDate > end) return false;
-        return true;
-      });
-    }
-
-    // Debug logging
-    console.log('Cash Out Query Results:', {
-      periodType,
-      startDate: startDate || periodStart.toISOString(),
-      endDate: endDate || periodEnd.toISOString(),
-      allPaymentsCount: allPayments?.length || 0,
-      filteredByStatus: payments.length,
-      samplePayments: payments.slice(0, 3).map(p => ({
+    // Debug: Log payments that were filtered out
+    const filteredOut = (allPayments || []).filter(p => {
+      const status = (p.status || '').toLowerCase().trim();
+      return !['completed', 'paid', 'success', 'successful'].includes(status);
+    });
+    
+    if (filteredOut.length > 0) {
+      console.log('Payments filtered out by status:', filteredOut.map(p => ({
         id: p.id,
         status: p.status,
+        amount: p.amount,
+        payee_id: p.payee_id,
+        paid_at: p.paid_at
+      })));
+    }
+
+    // Filter by date range - use paid_at if available, otherwise use created_at
+    // Only filter if date range is explicitly provided (periodStart and periodEnd are set)
+    if (periodStart && periodEnd) {
+      const beforeFilter = payments.length;
+      payments = payments.filter(p => {
+        // Use paid_at if available, otherwise fall back to created_at
+        const paymentDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
+        
+        // Check if payment is within the date range
+        if (paymentDate < periodStart!) return false;
+        if (paymentDate > periodEnd!) return false;
+        return true;
+      });
+      console.log(`Date filter (${periodStart.toISOString()} to ${periodEnd.toISOString()}): ${beforeFilter} payments before, ${payments.length} after filtering`);
+    } else {
+      console.log('No date range filter applied - showing all payments with valid status');
+    }
+
+    // Debug logging - Enhanced to show exactly what's happening
+    console.log('=== CASH OUT DEBUG ===');
+    console.log('Period Type:', periodType);
+    console.log('Start Date:', startDate || 'not set');
+    console.log('End Date:', endDate || 'not set');
+    console.log('Period Start:', periodStart ? periodStart.toISOString() : 'NULL (showing all)');
+    console.log('Period End:', periodEnd ? periodEnd.toISOString() : 'NULL (showing all)');
+    console.log('Total Payments Fetched:', allPayments?.length || 0);
+    console.log('Payments With Payee ID:', (allPayments || []).filter(p => p.payee_id).length);
+    console.log('Payments After Status Filter:', payments.length);
+    console.log('Payments After Date Filter:', payments.length);
+    
+    // Show specific payments we're looking for
+    const targetPaymentIds = [
+      '7f2333ed-6cf6-4100-b6e3-a3ba9c06c48d',
+      '2e89b638-812e-4f95-8d6c-5e8b3d73d7e7'
+    ];
+    const targetPayments = (allPayments || []).filter(p => targetPaymentIds.includes(p.id));
+    console.log('Target Payments Found:', targetPayments.length);
+    targetPayments.forEach(p => {
+      const statusMatch = ['completed', 'paid', 'success', 'successful'].includes((p.status || '').toLowerCase().trim());
+      const dateMatch = !periodStart || !periodEnd || (() => {
+        const paymentDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
+        return paymentDate >= periodStart && paymentDate <= periodEnd;
+      })();
+      console.log(`Payment ${p.id}:`, {
+        status: p.status,
+        normalized_status: (p.status || '').toLowerCase().trim(),
+        status_match: statusMatch,
+        payee_id: p.payee_id,
         paid_at: p.paid_at,
         created_at: p.created_at,
-        amount: p.amount,
-        payee_name: p.payee?.name
-      }))
+        date_match: dateMatch,
+        will_appear: statusMatch && dateMatch && p.payee_id ? 'YES' : 'NO',
+        reason: !p.payee_id ? 'Missing payee_id' : 
+                !statusMatch ? `Status '${p.status}' not in allowed list` :
+                !dateMatch ? 'Outside date range' : 'Should appear'
+      });
     });
+    
+    console.log('Sample Payments (first 5):', payments.slice(0, 5).map(p => ({
+      id: p.id,
+      status: p.status,
+      payee_id: p.payee_id,
+      amount: p.amount,
+      paid_at: p.paid_at
+    })));
+    console.log('Unique Statuses:', [...new Set((allPayments || []).map(p => p.status))]);
+    console.log('=== END CASH OUT DEBUG ===');
 
     // Group payments by influencer
     const earningsMap = new Map<string, InfluencerEarning>();
+    
+    console.log('Grouping payments. Total payments to group:', payments.length);
+    console.log('Payment IDs to group:', payments.map(p => p.id));
 
     for (const payment of payments || []) {
       const influencerId = payment.payee_id;
+      
+      if (!influencerId) {
+        console.warn('Skipping payment without payee_id:', payment.id);
+        continue;
+      }
       
       if (!earningsMap.has(influencerId)) {
         earningsMap.set(influencerId, {
