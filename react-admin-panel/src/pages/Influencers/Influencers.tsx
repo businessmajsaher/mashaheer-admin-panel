@@ -4,6 +4,7 @@ import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, 
 import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
+import { notificationService } from '@/services/notificationService';
 import Cropper from 'react-easy-crop';
 import { Modal as AntdModal, Slider } from 'antd';
 
@@ -44,10 +45,10 @@ export default function Influencers() {
     console.log('🚀 handleProfileImageUpload called with file:', file.name, file.size, file.type);
     setProfileImageUploading(true);
     setUploadProgress(0);
-    
+
     try {
       console.log('📤 Starting profile image upload...');
-      
+
       // Simulate progress
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
@@ -58,20 +59,20 @@ export default function Influencers() {
           return prev + Math.random() * 15;
         });
       }, 200);
-      
+
       // Use the storage service for authenticated upload
       const url = await uploadInfluencerProfileImage(file);
-      
+
       // Complete the progress
       clearInterval(progressInterval);
       setUploadProgress(100);
-      
+
       if (url) {
         form.setFieldsValue({ profile_image_url: url });
         // Update preview with the uploaded URL (replaces the local blob URL)
         setProfileImagePreview(url);
         console.log('✅ Profile image uploaded successfully:', url);
-        
+
         // Show success message
         message.success('Profile image uploaded successfully!');
         // Reset the file input after successful upload
@@ -83,7 +84,7 @@ export default function Influencers() {
       }
     } catch (err: any) {
       console.error('❌ Upload error:', err);
-      
+
       // Show specific error messages based on error type
       let errorMessage = 'Failed to upload profile image';
       if (err.message?.includes('StorageApiError')) {
@@ -95,9 +96,9 @@ export default function Influencers() {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       message.error(errorMessage);
-      
+
       // Clear the preview if upload fails
       setProfileImagePreview(null);
       form.setFieldsValue({ profile_image_url: null });
@@ -121,7 +122,7 @@ export default function Influencers() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
@@ -131,14 +132,14 @@ export default function Influencers() {
           message.error('File size must be less than 5MB');
           return;
         }
-        
+
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
           message.error('Please select a valid image file (JPG, PNG, GIF)');
           return;
         }
-        
+
         // Show immediate preview
         const previewUrl = URL.createObjectURL(file);
         setProfileImagePreview(previewUrl);
@@ -287,7 +288,7 @@ export default function Influencers() {
       // Validate current step fields
       const currentStepFields = getStepFields(currentStep);
       await form.validateFields(currentStepFields);
-      
+
       // Move to next step
       next();
     } catch (validationError: any) {
@@ -316,12 +317,12 @@ export default function Influencers() {
     console.log('=== FINAL FORM SUBMISSION ===');
     console.log('Processing final submission on step:', currentStep);
     console.log('Media files to upload:', mediaFiles.length);
-    
+
     // Get form values manually since we're not using onFinish
     const values = form.getFieldsValue();
     console.log('Form values retrieved:', values);
     console.log('Verification status in form values:', values.is_verified, 'Type:', typeof values.is_verified);
-    
+
     // Check if form is valid
     try {
       await form.validateFields();
@@ -333,7 +334,7 @@ export default function Influencers() {
       setFormLoading(false);
       return;
     }
-    
+
     // Check if email already exists (only for new influencers)
     if (!editingInfluencer) {
       console.log('6a. Checking if email already exists...');
@@ -343,7 +344,7 @@ export default function Influencers() {
           .select('id, email')
           .eq('email', values.email)
           .single();
-        
+
         if (existingUser && !checkError) {
           console.log('6b. Email already exists:', existingUser);
           setFormError(`An influencer with email "${values.email}" already exists. Please use a different email address or edit the existing influencer.`);
@@ -361,32 +362,32 @@ export default function Influencers() {
         }
       }
     }
-    
+
     // Get current form values again after validation
     const currentFormValues = form.getFieldsValue();
     console.log('7. Current form values after validation:', currentFormValues);
     console.log('8. Current form values keys:', Object.keys(currentFormValues));
-    
+
     // Generate random password for the influencer (only for new influencers)
     let randomPassword = null;
     if (!editingInfluencer) {
       randomPassword = generateRandomPassword(12);
       console.log('🔐 Generated random password for influencer:', randomPassword);
     }
-    
+
     setFormLoading(true);
     setFormError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       console.log('9. JWT access token used for Edge Function:', token);
-      
+
       let influencerId: string;
-      
+
       if (editingInfluencer) {
         // Update existing influencer - handle media files too
         console.log('13. Updating existing influencer with media files');
-        
+
         try {
           // Update profile first
           const profileUpdateData = {
@@ -397,41 +398,64 @@ export default function Influencers() {
             profile_image_url: values.profile_image_url || null,
             commission_percentage: values.commission_percentage !== undefined && values.commission_percentage !== null ? Number(values.commission_percentage) : 0
           };
-          
+
           console.log('13a. Profile update data:', profileUpdateData);
           console.log('13b. Profile image URL value:', values.profile_image_url);
           console.log('13c. Social links value:', values.social_links);
           console.log('13d. Verification status value:', values.is_verified, 'Type:', typeof values.is_verified);
-          
+
           const { error: updateError } = await supabase
             .from('profiles')
             .update(profileUpdateData)
             .eq('id', editingInfluencer.id);
-          
+
           if (updateError) {
             console.error('Error updating profile:', updateError);
             throw new Error(`Failed to update influencer: ${updateError.message}`);
           }
-          
+
           console.log('14. Profile updated successfully');
-          
+
           // Verify the profile update
           const { data: verifyProfile, error: verifyError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', editingInfluencer.id)
             .single();
-          
+
           if (verifyError) {
             console.error('Profile verification error:', verifyError);
           } else {
             console.log('14a. Profile verification after update:', verifyProfile);
             console.log('14b. Updated profile image URL:', verifyProfile.profile_image_url);
             console.log('14c. Updated verification status:', verifyProfile.is_verified);
+
+            // Send notification if verification status changed to true
+            if (verifyProfile && verifyProfile.is_verified && !editingInfluencer.is_verified) {
+              console.log('🎉 Verification status changed to TRUE. Sending notification...');
+              try {
+                // Send email can FCM notification using the Edge Function
+                const notifResult = await notificationService.sendAccountNotification({
+                  user_id: editingInfluencer.id,
+                  notification_type: 'verification_approved',
+                  message: 'Congratulations! Your influencer profile has been verified. You are now visible to brands and customers.'
+                });
+
+                if (notifResult.success) {
+                  message.success('Verification notification sent to influencer');
+                  console.log('✅ Verification notification sent successfully');
+                } else {
+                  console.error('❌ Failed to send verification notification:', notifResult.error);
+                  // Don't block the UI, just log the error
+                }
+              } catch (notifErr) {
+                console.error('❌ Exception sending verification notification:', notifErr);
+              }
+            }
           }
-          
+
           influencerId = editingInfluencer.id;
-          
+
           // Update social links for existing influencer
           if (values.social_links && values.social_links.length > 0) {
             console.log('14a. Updating social links for existing influencer...');
@@ -442,21 +466,21 @@ export default function Influencers() {
               profile_url: link.profile_url,
               url: link.url // Check if this exists
             })));
-            
+
             try {
               // First, delete existing social links
               const { error: deleteError } = await supabase
                 .from('social_links')
                 .delete()
                 .eq('user_id', influencerId);
-              
+
               if (deleteError) {
                 console.error('14c. Error deleting existing social links:', deleteError);
                 throw new Error(`Failed to delete existing social links: ${deleteError.message}`);
               }
-              
+
               console.log('14d. Existing social links deleted successfully');
-              
+
               // Then, insert new social links
               const socialLinksData = values.social_links.map((link: any) => ({
                 user_id: influencerId,
@@ -465,19 +489,19 @@ export default function Influencers() {
                 profile_url: link.profile_url,
                 created_at: new Date().toISOString()
               }));
-              
+
               const { data: insertedSocialLinks, error: socialError } = await supabase
                 .from('social_links')
                 .insert(socialLinksData)
                 .select();
-              
+
               if (socialError) {
                 console.error('14e. Error inserting social links:', socialError);
                 throw new Error(`Failed to insert social links: ${socialError.message}`);
               }
-              
+
               console.log('14f. Social links updated successfully:', insertedSocialLinks);
-              
+
             } catch (socialError: any) {
               console.error('Social links update error:', socialError);
               throw new Error(`Failed to update social links: ${socialError.message}`);
@@ -485,75 +509,75 @@ export default function Influencers() {
           } else {
             console.log('14a. No social links to update for existing influencer');
           }
-          
+
           // Handle media files for existing influencer
           if (mediaFiles.length > 0) {
             console.log('15. Processing media files for existing influencer...');
             console.log('15a. Media files to process:', mediaFiles);
-            
+
             // Filter out existing media files (they don't have actual File objects)
             const newMediaFiles = mediaFiles.filter(mediaFile => mediaFile.file !== null);
             console.log('15b. New media files to upload:', newMediaFiles);
-            
+
             if (newMediaFiles.length > 0) {
               // Test storage bucket access
               try {
                 const { data: bucketTest, error: bucketError } = await supabase.storage
                   .from('influencer-media')
                   .list('', { limit: 1 });
-                
+
                 if (bucketError) {
                   console.error('15c. Storage bucket test failed:', bucketError);
                   throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
                 }
-                
+
                 console.log('15d. Storage bucket test successful');
               } catch (bucketTestError) {
                 console.error('15e. Storage bucket test error:', bucketTestError);
                 throw bucketTestError;
               }
-              
+
               try {
                 const uploadPromises = newMediaFiles.map(async (mediaFile, index) => {
                   console.log(`15f. Processing new media file ${index + 1}:`, mediaFile);
                   const file = mediaFile.file;
-                  
+
                   if (!file) {
                     console.warn(`15g. Skipping media file ${index + 1} - no file object`);
                     return null;
                   }
-                  
+
                   // Validate file before upload
                   const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
                   const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
                   const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-                  
+
                   if (!allAllowedTypes.includes(file.type)) {
                     const errorMsg = `File ${file.name} has invalid type: ${file.type || 'unknown'}`;
                     console.error(`15g1. ${errorMsg}`);
                     throw new Error(errorMsg);
                   }
-                  
+
                   const maxImageSize = 10 * 1024 * 1024; // 10MB
                   const maxVideoSize = 100 * 1024 * 1024; // 100MB
                   const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
-                  
+
                   if (file.size > maxSize) {
                     const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
                     console.error(`15g2. ${errorMsg}`);
                     throw new Error(errorMsg);
                   }
-                  
+
                   if (file.size === 0) {
                     const errorMsg = `File ${file.name} appears to be empty or corrupted`;
                     console.error(`15g3. ${errorMsg}`);
                     throw new Error(errorMsg);
                   }
-                  
+
                   const filePath = `influencer-media/${Date.now()}-${file.name}`;
-                  
+
                   console.log(`15h. Uploading file ${index + 1} to path:`, filePath);
-                  
+
                   // Upload to storage with better error handling
                   let uploadError;
                   try {
@@ -565,10 +589,10 @@ export default function Influencers() {
                     console.error(`15h1. Storage upload exception for file ${index + 1}:`, storageError);
                     throw new Error(`Storage upload failed: ${storageError.message || 'Unknown error'}`);
                   }
-                  
+
                   if (uploadError) {
                     console.error(`15i. Upload error for file ${index + 1}:`, uploadError);
-                    
+
                     // Provide specific error messages
                     let errorMessage = `Failed to upload ${file.name}`;
                     if (uploadError.message?.includes('duplicate') || uploadError.message?.includes('already exists')) {
@@ -582,31 +606,31 @@ export default function Influencers() {
                     } else {
                       errorMessage = `Failed to upload ${file.name}: ${uploadError.message || 'Unknown error'}`;
                     }
-                    
+
                     throw new Error(errorMessage);
                   }
-                  
+
                   console.log(`15j. File ${index + 1} uploaded successfully to storage`);
-                  
+
                   // Get public URL
                   const { data: publicUrlData } = supabase.storage
                     .from('influencer-media')
                     .getPublicUrl(filePath);
-                  
+
                   const fileUrl = publicUrlData?.publicUrl;
                   console.log(`15k. Public URL for file ${index + 1}:`, fileUrl);
-                  
+
                   return {
                     file_url: fileUrl,
                     file_type: file.type,
                     file_name: file.name
                   };
                 });
-                
+
                 const uploadResults = await Promise.all(uploadPromises);
                 const uploadedMediaFiles = uploadResults.filter(result => result !== null);
                 console.log('15l. Media files uploaded successfully:', uploadedMediaFiles);
-                
+
                 if (uploadedMediaFiles.length > 0) {
                   // Insert media files into database
                   console.log('15m. Inserting media files into database...');
@@ -620,7 +644,7 @@ export default function Influencers() {
                       // This can be updated once the constraint is fixed
                       fileType = 'image';
                     }
-                    
+
                     return {
                       influencer_id: influencerId,
                       file_url: media!.file_url,
@@ -631,23 +655,23 @@ export default function Influencers() {
                       created_at: new Date().toISOString()
                     };
                   });
-                  
+
                   const { data: insertedMedia, error: mediaError } = await supabase
                     .from('influencer_media')
                     .insert(mediaData)
                     .select();
-                  
+
                   if (mediaError) {
                     console.error('❌ Media insertion error:', mediaError);
                     console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
                     throw new Error(`Failed to save media files: ${mediaError.message}`);
                   }
-                  
+
                   console.log('✅ Media files saved to database:', insertedMedia);
                 } else {
                   console.log('15m. No new media files to insert into database');
                 }
-                
+
               } catch (uploadError: any) {
                 console.error('Media upload error:', uploadError);
                 throw new Error(`Failed to upload media files: ${uploadError.message}`);
@@ -658,7 +682,7 @@ export default function Influencers() {
           } else {
             console.log('15. No media files to process for existing influencer');
           }
-          
+
         } catch (updateError: any) {
           console.error('Error updating influencer:', updateError);
           throw new Error(`Failed to update influencer: ${updateError.message}`);
@@ -666,10 +690,10 @@ export default function Influencers() {
       } else {
         // For new influencers, create profile directly with a generated UUID
         console.log('13. Creating new influencer profile directly in database');
-        
+
         try {
           console.log('14. Creating influencer with comprehensive Edge Function');
-          
+
           // Upload media files first if any exist
           let uploadedMediaFiles: Array<{
             file_url: string;
@@ -679,60 +703,60 @@ export default function Influencers() {
           if (mediaFiles.length > 0) {
             console.log('15. Uploading media files to storage...');
             console.log('15a. Media files to upload:', mediaFiles);
-            
+
             // Test storage bucket access
             try {
               const { data: bucketTest, error: bucketError } = await supabase.storage
                 .from('influencer-media')
                 .list('', { limit: 1 });
-              
+
               if (bucketError) {
                 console.error('15a1. Storage bucket test failed:', bucketError);
                 throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
               }
-              
+
               console.log('15a2. Storage bucket test successful');
             } catch (bucketTestError) {
               console.error('15a3. Storage bucket test error:', bucketTestError);
               throw bucketTestError;
             }
-            
+
             try {
               const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
                 console.log(`15b. Processing media file ${index + 1}:`, mediaFile);
                 const file = mediaFile.file;
-                
+
                 // Validate file before upload
                 const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
                 const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
                 const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-                
+
                 if (!allAllowedTypes.includes(file.type)) {
                   const errorMsg = `File ${file.name} has invalid type: ${file.type || 'unknown'}`;
                   console.error(`15b1. ${errorMsg}`);
                   throw new Error(errorMsg);
                 }
-                
+
                 const maxImageSize = 10 * 1024 * 1024; // 10MB
                 const maxVideoSize = 100 * 1024 * 1024; // 100MB
                 const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
-                
+
                 if (file.size > maxSize) {
                   const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
                   console.error(`15b2. ${errorMsg}`);
                   throw new Error(errorMsg);
                 }
-                
+
                 if (file.size === 0) {
                   const errorMsg = `File ${file.name} appears to be empty or corrupted`;
                   console.error(`15b3. ${errorMsg}`);
                   throw new Error(errorMsg);
                 }
-                
+
                 const filePath = `influencer-media/${Date.now()}-${file.name}`;
-                
+
                 console.log(`15c. Uploading file ${index + 1} to path:`, filePath);
-                
+
                 // Upload to storage with better error handling
                 let uploadError;
                 try {
@@ -744,10 +768,10 @@ export default function Influencers() {
                   console.error(`15c1. Storage upload exception for file ${index + 1}:`, storageError);
                   throw new Error(`Storage upload failed: ${storageError.message || 'Unknown error'}`);
                 }
-                
+
                 if (uploadError) {
                   console.error(`15d. Upload error for file ${index + 1}:`, uploadError);
-                  
+
                   // Provide specific error messages
                   let errorMessage = `Failed to upload ${file.name}`;
                   if (uploadError.message?.includes('duplicate') || uploadError.message?.includes('already exists')) {
@@ -761,27 +785,27 @@ export default function Influencers() {
                   } else {
                     errorMessage = `Failed to upload ${file.name}: ${uploadError.message || 'Unknown error'}`;
                   }
-                  
+
                   throw new Error(errorMessage);
                 }
-                
+
                 console.log(`15e. File ${index + 1} uploaded successfully to storage`);
-                
+
                 // Get public URL
                 const { data: publicUrlData } = supabase.storage
                   .from('influencer-media')
                   .getPublicUrl(filePath);
-                
+
                 const fileUrl = publicUrlData?.publicUrl;
                 console.log(`15f. Public URL for file ${index + 1}:`, fileUrl);
-                
+
                 return {
                   file_url: fileUrl,
                   file_type: file.type,
                   file_name: file.name
                 };
               });
-              
+
               uploadedMediaFiles = await Promise.all(uploadPromises);
               console.log('16. Media files uploaded successfully:', uploadedMediaFiles);
             } catch (uploadError: any) {
@@ -791,7 +815,7 @@ export default function Influencers() {
           } else {
             console.log('15. No media files to upload');
           }
-          
+
           // Prepare all data for the comprehensive Edge Function
           const influencerData = {
             email: values.email,
@@ -806,9 +830,9 @@ export default function Influencers() {
             media_files: uploadedMediaFiles,
             is_update: !!editingInfluencer
           };
-          
+
           console.log('17. Sending complete data to Edge Function:', influencerData);
-          
+
           const response = await fetch('https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/create-influencer-complete', {
             method: 'POST',
             headers: {
@@ -817,9 +841,9 @@ export default function Influencers() {
             },
             body: JSON.stringify(influencerData)
           });
-          
+
           console.log('18. Edge Function response status:', response.status);
-          
+
           let result;
           try {
             result = await response.json();
@@ -830,13 +854,13 @@ export default function Influencers() {
             console.log('21. Raw Edge Function response text:', textResponse);
             throw new Error('Invalid response from Edge Function');
           }
-          
+
           if (!response.ok && response.status !== 201) {
             console.error('22. Edge Function error response:', result);
             console.error('22a. Error details:', result.details);
             console.error('22b. Error code:', result.code);
             console.error('22c. Error hint:', result.hint);
-            
+
             // Handle specific error cases
             if (result.error === 'Failed to create user in authentication system' && result.details?.includes('already been registered')) {
               throw new Error(`An influencer with email "${values.email}" already exists. Please use a different email address or edit the existing influencer.`);
@@ -859,31 +883,31 @@ export default function Influencers() {
               throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create influencer`);
             }
           }
-          
+
           // Get the user ID from Edge Function response
           influencerId = result.user.id;
           console.log('23. Influencer created successfully with ID:', influencerId);
-          
+
         } catch (error: any) {
           console.error('Error in comprehensive Edge Function:', error);
           throw new Error(`Failed to create influencer: ${error.message}`);
         }
       }
-      
+
       if (influencerId) {
         console.log('24. Processing additional data for influencer ID:', influencerId);
-        
+
         if (editingInfluencer) {
           console.log('25. Updating existing influencer');
           message.success('Influencer updated successfully!');
-          
+
           // Refresh the influencers list to show updated data
           console.log('26. Refreshing influencers list after update...');
           fetchInfluencers();
         } else {
           console.log('25. Success! Influencer created');
           message.success('Influencer created successfully!');
-          
+
           // Send welcome email to the influencer (only for new influencers)
           if (randomPassword) {
             console.log('📧 Sending welcome email to influencer...');
@@ -892,16 +916,16 @@ export default function Influencers() {
               name: values.name,
               password: randomPassword
             });
-            
+
             try {
               const emailResult = await sendWelcomeEmail(
-                values.email, 
-                values.name, 
+                values.email,
+                values.name,
                 randomPassword
               );
-              
+
               console.log('📧 Email result:', emailResult);
-              
+
               if (emailResult.success) {
                 message.success('📧 Welcome email sent to influencer!');
                 console.log('✅ Welcome email sent successfully');
@@ -913,23 +937,23 @@ export default function Influencers() {
               console.error('❌ Email sending error:', emailError);
               message.warning('⚠️ Influencer created but email failed to send. Please contact them manually.');
             }
-            
+
             // Show password info to admin
             message.info(`🔑 Influencer password: ${randomPassword} - Please share this with the influencer`);
           } else {
             console.log('📧 No random password generated, skipping welcome email');
           }
-          
+
           // Refresh the influencers list to show the newly created one
           console.log('26. Refreshing influencers list...');
           fetchInfluencers();
         }
-        
+
         // Social links and media files are handled by the Edge Function
         console.log('27. Social links and media files processed by Edge Function');
-        
 
-        
+
+
         // Show success message and keep form open
         if (editingInfluencer) {
           message.success('Influencer updated successfully! You can continue editing or close the form.');
@@ -938,15 +962,15 @@ export default function Influencers() {
           // Show additional guidance for new influencers
           message.info('💡 Tip: You can now add media files in the "Additional Media" step, or click "Close Form" when done.');
         }
-        
+
         // Set a flag to indicate the influencer was created/updated
         setFormLoading(false);
-        
+
         // Only set influencerCreated to true if we're editing an existing one
         if (editingInfluencer) {
           setInfluencerCreated(true);
         }
-        
+
         // Close the form and reset after successful creation/update
         setDrawerOpen(false);
         form.resetFields();
@@ -980,41 +1004,41 @@ export default function Influencers() {
     try {
       console.log('📁 Starting media file upload for user:', userId);
       console.log('📁 Number of files to upload:', mediaFiles.length);
-      
+
       const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
         console.log(`📁 Processing file ${index + 1}:`, mediaFile);
         const file = mediaFile.file;
         const filePath = `influencer-media/${userId}/${Date.now()}-${file.name}`;
-        
+
         console.log(`📁 Uploading file ${index + 1} to storage path:`, filePath);
-        
+
         // Upload to storage
         const { error: uploadError } = await supabase.storage
           .from('influencer-media')
           .upload(filePath, file, { upsert: true });
-        
+
         if (uploadError) {
           console.error(`📁 Storage upload error for file ${index + 1}:`, uploadError);
           throw uploadError;
         }
-        
+
         console.log(`📁 File ${index + 1} uploaded to storage successfully`);
-        
+
         // Get public URL
         const { data: publicUrlData } = supabase.storage
           .from('influencer-media')
           .getPublicUrl(filePath);
-        
+
         const fileUrl = publicUrlData?.publicUrl;
         console.log(`📁 Public URL for file ${index + 1}:`, fileUrl);
-        
+
         // Determine file type
         const fileType = file.type.startsWith('image/') ? 'image' : 'video';
-        
+
         // Insert into database (if table exists)
         try {
           console.log(`📁 Attempting to insert file ${index + 1} into influencer_media table`);
-          
+
           const { data: insertData, error: dbError } = await supabase
             .from('influencer_media')
             .insert({
@@ -1027,18 +1051,18 @@ export default function Influencers() {
               created_at: new Date().toISOString()
             })
             .select();
-          
+
           if (dbError) {
             console.error(`📁 Database insert error for file ${index + 1}:`, dbError);
             console.error(`📁 Error details:`, JSON.stringify(dbError, null, 2));
-            
+
             // Check if it's a table not found error
             if (dbError.message && dbError.message.includes('relation "influencer_media" does not exist')) {
               console.error('📁 CRITICAL: influencer_media table does not exist!');
               console.error('📁 Please run the create_influencer_media_table.sql script in your Supabase database');
               throw new Error('influencer_media table does not exist. Please create it first.');
             }
-            
+
             // Continue even if DB insert fails for other reasons
             console.warn(`📁 Continuing without database insert for file ${index + 1}`);
           } else {
@@ -1046,18 +1070,18 @@ export default function Influencers() {
           }
         } catch (dbTableError: any) {
           console.error(`📁 Database table error for file ${index + 1}:`, dbTableError);
-          
+
           if (dbTableError.message && dbTableError.message.includes('relation "influencer_media" does not exist')) {
             console.error('📁 CRITICAL: influencer_media table does not exist!');
             throw new Error('influencer_media table does not exist. Please create it first.');
           }
-          
+
           console.warn(`📁 Continuing without database insert for file ${index + 1}`);
         }
-        
+
         return { success: true, fileUrl };
       });
-      
+
       const results = await Promise.all(uploadPromises);
       console.log('📁 All media files processed successfully:', results);
       return results;
@@ -1129,35 +1153,35 @@ export default function Influencers() {
   const fetchAndUpdateUser = async (email: string, additionalData: any) => {
     try {
       console.log('24. Fetching user by email:', email);
-      
+
       // First, get the user from profiles table
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('email', email)
         .single();
-      
+
       if (profileError) {
         console.error('Error fetching profile:', profileError);
         throw profileError;
       }
-      
+
       console.log('25. Found profile:', profileData);
-      
+
       // Update the profile with additional data
       const { error: updateError } = await supabase
         .from('profiles')
         .update(additionalData)
         .eq('email', email);
-      
+
       if (updateError) {
         console.error('Error updating profile:', updateError);
         throw updateError;
       }
-      
+
       console.log('26. Profile updated successfully');
       return profileData;
-      
+
     } catch (error) {
       console.error('Error in fetchAndUpdateUser:', error);
       throw error;
@@ -1175,13 +1199,13 @@ export default function Influencers() {
   const handleDeleteInfluencer = async (record: any) => {
     try {
       console.log('Deleting influencer:', record.id);
-      
+
       // Delete from profiles table
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', record.id);
-      
+
       if (profileError) {
         console.error('Error deleting profile:', profileError);
         message.error('Failed to delete influencer profile');
@@ -1194,7 +1218,7 @@ export default function Influencers() {
           .from('social_links')
           .delete()
           .eq('user_id', record.id);
-        
+
         if (socialError) {
           console.warn('Error deleting social links:', socialError);
         }
@@ -1208,7 +1232,7 @@ export default function Influencers() {
           .from('social_stats')
           .delete()
           .eq('user_id', record.id);
-        
+
         if (statsError) {
           console.warn('Error deleting social stats:', statsError);
         }
@@ -1222,30 +1246,30 @@ export default function Influencers() {
           .from('influencer_media')
           .select('file_url')
           .eq('influencer_id', record.id);
-        
+
         if (mediaFiles && mediaFiles.length > 0) {
           // Delete from storage
           const filePaths = mediaFiles.map(media => {
             const path = media.file_url.split('/storage/v1/object/public/influencer-media/')[1];
             return path;
           }).filter(Boolean);
-          
+
           if (filePaths.length > 0) {
             const { error: storageError } = await supabase.storage
               .from('influencer-media')
               .remove(filePaths);
-            
+
             if (storageError) {
               console.warn('Error deleting media from storage:', storageError);
             }
           }
-          
+
           // Delete from database
           const { error: mediaError } = await supabase
             .from('influencer_media')
             .delete()
             .eq('influencer_id', record.id);
-          
+
           if (mediaError) {
             console.warn('Error deleting media from database:', mediaError);
           }
@@ -1260,7 +1284,7 @@ export default function Influencers() {
           .from('wallets')
           .delete()
           .eq('user_id', record.id);
-        
+
         if (walletError) {
           console.warn('Error deleting wallet:', walletError);
         }
@@ -1276,7 +1300,7 @@ export default function Influencers() {
             const { error: profileImageError } = await supabase.storage
               .from('influencer-profile')
               .remove([profileImagePath]);
-            
+
             if (profileImageError) {
               console.warn('Error deleting profile image from storage:', profileImageError);
             }
@@ -1287,20 +1311,20 @@ export default function Influencers() {
       }
 
       message.success('Influencer deleted successfully');
-      
+
       // Refresh the influencers list
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, email, created_at')
         .eq('role', 'influencer')
         .order('created_at', { ascending: false });
-      
+
       if (error) {
         console.error('Error refreshing influencers list:', error);
       } else {
         setInfluencers(data || []);
       }
-      
+
     } catch (error) {
       console.error('Error deleting influencer:', error);
       message.error('Failed to delete influencer');
@@ -1320,7 +1344,7 @@ export default function Influencers() {
           .from('influencer_media')
           .select('*')
           .eq('influencer_id', record.id);
-        
+
         if (mediaError) {
           console.warn('Media table might not exist or have different structure:', mediaError);
           setDetailMedia([]);
@@ -1331,14 +1355,14 @@ export default function Influencers() {
         console.warn('influencer_media table not accessible:', mediaTableError);
         setDetailMedia([]);
       }
-      
+
       // Fetch social links (with platform name)
       try {
         const { data: social, error: socialError } = await supabase
           .from('social_links')
           .select('*, social_media_platforms(name)')
           .eq('user_id', record.id);
-        
+
         if (socialError) {
           console.warn('Social links table might not exist or have different structure:', socialError);
           setDetailSocial([]);
@@ -1358,16 +1382,16 @@ export default function Influencers() {
   const columns = [
     { title: 'Name', dataIndex: 'name', key: 'name' },
     { title: 'Email', dataIndex: 'email', key: 'email' },
-    { 
-      title: 'Bio', 
-      dataIndex: 'bio', 
+    {
+      title: 'Bio',
+      dataIndex: 'bio',
       key: 'bio',
       render: (bio: string) => bio ? (bio.length > 50 ? bio.substring(0, 50) + '...' : bio) : '-',
       width: 200
     },
-    { 
-      title: 'Country', 
-      dataIndex: 'country', 
+    {
+      title: 'Country',
+      dataIndex: 'country',
       key: 'country',
       render: (countryCode: string) => {
         const country = countries.find(c => c.value === countryCode);
@@ -1385,8 +1409,8 @@ export default function Influencers() {
       key: 'actions',
       render: (unused: any, record: any) => (
         <Space>
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             size="small"
             onClick={() => handleEditInfluencer(record)}
           >
@@ -1400,8 +1424,8 @@ export default function Influencers() {
             cancelText="No"
             okType="danger"
           >
-            <Button 
-              danger 
+            <Button
+              danger
               size="small"
             >
               Delete
@@ -1416,17 +1440,17 @@ export default function Influencers() {
   function MediaCount({ influencerId }: { influencerId: string }) {
     const [count, setCount] = useState<number | null>(null);
     const [error, setError] = useState<boolean>(false);
-    
+
     useEffect(() => {
       let mounted = true;
-      
+
       async function fetchMediaCount() {
         try {
           const { data, error, count } = await supabase
             .from('influencer_media')
             .select('id', { count: 'exact', head: true })
             .eq('influencer_id', influencerId);
-          
+
           if (mounted) {
             if (error) {
               console.warn('influencer_media table not accessible:', error);
@@ -1446,16 +1470,16 @@ export default function Influencers() {
           }
         }
       }
-      
+
       fetchMediaCount();
-        
+
       return () => { mounted = false; };
     }, [influencerId]);
-    
+
     if (error) {
       return <span title="Media table not accessible">-</span>;
     }
-    
+
     return count === null ? <Spin size="small" /> : <span>{count}</span>;
   }
 
@@ -1468,7 +1492,7 @@ export default function Influencers() {
         const { error: storageError } = await supabase.storage.from('influencer-media').remove([filePath]);
         if (storageError) throw storageError;
       }
-      
+
       // Remove from DB - handle case where table might not exist
       try {
         const { error: dbError } = await supabase.from('influencer_media').delete().eq('id', media.id);
@@ -1500,7 +1524,7 @@ export default function Influencers() {
       if (uploadError) throw uploadError;
       const { data: publicUrlData } = supabase.storage.from('influencer-media').getPublicUrl(newFilePath);
       const newFileUrl = publicUrlData?.publicUrl;
-      
+
       // Update DB entry - handle case where table might not exist
       try {
         const { error: updateError } = await supabase.from('influencer_media').update({ file_url: newFileUrl }).eq('id', media.id);
@@ -1542,8 +1566,8 @@ export default function Influencers() {
               { type: 'email', message: 'Please enter a valid email!' }
             ]}
           >
-            <Input 
-              placeholder="Enter email" 
+            <Input
+              placeholder="Enter email"
               size="large"
               style={{
                 borderRadius: '8px',
@@ -1554,16 +1578,16 @@ export default function Influencers() {
               }}
             />
           </Form.Item>
-          
 
-          
+
+
           <Form.Item
             name="name"
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Full Name</span>}
             rules={[{ required: true, message: 'Please input full name!' }]}
           >
-            <Input 
-              placeholder="Enter full name" 
+            <Input
+              placeholder="Enter full name"
               size="large"
               style={{
                 borderRadius: '8px',
@@ -1574,14 +1598,14 @@ export default function Influencers() {
               }}
             />
           </Form.Item>
-          
+
           <Form.Item
             name="bio"
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Bio</span>}
           >
-            <Input.TextArea 
-              rows={4} 
-              placeholder="Enter bio (optional)" 
+            <Input.TextArea
+              rows={4}
+              placeholder="Enter bio (optional)"
               maxLength={500}
               showCount
               style={{
@@ -1593,13 +1617,13 @@ export default function Influencers() {
               }}
             />
           </Form.Item>
-          
+
           <Form.Item
             name="country"
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Country</span>}
             rules={[{ required: true, message: 'Please select a country!' }]}
           >
-            <Select 
+            <Select
               placeholder="Select country"
               size="large"
               showSearch
@@ -1634,7 +1658,7 @@ export default function Influencers() {
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Verification Status</span>}
             valuePropName="checked"
           >
-            <Switch 
+            <Switch
               style={{
                 backgroundColor: '#d9d9d9'
               }}
@@ -1644,21 +1668,21 @@ export default function Influencers() {
               }}
             />
           </Form.Item>
-          
+
           <Form.Item
             name="commission_percentage"
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Commission Percentage (%)</span>}
             rules={[
-              { 
-                type: 'number', 
-                min: 0, 
-                max: 100, 
-                message: 'Commission must be between 0 and 100%' 
+              {
+                type: 'number',
+                min: 0,
+                max: 100,
+                message: 'Commission must be between 0 and 100%'
               }
             ]}
             tooltip="The commission percentage (0-100%) that will be deducted from this influencer's earnings. This is specific to this influencer and can be different for each influencer."
           >
-            <InputNumber 
+            <InputNumber
               placeholder="Enter commission percentage (0-100)"
               min={0}
               max={100}
@@ -1676,16 +1700,16 @@ export default function Influencers() {
               parser={(value) => value ? value.replace('%', '') : ''}
             />
           </Form.Item>
-          
+
           <Form.Item
             name="profile_image_url"
             label={<span style={{ fontWeight: '600', color: '#262626', fontSize: '16px' }}>Profile Image</span>}
           >
-            <div 
-              style={{ 
-                border: `2px dashed ${isDragOver ? '#1890ff' : '#d9d9d9'}`, 
-                borderRadius: '12px', 
-                padding: '24px', 
+            <div
+              style={{
+                border: `2px dashed ${isDragOver ? '#1890ff' : '#d9d9d9'}`,
+                borderRadius: '12px',
+                padding: '24px',
                 textAlign: 'center',
                 background: isDragOver ? '#f0f8ff' : '#fafafa',
                 transition: 'all 0.3s ease',
@@ -1703,21 +1727,21 @@ export default function Influencers() {
             >
               {profileImagePreview ? (
                 <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <img 
-                    src={profileImagePreview} 
-                    alt="Profile preview" 
-                    style={{ 
-                      width: '120px', 
-                      height: '120px', 
-                      objectFit: 'cover', 
+                  <img
+                    src={profileImagePreview}
+                    alt="Profile preview"
+                    style={{
+                      width: '120px',
+                      height: '120px',
+                      objectFit: 'cover',
                       borderRadius: '50%',
                       border: '4px solid #fff',
                       boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
                     }}
                   />
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '-8px', 
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
                     right: '-8px',
                     background: '#ff4d4f',
                     borderRadius: '50%',
@@ -1729,22 +1753,22 @@ export default function Influencers() {
                     cursor: 'pointer',
                     boxShadow: '0 4px 12px rgba(255, 77, 79, 0.4)'
                   }}
-                  onClick={() => {
-                    setProfileImagePreview(null);
-                    form.setFieldsValue({ profile_image_url: null });
-                    // Reset the file input
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = '';
-                    }
-                  }}>
+                    onClick={() => {
+                      setProfileImagePreview(null);
+                      form.setFieldsValue({ profile_image_url: null });
+                      // Reset the file input
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                      }
+                    }}>
                     <DeleteOutlined style={{ color: 'white', fontSize: '14px' }} />
                   </div>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ 
-                    fontSize: '48px', 
-                    color: '#d9d9d9', 
+                  <div style={{
+                    fontSize: '48px',
+                    color: '#d9d9d9',
                     marginBottom: '16px',
                     display: 'flex',
                     justifyContent: 'center'
@@ -1758,7 +1782,7 @@ export default function Influencers() {
                     {isDragOver ? 'Drop your image here!' : 'Drag & drop an image here, or click to browse'}
                   </Typography.Text>
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <Button 
+                    <Button
                       type="primary"
                       icon={profileImageUploading ? <Spin size="small" /> : <UploadOutlined />}
                       loading={profileImageUploading}
@@ -1775,18 +1799,18 @@ export default function Influencers() {
                       {profileImageUploading ? 'Uploading...' : 'Choose Image'}
                     </Button>
                   </div>
-                  <Typography.Text style={{ 
-                    color: '#8c8c8c', 
-                    fontSize: '12px', 
-                    display: 'block', 
-                    marginTop: '8px' 
+                  <Typography.Text style={{
+                    color: '#8c8c8c',
+                    fontSize: '12px',
+                    display: 'block',
+                    marginTop: '8px'
                   }}>
                     Supports: JPG, PNG, GIF (Max 5MB)
                   </Typography.Text>
                   {profileImageUploading && (
                     <div style={{ width: '100%', marginTop: '16px' }}>
-                      <Progress 
-                        percent={uploadProgress} 
+                      <Progress
+                        percent={uploadProgress}
                         status="active"
                         strokeColor={{
                           '0%': '#108ee9',
@@ -1801,7 +1825,7 @@ export default function Influencers() {
                   )}
                 </div>
               )}
-              
+
               <input
                 ref={fileInputRef}
                 key={profileImagePreview ? 'has-image' : 'no-image'}
@@ -1821,7 +1845,7 @@ export default function Influencers() {
                       e.target.value = '';
                       return;
                     }
-                    
+
                     // Validate file type
                     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
                     if (!allowedTypes.includes(file.type)) {
@@ -1830,7 +1854,7 @@ export default function Influencers() {
                       e.target.value = '';
                       return;
                     }
-                    
+
                     // Show immediate preview
                     const previewUrl = URL.createObjectURL(file);
                     setProfileImagePreview(previewUrl);
@@ -1857,7 +1881,7 @@ export default function Influencers() {
               Add the influencer's social media profiles with follower counts to showcase their reach
             </Typography.Text>
           </div>
-          
+
           <Form.List name="social_links">
             {(fields, { add, remove }) => (
               <>
@@ -1881,7 +1905,7 @@ export default function Influencers() {
                     </Typography.Text>
                   </div>
                 )}
-                
+
                 {fields.map(({ key, name, ...restField }) => (
                   <div key={key} style={{
                     background: '#fff',
@@ -1893,17 +1917,17 @@ export default function Influencers() {
                     transition: 'all 0.3s ease'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                      <div style={{ 
-                        width: '8px', 
-                        height: '8px', 
-                        borderRadius: '50%', 
-                        background: '#52c41a' 
+                      <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: '#52c41a'
                       }} />
                       <Typography.Text style={{ fontWeight: '500', color: '#262626' }}>
                         Social Media Profile #{name + 1}
                       </Typography.Text>
                     </div>
-                    
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                       <Form.Item
                         {...restField}
@@ -1913,7 +1937,7 @@ export default function Influencers() {
                         ]}
                         style={{ margin: 0 }}
                       >
-                        <Select 
+                        <Select
                           placeholder="Select Platform"
                           size="large"
                           style={{
@@ -1929,8 +1953,8 @@ export default function Influencers() {
                             <Select.Option key={platform.id} value={platform.id}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 {platform.icon_url && (
-                                  <img 
-                                    src={platform.icon_url} 
+                                  <img
+                                    src={platform.icon_url}
                                     alt={platform.name}
                                     style={{ width: '20px', height: '20px', borderRadius: '4px' }}
                                   />
@@ -1941,21 +1965,21 @@ export default function Influencers() {
                           ))}
                         </Select>
                       </Form.Item>
-                      
+
                       <Form.Item
                         {...restField}
                         name={[name, 'handle']}
                         rules={[
                           { required: true, message: 'Please enter follower count' },
-                          { 
-                            pattern: /^[0-9,]+$/, 
-                            message: 'Please enter a valid number (e.g., 1000, 1,000, 1000000)' 
+                          {
+                            pattern: /^[0-9,]+$/,
+                            message: 'Please enter a valid number (e.g., 1000, 1,000, 1000000)'
                           }
                         ]}
                         style={{ margin: 0 }}
                       >
-                        <Input 
-                          placeholder="Follower count (e.g., 1000, 1,000, 1000000)" 
+                        <Input
+                          placeholder="Follower count (e.g., 1000, 1,000, 1000000)"
                           size="large"
                           style={{
                             borderRadius: '8px',
@@ -1971,14 +1995,14 @@ export default function Influencers() {
                         />
                       </Form.Item>
                     </div>
-                    
+
                     <Form.Item
                       {...restField}
                       name={[name, 'profile_url']}
                       style={{ margin: 0 }}
                     >
-                      <Input 
-                        placeholder="Full profile URL (optional)" 
+                      <Input
+                        placeholder="Full profile URL (optional)"
                         size="large"
                         style={{
                           borderRadius: '8px',
@@ -1987,16 +2011,16 @@ export default function Influencers() {
                         prefix={<span style={{ color: '#8c8c8c' }}>🔗</span>}
                       />
                     </Form.Item>
-                    
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'flex-end', 
+
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
                       marginTop: '16px',
                       paddingTop: '16px',
                       borderTop: '1px solid #f0f0f0'
                     }}>
-                      <Button 
-                        danger 
+                      <Button
+                        danger
                         onClick={() => remove(name)}
                         icon={<DeleteOutlined />}
                         size="middle"
@@ -2013,12 +2037,12 @@ export default function Influencers() {
                     </div>
                   </div>
                 ))}
-                
+
                 <div style={{ marginTop: '24px' }}>
-                  <Button 
-                    type="dashed" 
-                    onClick={() => add()} 
-                    block 
+                  <Button
+                    type="dashed"
+                    onClick={() => add()}
+                    block
                     icon={<PlusOutlined />}
                     size="large"
                     style={{
@@ -2061,15 +2085,15 @@ export default function Influencers() {
               Upload images and videos to showcase the influencer's work and portfolio
             </Typography.Text>
           </div>
-          
+
           <Form.Item
             name="media_files"
             style={{ margin: 0 }}
           >
-            <div style={{ 
-              border: '2px dashed #d9d9d9', 
-              borderRadius: '12px', 
-              padding: '32px', 
+            <div style={{
+              border: '2px dashed #d9d9d9',
+              borderRadius: '12px',
+              padding: '32px',
               textAlign: 'center',
               background: '#fafafa',
               transition: 'all 0.3s ease',
@@ -2080,31 +2104,31 @@ export default function Influencers() {
               justifyContent: 'center',
               alignItems: 'center'
             }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.style.borderColor = '#1890ff';
-              e.currentTarget.style.background = '#f0f8ff';
-            }}
-            onDragLeave={(e) => {
-              e.currentTarget.style.borderColor = '#d9d9d9';
-              e.currentTarget.style.background = '#fafafa';
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.currentTarget.style.borderColor = '#d9d9d9';
-              e.currentTarget.style.background = '#fafafa';
-              
-              const files = Array.from(e.dataTransfer.files);
-              if (files.length > 0) {
-                handleMediaFilesUpload(files);
-              }
-            }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor = '#1890ff';
+                e.currentTarget.style.background = '#f0f8ff';
+              }}
+              onDragLeave={(e) => {
+                e.currentTarget.style.borderColor = '#d9d9d9';
+                e.currentTarget.style.background = '#fafafa';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor = '#d9d9d9';
+                e.currentTarget.style.background = '#fafafa';
+
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length > 0) {
+                  handleMediaFilesUpload(files);
+                }
+              }}
             >
               {mediaFiles.length === 0 ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ 
-                    fontSize: '64px', 
-                    color: '#d9d9d9', 
+                  <div style={{
+                    fontSize: '64px',
+                    color: '#d9d9d9',
                     marginBottom: '20px',
                     display: 'flex',
                     justifyContent: 'center'
@@ -2118,7 +2142,7 @@ export default function Influencers() {
                     Drag & drop files here, or click to browse
                   </Typography.Text>
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <Button 
+                    <Button
                       type="primary"
                       icon={<UploadOutlined />}
                       size="large"
@@ -2135,27 +2159,27 @@ export default function Influencers() {
                       Choose Files
                     </Button>
                   </div>
-                  <Typography.Text style={{ 
-                    color: '#8c8c8c', 
-                    fontSize: '12px', 
-                    display: 'block', 
-                    marginTop: '12px' 
+                  <Typography.Text style={{
+                    color: '#8c8c8c',
+                    fontSize: '12px',
+                    display: 'block',
+                    marginTop: '12px'
                   }}>
                     Supports: Images (JPG, PNG, GIF, WEBP - Max 10MB) | Videos (MP4, MOV, AVI, WEBM - Max 100MB, 5 min)
                   </Typography.Text>
                 </div>
               ) : (
                 <div style={{ width: '100%' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    marginBottom: '20px' 
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '20px'
                   }}>
                     <Typography.Title level={4} style={{ margin: 0, color: '#262626' }}>
                       Media Files ({mediaFiles.length})
                     </Typography.Title>
-                    <Button 
+                    <Button
                       type="primary"
                       icon={<UploadOutlined />}
                       onClick={() => document.getElementById('media-upload')?.click()}
@@ -2167,10 +2191,10 @@ export default function Influencers() {
                       Add More
                     </Button>
                   </div>
-                  
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
                     gap: '16px',
                     maxHeight: '300px',
                     overflowY: 'auto',
@@ -2186,30 +2210,30 @@ export default function Influencers() {
                         transition: 'all 0.3s ease',
                         cursor: 'pointer'
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                       >
                         {file.type.startsWith('image/') ? (
-                          <img 
-                            src={file.preview} 
+                          <img
+                            src={file.preview}
                             alt={`Media ${index + 1}`}
-                            style={{ 
-                              width: '100%', 
-                              height: '80px', 
+                            style={{
+                              width: '100%',
+                              height: '80px',
                               objectFit: 'cover',
                               borderRadius: '8px 8px 0 0'
                             }}
                           />
                         ) : (
-                          <div style={{ 
-                            width: '100%', 
-                            height: '80px', 
+                          <div style={{
+                            width: '100%',
+                            height: '80px',
                             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                             display: 'flex',
                             alignItems: 'center',
@@ -2219,11 +2243,11 @@ export default function Influencers() {
                             <VideoCameraOutlined style={{ fontSize: '24px', color: '#fff' }} />
                           </div>
                         )}
-                        
+
                         <div style={{ padding: '8px' }}>
-                          <div style={{ 
-                            fontSize: '10px', 
-                            color: '#8c8c8c', 
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#8c8c8c',
                             marginBottom: '4px',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2231,23 +2255,23 @@ export default function Influencers() {
                           }}>
                             {file.name}
                           </div>
-                          <div style={{ 
-                            fontSize: '10px', 
+                          <div style={{
+                            fontSize: '10px',
                             color: file.type.startsWith('image/') ? '#52c41a' : '#1890ff',
                             fontWeight: '500',
                             marginBottom: '2px'
                           }}>
                             {file.type.startsWith('image/') ? '📷 Image' : '🎥 Video'}
                           </div>
-                          <div style={{ 
-                            fontSize: '9px', 
+                          <div style={{
+                            fontSize: '9px',
                             color: '#bfbfbf',
                             fontWeight: '400'
                           }}>
                             {(file.size / (1024 * 1024)).toFixed(1)}MB
                           </div>
                         </div>
-                        
+
                         <Button
                           type="text"
                           danger
@@ -2284,7 +2308,7 @@ export default function Influencers() {
                   </div>
                 </div>
               )}
-              
+
               <input
                 id="media-upload"
                 type="file"
@@ -2322,7 +2346,7 @@ export default function Influencers() {
       } else if (currentStep === 3) {
         // Step 4 has no required fields, just proceed
       }
-      
+
       setCurrentStep((s) => s + 1);
     } catch (err) {
       console.error('Validation failed:', err);
@@ -2356,10 +2380,10 @@ export default function Influencers() {
       console.log('Influencer bio value:', influencer.bio, 'Type:', typeof influencer.bio);
       console.log('Influencer profile_image_url value:', influencer.profile_image_url, 'Type:', typeof influencer.profile_image_url);
       console.log('Influencer is_verified value:', influencer.is_verified, 'Type:', typeof influencer.is_verified);
-      
+
       // Small delay to ensure form is ready
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // Set basic form fields
       const formData = {
         email: influencer.email,
@@ -2370,13 +2394,13 @@ export default function Influencers() {
         profile_image_url: influencer.profile_image_url,
         commission_percentage: influencer.commission_percentage !== undefined && influencer.commission_percentage !== null ? Number(influencer.commission_percentage) : 0
       };
-      
+
       console.log('Setting form fields with data:', formData);
-      
+
       // Try to set form values with retry mechanism
       let retryCount = 0;
       const maxRetries = 5;
-      
+
       const setFormValues = () => {
         try {
           form.setFieldsValue(formData);
@@ -2390,9 +2414,9 @@ export default function Influencers() {
           }
         }
       };
-      
+
       setFormValues();
-      
+
       console.log('Form fields set:', {
         email: influencer.email,
         name: influencer.name,
@@ -2401,7 +2425,7 @@ export default function Influencers() {
         is_verified: influencer.is_verified,
         profile_image_url: influencer.profile_image_url
       });
-      
+
       // Set profile image preview
       if (influencer.profile_image_url) {
         console.log('Setting profile image preview:', influencer.profile_image_url);
@@ -2410,40 +2434,40 @@ export default function Influencers() {
         console.log('No profile image URL found');
         setProfileImagePreview(null);
       }
-      
+
       // Load social links
       const { data: socialLinks } = await supabase
         .from('social_links')
         .select('*')
         .eq('user_id', influencer.id);
-      
+
       console.log('Social links loaded from database:', socialLinks);
-      
+
       if (socialLinks && socialLinks.length > 0) {
         const mappedSocialLinks = socialLinks.map(link => ({
           platform_id: link.platform_id,
           handle: link.handle,
           profile_url: link.profile_url
         }));
-        
+
         console.log('Mapped social links for form:', mappedSocialLinks);
-        
+
         form.setFieldsValue({
           social_links: mappedSocialLinks
         });
       } else {
         console.log('No social links found for influencer');
       }
-      
+
       // Load existing media files
       try {
         const { data: existingMedia } = await supabase
           .from('influencer_media')
           .select('*')
           .eq('influencer_id', influencer.id);
-        
+
         console.log('Existing media data:', existingMedia);
-        
+
         if (existingMedia && existingMedia.length > 0) {
           const mediaFilesData = existingMedia.map(media => ({
             file: null, // We don't have the actual file, just the URL
@@ -2460,7 +2484,7 @@ export default function Influencers() {
       } catch (mediaError) {
         console.warn('Could not load existing media:', mediaError);
       }
-      
+
       setCurrentStep(0);
       setFormError(null);
       console.log('Influencer data loaded for editing');
@@ -2476,13 +2500,13 @@ export default function Influencers() {
       // Sync profile image preview with form field
       const interval = setInterval(() => {
         const values = form.getFieldsValue();
-        
+
         // Sync profile image preview with form field
         if (values.profile_image_url && !profileImagePreview) {
           setProfileImagePreview(values.profile_image_url);
         }
       }, 1000);
-      
+
       return () => clearInterval(interval);
     }
   }, [drawerOpen, form, profileImagePreview]);
@@ -2494,7 +2518,7 @@ export default function Influencers() {
       const timer = setTimeout(() => {
         loadInfluencerForEditing(editingInfluencer);
       }, 200);
-      
+
       return () => clearTimeout(timer);
     }
   }, [drawerOpen, editingInfluencer]);
@@ -2504,7 +2528,7 @@ export default function Influencers() {
     const maxImageSize = 10 * 1024 * 1024; // 10MB for images
     const maxVideoSize = 100 * 1024 * 1024; // 100MB for videos
     const maxVideoDuration = 300; // 5 minutes in seconds
-    
+
     const validFiles: File[] = [];
     const errors: Array<{ file: string; reason: string }> = [];
 
@@ -2531,7 +2555,7 @@ export default function Influencers() {
         if (file.size > maxVideoSize) {
           fileErrors.push(`Video size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 100MB limit`);
         }
-        
+
         // Validate video duration
         try {
           const duration = await getVideoDuration(file);
@@ -2588,7 +2612,7 @@ export default function Influencers() {
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
       }));
       setMediaFiles(prev => [...prev, ...newFiles]);
-      
+
       if (validFiles.length > 0) {
         message.success(`${validFiles.length} file(s) added successfully`);
       }
@@ -2600,17 +2624,17 @@ export default function Influencers() {
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
       video.preload = 'metadata';
-      
+
       video.onloadedmetadata = () => {
         window.URL.revokeObjectURL(video.src);
         resolve(video.duration);
       };
-      
+
       video.onerror = () => {
         window.URL.revokeObjectURL(video.src);
         reject(new Error('Could not load video metadata'));
       };
-      
+
       video.src = URL.createObjectURL(file);
     });
   };
@@ -2661,7 +2685,7 @@ export default function Influencers() {
         .select('id, name, email, commission_percentage')
         .eq('role', 'influencer')
         .order('name', { ascending: true });
-      
+
       if (error) {
         message.error('Failed to load commissions');
         console.error('Error fetching commissions:', error);
@@ -2714,8 +2738,8 @@ export default function Influencers() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Influencers</Typography.Title>
         <Space>
-          <Button 
-            icon={<DollarOutlined />} 
+          <Button
+            icon={<DollarOutlined />}
             onClick={openCommissionsModal}
             style={{ borderRadius: '6px' }}
           >
@@ -2736,7 +2760,7 @@ export default function Influencers() {
           </Button>
         </Space>
       </div>
-      
+
       {/* Search Input */}
       <div style={{ marginBottom: 16 }}>
         <Input
@@ -2757,8 +2781,8 @@ export default function Influencers() {
       {loading ? (
         <Spin size="large" />
       ) : (
-        <Table 
-          columns={columns} 
+        <Table
+          columns={columns}
           dataSource={influencers.filter((influencer) => {
             if (!searchText) return true;
             const searchLower = searchText.toLowerCase();
@@ -2767,7 +2791,7 @@ export default function Influencers() {
             const bio = influencer.bio?.toLowerCase() || '';
             const country = influencer.country?.toLowerCase() || '';
             const countryLabel = countries.find(c => c.value === influencer.country)?.label.toLowerCase() || '';
-            
+
             return (
               name.includes(searchLower) ||
               email.includes(searchLower) ||
@@ -2775,21 +2799,21 @@ export default function Influencers() {
               country.includes(searchLower) ||
               countryLabel.includes(searchLower)
             );
-          })} 
-          rowKey="id" 
-          onRow={(record: any) => ({ onClick: () => openDetail(record) })} 
+          })}
+          rowKey="id"
+          onRow={(record: any) => ({ onClick: () => openDetail(record) })}
         />
       )}
       <Drawer
         title="Add Influencer"
         open={drawerOpen}
-        onClose={() => { 
+        onClose={() => {
           console.log('Drawer closing - user action or programmatic close');
-          setDrawerOpen(false); 
-          setMediaFiles([]); 
-          form.resetFields(); 
-          setFormError(null); 
-          setCurrentStep(0); 
+          setDrawerOpen(false);
+          setMediaFiles([]);
+          form.resetFields();
+          setFormError(null);
+          setCurrentStep(0);
           setInfluencerCreated(false);
           setEditingInfluencer(null);
           setProfileImagePreview(null);
@@ -2799,10 +2823,10 @@ export default function Influencers() {
         closeIcon
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16, maxWidth: 600 }} />}
-        
+
         <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 16 }}>
           <Steps current={currentStep} items={stepItems.map(s => ({ title: s.title }))} style={{ marginBottom: 32 }} responsive direction={isMobile ? 'vertical' : 'horizontal'} />
-          
+
           {/* Step guidance */}
           <div style={{ marginBottom: 16, textAlign: 'center' }}>
             <Typography.Text type="secondary">
@@ -2814,7 +2838,7 @@ export default function Influencers() {
               )}
             </Typography.Text>
           </div>
-          
+
           <Divider style={{ margin: '16px 0 32px 0' }} />
           <AntCard style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} styles={{ body: { padding: 0 } }}>
             <Form
@@ -2828,7 +2852,7 @@ export default function Influencers() {
               <div className="space-y-6">
                 {/* Render all steps but hide non-active ones */}
                 {stepItems.map((step, index) => (
-                  <div 
+                  <div
                     key={index}
                     style={{
                       display: index === currentStep ? 'block' : 'none'
@@ -2838,13 +2862,13 @@ export default function Influencers() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Form buttons */}
               <div className="flex justify-between items-center pt-8 pb-4">
                 <div className="flex items-center space-x-3">
                   {/* Show Close Form button after successful creation/update */}
                   {influencerCreated && (
-                    <Button 
+                    <Button
                       onClick={() => {
                         setDrawerOpen(false);
                         setInfluencerCreated(false);
@@ -2871,10 +2895,10 @@ export default function Influencers() {
                     </Button>
                   )}
                 </div>
-                
+
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   {currentStep > 0 && (
-                    <Button 
+                    <Button
                       onClick={() => setCurrentStep(currentStep - 1)}
                       size="large"
                       style={{
@@ -2891,9 +2915,9 @@ export default function Influencers() {
                       Previous
                     </Button>
                   )}
-                  
+
                   {currentStep < stepItems.length - 1 ? (
-                    <Button 
+                    <Button
                       onClick={handleNextStep}
                       type="primary"
                       size="large"
@@ -2911,8 +2935,8 @@ export default function Influencers() {
                       Next
                     </Button>
                   ) : (
-                    <Button 
-                      type="primary" 
+                    <Button
+                      type="primary"
                       onClick={() => {
                         handleAddInfluencer();
                       }}
@@ -2922,12 +2946,12 @@ export default function Influencers() {
                         minWidth: '140px',
                         height: '48px',
                         borderRadius: '10px',
-                        background: influencerCreated 
-                          ? 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)' 
+                        background: influencerCreated
+                          ? 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)'
                           : 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
                         border: 'none',
-                        boxShadow: influencerCreated 
-                          ? '0 6px 16px rgba(24, 144, 255, 0.3)' 
+                        boxShadow: influencerCreated
+                          ? '0 6px 16px rgba(24, 144, 255, 0.3)'
                           : '0 6px 16px rgba(82, 196, 26, 0.3)',
                         fontSize: '16px',
                         fontWeight: '600',

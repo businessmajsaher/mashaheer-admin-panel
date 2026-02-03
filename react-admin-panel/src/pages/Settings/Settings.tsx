@@ -32,7 +32,6 @@ export default function Settings() {
           influencer_approval_hours: data.influencer_approval_hours || 12,
           payment_deadline_hours: data.payment_deadline_hours || 12,
           script_submission_base_hours: data.script_submission_base_hours || 8,
-          influencer_response_minutes: data.influencer_response_minutes || 30,
           auto_approval_hour: data.auto_approval_hour || 22,
           auto_approval_minute: data.auto_approval_minute || 30,
           appointment_end_hour: data.appointment_end_hour || 23,
@@ -84,7 +83,6 @@ export default function Settings() {
             influencer_approval_hours: 12,
             payment_deadline_hours: 12,
             script_submission_base_hours: 8,
-            influencer_response_minutes: 30,
             auto_approval_hour: 22,
             auto_approval_minute: 30,
             appointment_end_hour: 23,
@@ -123,9 +121,9 @@ export default function Settings() {
 
             <Col span={12}>
               <Form.Item
-                label="Payment Deadline"
+                label="Customer Approval and Payment Deadline"
                 name="payment_deadline_hours"
-                tooltip="Hours for customer to pay after influencer approval"
+                tooltip="Hours for customer to approve and pay after influencer approval"
                 rules={[
                   { required: true, message: 'Please enter hours' },
                   { type: 'number', min: 1, message: 'Must be at least 1 hour' }
@@ -159,26 +157,6 @@ export default function Settings() {
                   precision={1}
                   addonAfter="hours"
                   placeholder="8"
-                />
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item
-                label="Influencer Response Time"
-                name="influencer_response_minutes"
-                tooltip="Minutes for influencer to respond after script rejection (before AI takes over)"
-                rules={[
-                  { required: true, message: 'Please enter minutes' },
-                  { type: 'number', min: 1, message: 'Must be at least 1 minute' }
-                ]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={1}
-                  precision={0}
-                  addonAfter="minutes"
-                  placeholder="30"
                 />
               </Form.Item>
             </Col>
@@ -296,12 +274,12 @@ export default function Settings() {
                 tooltip="Minimum number of days between bookings for the same influencer"
                 rules={[
                   { required: true, message: 'Please enter cooldown days' },
-                  { type: 'number', min: 0, message: 'Must be 0 or greater' }
+                  { type: 'number', min: 2, message: 'Must be at least 2 days' }
                 ]}
               >
                 <InputNumber
                   style={{ width: '100%' }}
-                  min={0}
+                  min={2}
                   precision={0}
                   addonAfter="days"
                   placeholder="2"

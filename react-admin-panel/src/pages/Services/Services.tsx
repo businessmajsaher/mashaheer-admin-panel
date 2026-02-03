@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col } from 'antd';
-import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col, Drawer, Descriptions, Tag } from 'antd';
+import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import dayjs from 'dayjs';
-import { getCurrencyByCountry, getCurrencySymbol, formatPrice } from '@/utils/currencyUtils';
+import { getCurrencyByCountry, getCurrencySymbol, formatPrice, getCurrencyDecimals } from '@/utils/currencyUtils';
 
 // Currency options for dropdown
-const currencyOptions = [
+const allCurrencyOptions = [
   { value: 'USD', label: 'USD ($)' },
   { value: 'EUR', label: 'EUR (€)' },
   { value: 'GBP', label: 'GBP (£)' },
@@ -64,6 +64,10 @@ const currencyOptions = [
   { value: 'ISK', label: 'ISK (kr)' }
 ];
 
+// Phase 1: Only KWD is allowed
+// To enable all currencies in future phases, change this to: const currencyOptions = allCurrencyOptions;
+const currencyOptions = allCurrencyOptions.filter(option => option.value === 'KWD');
+
 const { TextArea } = Input;
 const { Option } = Select;
 
@@ -91,13 +95,17 @@ export default function Services() {
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   const [isFlashDeal, setIsFlashDeal] = useState(false);
   const [editIsFlashDeal, setEditIsFlashDeal] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
-  const [editSelectedCurrency, setEditSelectedCurrency] = useState<string>('USD');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('KWD');
+  const [editSelectedCurrency, setEditSelectedCurrency] = useState<string>('KWD');
   const [filters, setFilters] = useState({
     category_id: undefined,
     service_type: undefined,
     primary_influencer_id: undefined
   });
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [selectedServiceDetails, setSelectedServiceDetails] = useState<any>(null);
+  const [serviceBookings, setServiceBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
 
 
 
@@ -223,10 +231,10 @@ export default function Services() {
         platform_id: editingService.platform_ids || editingService.platform_id,
         price: editingService.price,
         offer_price: editingService.offer_price,
-        currency: editingService.currency || 'USD'
+        currency: editingService.currency || 'KWD'
       });
       setEditIsFlashDeal(editingService.is_flash_deal);
-      setEditSelectedCurrency(editingService.currency || 'USD');
+      setEditSelectedCurrency(editingService.currency || 'KWD');
       setSelectedServiceType(editingService.service_type);
     }
   }, [editingService, editModalOpen, editForm]);
@@ -467,6 +475,40 @@ export default function Services() {
     }
   };
 
+  // Fetch bookings for a service
+  const fetchServiceBookings = async (serviceId: string) => {
+    setBookingsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          created_at,
+          customer_id,
+          influencer_id,
+          status_id,
+          booking_statuses(name)
+        `)
+        .eq('service_id', serviceId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setServiceBookings(data || []);
+    } catch (err: any) {
+      console.error('Error fetching service bookings:', err);
+      message.error('Failed to fetch bookings');
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  // Handle view details
+  const handleViewDetails = async (record: any) => {
+    setSelectedServiceDetails(record);
+    setDetailDrawerVisible(true);
+    await fetchServiceBookings(record.id);
+  };
+
   const columns = [
     { 
       title: 'Thumbnail', 
@@ -514,7 +556,7 @@ export default function Services() {
       key: 'currency',
       render: (currency: string) => (
         <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
-          {currency || 'USD'}
+          {currency || 'KWD'}
         </span>
       )
     },
@@ -669,6 +711,9 @@ export default function Services() {
       key: 'actions',
       render: (_: any, record: any) => (
         <span>
+          <Button icon={<EyeOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => handleViewDetails(record)}>
+            View Details
+          </Button>
           <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
             setEditingService(record);
             setEditModalOpen(true);
@@ -742,7 +787,9 @@ export default function Services() {
         <div style={{ display: 'flex', gap: 8 }}>
           <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { 
             setModalOpen(true); 
-            form.resetFields(); 
+            form.resetFields();
+            form.setFieldsValue({ currency: 'KWD' });
+            setSelectedCurrency('KWD');
             setIsFlashDeal(false);
           }}>
             Add Service
@@ -966,7 +1013,8 @@ export default function Services() {
               >
                 <InputNumber 
                   min={0} 
-                  step={0.01} 
+                  step={0.001}
+                  precision={getCurrencyDecimals(selectedCurrency)}
                   style={{ width: '100%' }} 
                   disabled={!isFlashDeal}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -1336,7 +1384,7 @@ export default function Services() {
             platform_id: editingService.platform_ids || editingService.platform_id,
             price: editingService.price,
             offer_price: editingService.offer_price,
-            currency: editingService.currency || 'USD',
+            currency: editingService.currency || 'KWD',
             primary_influencer_earnings_percentage: editingService.primary_influencer_earnings_percentage || 50,
             invited_influencer_earnings_percentage: editingService.invited_influencer_earnings_percentage || 50
           } : {}}
@@ -1466,7 +1514,8 @@ export default function Services() {
               >
                 <InputNumber 
                   min={0} 
-                  step={0.01} 
+                  step={0.001}
+                  precision={getCurrencyDecimals(editSelectedCurrency)}
                   style={{ width: '100%' }} 
                   disabled={!editIsFlashDeal}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -1787,6 +1836,117 @@ export default function Services() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Service Details Drawer */}
+      <Drawer
+        title="Service Details"
+        placement="right"
+        width={600}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setSelectedServiceDetails(null);
+          setServiceBookings([]);
+        }}
+      >
+        {selectedServiceDetails && (
+          <div>
+            <Descriptions column={1} bordered>
+              <Descriptions.Item label="Title">
+                {selectedServiceDetails.title}
+              </Descriptions.Item>
+              <Descriptions.Item label="Description">
+                {selectedServiceDetails.description || 'No description'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Service Type">
+                <span style={{ 
+                  color: selectedServiceDetails.service_type === 'flash' ? '#ff4d4f' : selectedServiceDetails.service_type === 'dual' ? '#1890ff' : '#52c41a',
+                  fontWeight: 'bold'
+                }}>
+                  {selectedServiceDetails.service_type?.toUpperCase() || '-'}
+                </span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Category">
+                {selectedServiceDetails.service_categories?.name || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Price">
+                {selectedServiceDetails.price ? `${getCurrencySymbol(selectedServiceDetails.currency || 'KWD')} ${selectedServiceDetails.price}` : '-'}
+              </Descriptions.Item>
+              {selectedServiceDetails.is_flash_deal && (
+                <Descriptions.Item label="Flash Deal Offer Price">
+                  {selectedServiceDetails.offer_price ? `${getCurrencySymbol(selectedServiceDetails.currency || 'KWD')} ${selectedServiceDetails.offer_price}` : '-'}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Minimum Duration">
+                {selectedServiceDetails.min_duration_days} days
+              </Descriptions.Item>
+              <Descriptions.Item label="Location Required">
+                {selectedServiceDetails.location_required ? 'Yes' : 'No'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Flash Deal">
+                {selectedServiceDetails.is_flash_deal ? 'Yes' : 'No'}
+              </Descriptions.Item>
+              {selectedServiceDetails.flash_from && (
+                <Descriptions.Item label="Flash Deal From">
+                  {dayjs(selectedServiceDetails.flash_from).format('YYYY-MM-DD HH:mm')}
+                </Descriptions.Item>
+              )}
+              {selectedServiceDetails.flash_to && (
+                <Descriptions.Item label="Flash Deal To">
+                  {dayjs(selectedServiceDetails.flash_to).format('YYYY-MM-DD HH:mm')}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Service Created At">
+                {dayjs(selectedServiceDetails.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider>Bookings</Divider>
+            
+            {bookingsLoading ? (
+              <Spin />
+            ) : serviceBookings.length > 0 ? (
+              <div>
+                <Typography.Title level={5}>Booking Created At</Typography.Title>
+                <Table
+                  dataSource={serviceBookings}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: 'Booking ID',
+                      dataIndex: 'id',
+                      key: 'id',
+                      render: (id: string) => <Text code>{id.substring(0, 8)}...</Text>
+                    },
+                    {
+                      title: 'Created At',
+                      dataIndex: 'created_at',
+                      key: 'created_at',
+                      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+                    },
+                    {
+                      title: 'Status',
+                      key: 'status',
+                      render: (record: any) => {
+                        const statusName = record.booking_statuses?.name || '-';
+                        return (
+                          <Tag color={statusName === 'completed' ? 'green' : statusName === 'cancelled' ? 'red' : 'blue'}>
+                            {statusName}
+                          </Tag>
+                        );
+                      }
+                    }
+                  ]}
+                />
+              </div>
+            ) : (
+              <Typography.Text type="secondary">No bookings found for this service</Typography.Text>
+            )}
+          </div>
+        )}
+      </Drawer>
     </Card>
   );
 } 

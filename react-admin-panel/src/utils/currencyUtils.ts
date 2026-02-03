@@ -163,6 +163,37 @@ export const getCurrencySymbol = (currencyCode: string): string => {
 };
 
 /**
+ * Get decimal places for a currency
+ * @param currencyCode - Currency code (e.g., 'KWD', 'USD', 'EUR')
+ * @returns Number of decimal places (KWD: 3, USD/EUR: 2, default: 2)
+ */
+export const getCurrencyDecimals = (currencyCode: string): number => {
+  const decimalMap: { [key: string]: number } = {
+    'KWD': 3,  // Kuwaiti Dinar uses 3 decimal places
+    'BHD': 3,  // Bahraini Dinar uses 3 decimal places
+    'OMR': 3,  // Omani Rial uses 3 decimal places
+    'JOD': 3,  // Jordanian Dinar uses 3 decimal places
+    'LYD': 3,  // Libyan Dinar uses 3 decimal places
+    'TND': 3,  // Tunisian Dinar uses 3 decimal places
+    'IQD': 3,  // Iraqi Dinar uses 3 decimal places
+  };
+  
+  return decimalMap[currencyCode] || 2; // Default to 2 decimals for most currencies
+};
+
+/**
+ * Round amount based on currency decimal places
+ * @param amount - Amount to round
+ * @param currencyCode - Currency code (e.g., 'KWD', 'USD')
+ * @returns Rounded amount
+ */
+export const roundByCurrency = (amount: number, currencyCode: string = 'KWD'): number => {
+  const decimals = getCurrencyDecimals(currencyCode);
+  const multiplier = Math.pow(10, decimals);
+  return Math.round(amount * multiplier) / multiplier;
+};
+
+/**
  * Format price with currency symbol
  * @param amount - Amount to format
  * @param currencyCode - Currency code (defaults to KWD)

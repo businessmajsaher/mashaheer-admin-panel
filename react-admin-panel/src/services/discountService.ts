@@ -1,8 +1,10 @@
 import { supabase } from './supabaseClient';
+import { roundByCurrency } from '@/utils/currencyUtils';
 
 export interface CouponValidationResult {
   isValid: boolean;
   discountAmount: number;
+  payableAmount?: number; // Final payable amount after discount (rounded)
   coupon?: {
     id: string;
     code: string;
@@ -32,12 +34,18 @@ export interface CouponUsageData {
 
 /**
  * Validate a coupon code and calculate discount
+ * @param couponCode - Coupon code to validate
+ * @param orderItems - Order items
+ * @param userId - User ID (optional)
+ * @param orderTotal - Order total amount (optional, will be calculated if not provided)
+ * @param currencyCode - Currency code for rounding (default: 'KWD')
  */
 export const validateCoupon = async (
   couponCode: string,
   orderItems: OrderItem[],
   userId?: string,
-  orderTotal: number = 0
+  orderTotal: number = 0,
+  currencyCode: string = 'KWD'
 ): Promise<CouponValidationResult> => {
   try {
     // Calculate order total if not provided
@@ -130,25 +138,35 @@ export const validateCoupon = async (
       };
     }
 
-    // Calculate discount amount
-    let discountAmount = 0;
-    if (coupon.discount_type === 'percentage') {
-      discountAmount = (orderTotal * coupon.discount_value) / 100;
-      
-      // Apply maximum discount limit if set
-      if (coupon.maximum_discount_amount && discountAmount > coupon.maximum_discount_amount) {
-        discountAmount = coupon.maximum_discount_amount;
+    // Calculate discount amount (only percentage supported)
+    // Formula: Payable = Amount × (1 - discount_percentage / 100)
+    // IMPORTANT: Do NOT round during calculation, only round the final result
+    // Example: 21.000 × (1 - 0.21356) = 16.51524 (no rounding yet)
+    let payableAmount = orderTotal * (1 - coupon.discount_value / 100);
+    
+    // Apply maximum discount limit if set
+    if (coupon.maximum_discount_amount) {
+      const discountAmount = orderTotal - payableAmount;
+      if (discountAmount > coupon.maximum_discount_amount) {
+        payableAmount = orderTotal - coupon.maximum_discount_amount;
       }
-    } else {
-      discountAmount = coupon.discount_value;
     }
 
-    // Ensure discount doesn't exceed order total
-    discountAmount = Math.min(discountAmount, orderTotal);
+    // Ensure payable amount doesn't go below 0
+    payableAmount = Math.max(0, payableAmount);
+    
+    // Round ONLY the final payable amount based on currency decimal places
+    // KWD: 3 decimals (16.51524 → 16.515)
+    // USD: 2 decimals (16.51524 → 16.52)
+    const finalPayableAmount = roundByCurrency(payableAmount, currencyCode);
+    
+    // Calculate final discount amount from rounded payable
+    const roundedDiscountAmount = orderTotal - finalPayableAmount;
 
     return {
       isValid: true,
-      discountAmount,
+      discountAmount: roundedDiscountAmount,
+      payableAmount: finalPayableAmount,
       coupon: {
         id: coupon.id,
         code: coupon.code,
@@ -182,7 +200,7 @@ const validateUserRestrictions = async (coupon: any, userId: string): Promise<bo
     return coupon.restricted_user_ids?.includes(userId) || false;
   }
 
-  if (coupon.user_restrictions === 'new_users' || coupon.user_restrictions === 'existing_users') {
+  if (coupon.user_restrictions === 'new_users') {
     // Get user creation date
     const { data: user, error } = await supabase
       .from('profiles')
@@ -196,11 +214,7 @@ const validateUserRestrictions = async (coupon: any, userId: string): Promise<bo
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    if (coupon.user_restrictions === 'new_users') {
-      return userCreatedAt > thirtyDaysAgo;
-    } else {
-      return userCreatedAt <= thirtyDaysAgo;
-    }
+    return userCreatedAt > thirtyDaysAgo;
   }
 
   return true;

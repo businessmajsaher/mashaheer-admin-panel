@@ -268,8 +268,38 @@ export default function App() {
                 {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 
-                {/* Catch-all route for SPA routing */}
-                <Route path="*" element={<Navigate to="/login" replace />} />
+                {/* Catch-all route - show 404 page instead of redirecting */}
+                <Route path="*" element={
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100vh',
+                    textAlign: 'center',
+                    padding: '20px'
+                  }}>
+                    <h1 style={{ fontSize: '48px', marginBottom: '16px' }}>404</h1>
+                    <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>Page Not Found</h2>
+                    <p style={{ marginBottom: '24px', color: '#666' }}>
+                      The page you're looking for doesn't exist.
+                    </p>
+                    <button
+                      onClick={() => window.location.href = '/login'}
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        cursor: 'pointer',
+                        backgroundColor: '#1890ff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      Go to Login
+                    </button>
+                  </div>
+                } />
               </Routes>
             </Suspense>
           </Router>

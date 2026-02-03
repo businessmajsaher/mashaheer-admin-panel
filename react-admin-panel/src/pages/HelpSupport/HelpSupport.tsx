@@ -137,14 +137,14 @@ export default function HelpSupport() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={2} style={{ color: '#000' }}>مركز المساعدة والدعم</Title>
+      <Title level={2} style={{ color: '#000' }}>Help & Support Center</Title>
       <Paragraph style={{ color: '#333' }}>
-        إدارة وثائق المساعدة والأسئلة الشائعة وموارد الدعم لمساعدة المستخدمين في العثور على الإجابات بسرعة.
+        Manage help documentation, frequently asked questions, and support resources to help users find answers quickly.
       </Paragraph>
 
       <Alert
-        message="إدارة المساعدة والدعم"
-        description="تعديل أقسام المساعدة وعناصر الأسئلة الشائعة. يمكن للمستخدمين البحث والتصفية حسب الفئة. يتم حفظ التغييرات في قاعدة البيانات."
+        message="Help & Support Management"
+        description="Edit help sections and FAQ items. Users can search and filter by category. Changes are saved to the database."
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
@@ -155,7 +155,7 @@ export default function HelpSupport() {
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} md={12}>
             <Search
-              placeholder="البحث في مقالات المساعدة والأسئلة الشائعة..."
+              placeholder="Search help articles and FAQs..."
               allowClear
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -184,7 +184,7 @@ export default function HelpSupport() {
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={16}>
           {/* Help Sections */}
-          <Card title="مقالات المساعدة" style={{ marginBottom: 24 }}>
+          <Card title="Help Articles" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               {filteredHelpSections.map((section) => (
                 <Card
@@ -205,7 +205,7 @@ export default function HelpSupport() {
                             onClick={() => handleEdit(section)}
                             style={{ backgroundColor: '#000', borderColor: '#000' }}
                           >
-                            تعديل
+                            Edit
                           </Button>
                         )}
                       </Space>
@@ -216,7 +216,7 @@ export default function HelpSupport() {
                     <div>
                       <div style={{ marginBottom: 16 }}>
                         <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#000' }}>
-                          محتوى HTML:
+                          HTML Content:
                         </label>
                         <textarea
                           value={editContent}
@@ -231,7 +231,7 @@ export default function HelpSupport() {
                             fontSize: '14px',
                             resize: 'vertical'
                           }}
-                          placeholder="أدخل محتوى HTML هنا..."
+                          placeholder="Enter HTML content here..."
                         />
                       </div>
                       <Space>
@@ -242,14 +242,14 @@ export default function HelpSupport() {
                           onClick={handleSave}
                           style={{ backgroundColor: '#000', borderColor: '#000' }}
                         >
-                          حفظ التغييرات
+                          Save Changes
                         </Button>
                         <Button
                           icon={<UndoOutlined />}
                           onClick={handleCancel}
                           style={{ color: '#000', borderColor: '#000' }}
                         >
-                          إلغاء
+                          Cancel
                         </Button>
                       </Space>
                     </div>
@@ -268,7 +268,7 @@ export default function HelpSupport() {
           </Card>
 
           {/* FAQ Section */}
-          <Card title="الأسئلة الشائعة">
+          <Card title="Frequently Asked Questions">
             <Collapse accordion>
               {filteredFAQItems.map((item) => (
                 <Panel
@@ -299,10 +299,10 @@ export default function HelpSupport() {
                         icon="👍"
                         style={{ color: '#000', borderColor: '#000' }}
                       >
-                        مفيد ({item.helpful_count})
+                        Helpful ({item.helpful_count})
                       </Button>
                       <span style={{ fontSize: '12px', color: '#666' }}>
-                        👁️ {item.view_count} مشاهدة
+                        👁️ {item.view_count} views
                       </span>
                     </div>
                   </div>
@@ -314,32 +314,32 @@ export default function HelpSupport() {
 
         <Col xs={24} lg={8}>
           {/* Quick Links */}
-          <Card title="روابط سريعة" style={{ marginBottom: 24 }}>
+          <Card title="Quick Links" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
               <Button type="link" icon={<BookOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
-                دليل المستخدم والدروس التعليمية
+                User Guide & Tutorials
               </Button>
               <Button type="link" icon={<VideoCameraOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
-                دروس الفيديو
+                Video Tutorials
               </Button>
               <Button type="link" icon={<FileTextOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
-                وثائق API
+                API Documentation
               </Button>
               <Button type="link" icon={<QuestionCircleOutlined />} block style={{ textAlign: 'left', color: '#000' }}>
-                اتصل بالدعم
+                Contact Support
               </Button>
             </Space>
           </Card>
 
           {/* Statistics */}
-          <Card title="إحصائيات مركز المساعدة">
+          <Card title="Help Center Statistics">
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>
                     {helpSections.length}
                   </div>
-                  <Text type="secondary">مقالات المساعدة</Text>
+                  <Text type="secondary">Help Articles</Text>
                 </div>
               </Col>
               <Col span={12}>
@@ -347,7 +347,7 @@ export default function HelpSupport() {
                   <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>
                     {faqItems.length}
                   </div>
-                  <Text type="secondary">عناصر الأسئلة الشائعة</Text>
+                  <Text type="secondary">FAQ Items</Text>
                 </div>
               </Col>
             </Row>

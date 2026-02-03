@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resend } from 'https://esm.sh/resend@2.0.0';
+import * as jose from 'https://deno.land/x/jose@v4.14.4/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +16,7 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || 're_XUZU3pCV_JV94kXsEuD
 interface NotificationRequest {
   user_id: string;
   booking_id: string;
-  notification_type: 'status_change' | 'auto_reject' | 'auto_cancel' | 'auto_refund' | 'auto_approve' | 'script_rejected' | 'payment_required' | 'script_approved';
+  notification_type: 'status_change' | 'auto_reject' | 'auto_cancel' | 'auto_refund' | 'auto_approve' | 'script_rejected' | 'payment_required' | 'script_approved' | 'payment_success';
   status_name: string;
   message: string;
   booking_details?: {
@@ -24,6 +25,40 @@ interface NotificationRequest {
     influencer_name?: string;
     customer_name?: string;
   };
+}
+
+// Function to get access token from Service Account JSON
+async function getAccessToken(serviceAccountJson: any) {
+  try {
+    const alg = 'RS256';
+    const privateKey = await jose.importPKCS8(serviceAccountJson.private_key, alg);
+
+    const jwt = await new jose.SignJWT({
+      iss: serviceAccountJson.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      aud: 'https://oauth2.googleapis.com/token'
+    })
+      .setProtectedHeader({ alg })
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(privateKey);
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+    params.append('assertion', jwt);
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    const data = await res.json();
+    return data.access_token;
+  } catch (err) {
+    console.error('Error generating access token:', err);
+    throw err;
+  }
 }
 
 serve(async (req: Request) => {
@@ -111,17 +146,69 @@ serve(async (req: Request) => {
       }
     }
 
-    // 2. Send FCM Push Notification
+    // 2. Send FCM Push Notification (V1 API)
     if (profile.fcm_token) {
       try {
-        // Note: FCM requires Firebase Admin SDK or HTTP API
-        // For now, we'll store the notification and the mobile app can fetch it
-        // Or you can integrate Firebase Admin SDK here
-        console.log(`📱 FCM token found for user ${user_id}`);
-        results.fcmSent = true; // Mark as sent (actual FCM send would happen here)
+        const serviceAccountStr = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON');
+
+        if (serviceAccountStr) {
+          const serviceAccount = JSON.parse(serviceAccountStr);
+          const projectId = serviceAccount.project_id;
+          const accessToken = await getAccessToken(serviceAccount);
+
+          if (!accessToken) throw new Error('Failed to generate access token');
+
+          const fcmTitle = getFCMTitle(notification_type, status_name);
+          const fcmBody = message || `Your booking status has been updated to ${status_name}`;
+
+          const fcmResponse = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+              message: {
+                token: profile.fcm_token,
+                notification: {
+                  title: fcmTitle,
+                  body: fcmBody
+                },
+                data: {
+                  type: notification_type,
+                  booking_id: booking_id,
+                  status_name: status_name,
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK'
+                },
+                android: {
+                  priority: 'high'
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: 'default'
+                    }
+                  }
+                }
+              }
+            })
+          });
+
+          if (fcmResponse.ok) {
+            results.fcmSent = true;
+            console.log(`✅ FCM notification sent to user ${user_id}`);
+          } else {
+            const fcmError = await fcmResponse.text();
+            throw new Error(`FCM V1 API error: ${fcmError}`);
+          }
+        } else {
+          console.log(`⚠️ FIREBASE_SERVICE_ACCOUNT_JSON not set. Skipping FCM.`);
+          results.errors.push('FCM configuration missing');
+        }
       } catch (error: any) {
         results.errors.push(`FCM error: ${error.message}`);
         console.error('FCM error:', error);
+        // Don't fail notification if FCM fails
       }
     }
 
@@ -182,9 +269,25 @@ function getEmailSubject(type: string, statusName: string): string {
     'auto_approve': 'Script Auto-Approved',
     'script_rejected': 'Script Rejected - Revision Required',
     'payment_required': 'Payment Required for Booking',
+    'payment_success': 'Payment Confirmed - Booking Updated',
     'script_approved': 'Script Approved - Ready to Publish'
   };
   return subjects[type] || 'Booking Update';
+}
+
+function getFCMTitle(type: string, statusName: string): string {
+  const titles: Record<string, string> = {
+    'status_change': `Booking: ${statusName}`,
+    'auto_reject': 'Booking Auto-Rejected',
+    'auto_cancel': 'Booking Cancelled',
+    'auto_refund': 'Refund Initiated',
+    'auto_approve': 'Script Approved',
+    'script_rejected': 'Script Rejected',
+    'payment_required': 'Payment Required',
+    'payment_success': 'Payment Confirmed ✓',
+    'script_approved': 'Script Approved'
+  };
+  return titles[type] || 'Booking Update';
 }
 
 function generateEmailTemplate(
@@ -195,7 +298,7 @@ function generateEmailTemplate(
   bookingDetails?: any
 ): string {
   const serviceTitle = bookingDetails?.service_title || 'Your Service';
-  const scheduledTime = bookingDetails?.scheduled_time 
+  const scheduledTime = bookingDetails?.scheduled_time
     ? new Date(bookingDetails.scheduled_time).toLocaleString()
     : 'TBD';
 

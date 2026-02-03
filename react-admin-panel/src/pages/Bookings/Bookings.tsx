@@ -498,7 +498,7 @@ const Bookings: React.FC = () => {
                     </span>
                   ) : 'Not set'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Payment Deadline" span={2}>
+                <Descriptions.Item label="Customer Approval and Payment Deadline" span={2}>
                   {selectedBooking.payment_deadline ? (
                     <span style={{ 
                       color: dayjs(selectedBooking.payment_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',

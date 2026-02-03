@@ -1,26 +1,6 @@
+# SPA routing - redirect all routes to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[[redirects]]
-  from = "/password-reset-callback"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/routing-test"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/login"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/signup"
-  to = "/index.html"
-  status = 200
-
 

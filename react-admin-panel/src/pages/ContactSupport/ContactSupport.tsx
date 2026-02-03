@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Typography, Space, Alert, Spin, message, Form, Input, Select, Row, Col, Divider } from 'antd';
-import { EditOutlined, SaveOutlined, UndoOutlined, PhoneOutlined, MailOutlined, MessageOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, SaveOutlined, UndoOutlined, PhoneOutlined, MailOutlined, MessageOutlined, ClockCircleOutlined, UserOutlined } from '@ant-design/icons';
 import { contactSupportService, supportTicketsService, ContactSupportInfo } from '@/services/legalSupportService';
 
 const { Title, Paragraph, Text } = Typography;
@@ -106,14 +106,14 @@ export default function ContactSupport() {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={2} style={{ color: '#000' }}>إدارة دعم العملاء</Title>
+      <Title level={2} style={{ color: '#000' }}>Customer Support Management</Title>
       <Paragraph style={{ color: '#333' }}>
-        إدارة معلومات دعم العملاء وتوفير طرق متعددة للمستخدمين للوصول إلى فريق الدعم الخاص بك.
+        Manage customer support information and provide multiple ways for users to access your support team.
       </Paragraph>
 
       <Alert
-        message="إدارة دعم العملاء"
-        description="تعديل معلومات الاتصال وساعات الدعم ومحتوى المساعدة. يتم حفظ التغييرات في قاعدة البيانات."
+        message="Customer Support Management"
+        description="Edit contact information, support hours, and help content. Changes are saved to the database."
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
@@ -130,7 +130,7 @@ export default function ContactSupport() {
                     <span>{info.title}</span>
                     <Space>
                       <small style={{ color: '#666' }}>
-                        آخر تحديث: {new Date(info.last_updated).toLocaleDateString()}
+                        Last updated: {new Date(info.last_updated).toLocaleDateString()}
                       </small>
                       {editingId !== info.id && (
                         <Button
@@ -140,7 +140,7 @@ export default function ContactSupport() {
                           onClick={() => handleEdit(info)}
                           style={{ backgroundColor: '#000', borderColor: '#000' }}
                         >
-                          تعديل
+                          Edit
                         </Button>
                       )}
                     </Space>
@@ -152,7 +152,7 @@ export default function ContactSupport() {
                   <div>
                     <div style={{ marginBottom: 16 }}>
                         <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#000' }}>
-                          محتوى HTML:
+                          HTML Content:
                         </label>
                       <textarea
                         value={editContent}
@@ -167,7 +167,7 @@ export default function ContactSupport() {
                           fontSize: '14px',
                           resize: 'vertical'
                         }}
-                        placeholder="أدخل محتوى HTML هنا..."
+                        placeholder="Enter HTML content here..."
                       />
                     </div>
                     <Space>
@@ -178,14 +178,14 @@ export default function ContactSupport() {
                         onClick={handleSave}
                         style={{ backgroundColor: '#000', borderColor: '#000' }}
                       >
-                        حفظ التغييرات
+                        Save Changes
                       </Button>
                       <Button
                         icon={<UndoOutlined />}
                         onClick={handleCancel}
                         style={{ color: '#000', borderColor: '#000' }}
                       >
-                        إلغاء
+                        Cancel
                       </Button>
                     </Space>
                   </div>
@@ -204,7 +204,7 @@ export default function ContactSupport() {
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="معاينة نموذج الاتصال" style={{ position: 'sticky', top: 24 }}>
+          <Card title="Contact Form Preview" style={{ position: 'sticky', top: 24 }}>
             <Form
               form={form}
               layout="vertical"
@@ -212,18 +212,18 @@ export default function ContactSupport() {
             >
               <Form.Item
                 name="name"
-                label="الاسم الكامل"
-                rules={[{ required: true, message: 'يرجى إدخال اسمك' }]}
+                label="Full Name"
+                rules={[{ required: true, message: 'Please enter your name' }]}
               >
-                <Input prefix={<UserOutlined />} placeholder="اسمك الكامل" />
+                <Input prefix={<UserOutlined />} placeholder="Your full name" />
               </Form.Item>
 
               <Form.Item
                 name="email"
-                label="عنوان البريد الإلكتروني"
+                label="Email Address"
                 rules={[
-                  { required: true, message: 'يرجى إدخال بريدك الإلكتروني' },
-                  { type: 'email', message: 'يرجى إدخال بريد إلكتروني صحيح' }
+                  { required: true, message: 'Please enter your email' },
+                  { type: 'email', message: 'Please enter a valid email' }
                 ]}
               >
                 <Input prefix={<MailOutlined />} placeholder="your.email@example.com" />
@@ -231,54 +231,54 @@ export default function ContactSupport() {
 
               <Form.Item
                 name="subject"
-                label="الموضوع"
-                rules={[{ required: true, message: 'يرجى إدخال موضوع' }]}
+                label="Subject"
+                rules={[{ required: true, message: 'Please enter a subject' }]}
               >
-                <Input placeholder="ملخص موجز لاستفسارك" />
+                <Input placeholder="Brief summary of your inquiry" />
               </Form.Item>
 
               <Form.Item
                 name="category"
-                label="الفئة"
-                rules={[{ required: true, message: 'يرجى اختيار فئة' }]}
+                label="Category"
+                rules={[{ required: true, message: 'Please select a category' }]}
               >
-                <Select placeholder="اختر فئة">
-                  <Option value="technical">مشاكل تقنية</Option>
-                  <Option value="account">إدارة الحساب</Option>
-                  <Option value="payment">الدفع والفواتير</Option>
-                  <Option value="campaign">دعم الحملات</Option>
-                  <Option value="feature">طلبات الميزات</Option>
-                  <Option value="general">استفسار عام</Option>
+                <Select placeholder="Select category">
+                  <Option value="technical">Technical Issues</Option>
+                  <Option value="account">Account Management</Option>
+                  <Option value="payment">Payment & Billing</Option>
+                  <Option value="campaign">Campaign Support</Option>
+                  <Option value="feature">Feature Requests</Option>
+                  <Option value="general">General Inquiry</Option>
                 </Select>
               </Form.Item>
 
               <Form.Item
                 name="priority"
-                label="الأولوية"
-                rules={[{ required: true, message: 'يرجى اختيار الأولوية' }]}
+                label="Priority"
+                rules={[{ required: true, message: 'Please select priority' }]}
               >
-                <Select placeholder="اختر مستوى الأولوية">
-                  <Option value="low">منخفض - أسئلة عامة</Option>
-                  <Option value="medium">متوسط - مشاكل الحساب</Option>
-                  <Option value="high">عالي - قضايا عاجلة</Option>
-                  <Option value="critical">حرج - مشاكل المنصة</Option>
+                <Select placeholder="Select priority level">
+                  <Option value="low">Low - General Questions</Option>
+                  <Option value="medium">Medium - Account Issues</Option>
+                  <Option value="high">High - Urgent Issues</Option>
+                  <Option value="critical">Critical - Platform Problems</Option>
                 </Select>
               </Form.Item>
 
               <Form.Item
                 name="message"
-                label="الرسالة"
-                rules={[{ required: true, message: 'يرجى إدخال رسالتك' }]}
+                label="Message"
+                rules={[{ required: true, message: 'Please enter your message' }]}
               >
                 <TextArea
                   rows={4}
-                  placeholder="يرجى وصف مشكلتك أو سؤالك بالتفصيل..."
+                  placeholder="Please describe your problem or question in detail..."
                 />
               </Form.Item>
 
               <Form.Item>
                 <Button type="primary" htmlType="submit" block icon={<MessageOutlined />} style={{ backgroundColor: '#000', borderColor: '#000' }}>
-                  إرسال الرسالة
+                  Send Message
                 </Button>
               </Form.Item>
             </Form>
@@ -287,7 +287,7 @@ export default function ContactSupport() {
 
             <div style={{ textAlign: 'center' }}>
               <Text type="secondary">
-                <ClockCircleOutlined /> رد خلال 24 ساعة
+                <ClockCircleOutlined /> Response within 24 hours
               </Text>
             </div>
           </Card>

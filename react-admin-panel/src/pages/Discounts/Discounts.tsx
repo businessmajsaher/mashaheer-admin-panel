@@ -56,8 +56,8 @@ interface DiscountCoupon {
   code: string;
   name: string;
   description?: string;
-  discount_type: 'percentage' | 'fixed_amount';
-  discount_value: number;
+  discount_type: 'percentage'; // Only percentage discounts are supported
+  discount_value: number; // Discount percentage with 3 decimal precision (e.g., 21.356)
   minimum_order_amount: number;
   maximum_discount_amount?: number;
   usage_limit?: number;
@@ -68,7 +68,7 @@ interface DiscountCoupon {
   is_active: boolean;
   is_public: boolean;
   applicable_to: 'all' | 'specific_products' | 'categories';
-  user_restrictions: 'all' | 'new_users' | 'existing_users' | 'specific_users';
+  user_restrictions: 'all' | 'new_users' | 'specific_users';
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -91,6 +91,11 @@ const Discounts: React.FC = () => {
     totalUsage: 0,
     totalSavings: 0
   });
+  const [users, setUsers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [applicableTo, setApplicableTo] = useState<string>('all');
+  const [userRestrictions, setUserRestrictions] = useState<string>('all');
 
   // Fetch coupons
   const fetchCoupons = async () => {
@@ -118,11 +123,9 @@ const Discounts: React.FC = () => {
     const expired = coupons.filter(c => c.valid_until && new Date(c.valid_until) <= now).length;
     const totalUsage = coupons.reduce((sum, c) => sum + c.usage_count, 0);
     const totalSavings = coupons.reduce((sum, c) => {
-      if (c.discount_type === 'percentage') {
-        return sum + (c.usage_count * (c.discount_value / 100) * 50); // Assuming average order value
-      } else {
-        return sum + (c.usage_count * c.discount_value);
-      }
+      // Only percentage discounts are supported
+      // Assuming average order value of 50 for calculation
+      return sum + (c.usage_count * (c.discount_value / 100) * 50);
     }, 0);
 
     setStats({
@@ -136,13 +139,63 @@ const Discounts: React.FC = () => {
 
   useEffect(() => {
     fetchCoupons();
+    fetchUsers();
+    fetchProducts();
+    fetchCategories();
   }, []);
+
+  // Fetch users for specific users selection
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .order('name');
+      
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // Fetch products for specific products selection
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, title')
+        .order('title');
+      
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error: any) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  // Fetch categories for categories selection
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('service_categories')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   // Handle create/edit coupon
   const handleSaveCoupon = async (values: any) => {
     try {
       const couponData = {
         ...values,
+        discount_type: 'percentage', // Always set to percentage
+        discount_value: values.discount_value, // Already has 3 decimal precision from InputNumber
         valid_from: values.valid_from?.toISOString(),
         valid_until: values.valid_until?.toISOString(),
         product_ids: values.product_ids || [],
@@ -169,6 +222,8 @@ const Discounts: React.FC = () => {
 
       setIsModalVisible(false);
       setEditingCoupon(null);
+      setApplicableTo('all');
+      setUserRestrictions('all');
       form.resetFields();
       fetchCoupons();
     } catch (error: any) {
@@ -291,10 +346,7 @@ const Discounts: React.FC = () => {
       render: (record: DiscountCoupon) => (
         <div>
           <div>
-            {record.discount_type === 'percentage' 
-              ? `${record.discount_value}%` 
-              : `$${record.discount_value}`
-            }
+            {Number(record.discount_value).toFixed(3)}%
           </div>
           {record.minimum_order_amount > 0 && (
             <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -358,10 +410,16 @@ const Discounts: React.FC = () => {
               icon={<EditOutlined />} 
               onClick={() => {
                 setEditingCoupon(record);
+                setApplicableTo(record.applicable_to || 'all');
+                setUserRestrictions(record.user_restrictions || 'all');
                 form.setFieldsValue({
                   ...record,
+                  discount_type: 'percentage', // Always set to percentage
                   valid_from: dayjs(record.valid_from),
-                  valid_until: record.valid_until ? dayjs(record.valid_until) : null
+                  valid_until: record.valid_until ? dayjs(record.valid_until) : null,
+                  product_ids: record.product_ids || [],
+                  category_ids: record.category_ids || [],
+                  restricted_user_ids: record.restricted_user_ids || []
                 });
                 setIsModalVisible(true);
               }}
@@ -468,7 +526,12 @@ const Discounts: React.FC = () => {
             <Button icon={<ExportOutlined />}>
               Export
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+              setIsModalVisible(true);
+              setApplicableTo('all');
+              setUserRestrictions('all');
+              form.resetFields();
+            }}>
               Create Coupon
             </Button>
           </Space>
@@ -495,6 +558,8 @@ const Discounts: React.FC = () => {
         onCancel={() => {
           setIsModalVisible(false);
           setEditingCoupon(null);
+          setApplicableTo('all');
+          setUserRestrictions('all');
           form.resetFields();
         }}
         footer={null}
@@ -534,32 +599,26 @@ const Discounts: React.FC = () => {
           </Form.Item>
 
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="discount_type"
-                label="Discount Type"
-                rules={[{ required: true, message: 'Please select discount type' }]}
-              >
-                <Select>
-                  <Option value="percentage">Percentage</Option>
-                  <Option value="fixed_amount">Fixed Amount</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item
                 name="discount_value"
-                label="Discount Value"
-                rules={[{ required: true, message: 'Please enter discount value' }]}
+                label="Discount Percentage"
+                rules={[
+                  { required: true, message: 'Please enter discount percentage' },
+                  { type: 'number', min: 0, max: 100, message: 'Discount must be between 0 and 100%' }
+                ]}
               >
                 <InputNumber
                   min={0}
+                  max={100}
+                  precision={3}
                   style={{ width: '100%' }}
-                  placeholder="10"
+                  placeholder="21.356"
+                  addonAfter="%"
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item
                 name="minimum_order_amount"
                 label="Minimum Order Amount"
@@ -572,6 +631,11 @@ const Discounts: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+          
+          {/* Hidden field to always set discount_type to percentage */}
+          <Form.Item name="discount_type" hidden initialValue="percentage">
+            <Input type="hidden" />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={8}>
@@ -640,7 +704,19 @@ const Discounts: React.FC = () => {
                 label="Applicable To"
                 rules={[{ required: true, message: 'Please select applicable scope' }]}
               >
-                <Select>
+                <Select
+                  value={applicableTo}
+                  onChange={(value) => {
+                    setApplicableTo(value);
+                    if (value === 'all') {
+                      form.setFieldsValue({ product_ids: [], category_ids: [] });
+                    } else if (value === 'specific_products') {
+                      form.setFieldsValue({ category_ids: [] });
+                    } else if (value === 'categories') {
+                      form.setFieldsValue({ product_ids: [] });
+                    }
+                  }}
+                >
                   <Option value="all">All Products</Option>
                   <Option value="specific_products">Specific Products</Option>
                   <Option value="categories">Categories</Option>
@@ -653,15 +729,152 @@ const Discounts: React.FC = () => {
                 label="User Restrictions"
                 rules={[{ required: true, message: 'Please select user restrictions' }]}
               >
-                <Select>
+                <Select
+                  value={userRestrictions}
+                  onChange={(value) => {
+                    setUserRestrictions(value);
+                    if (value !== 'specific_users') {
+                      form.setFieldsValue({ restricted_user_ids: [] });
+                    }
+                  }}
+                >
                   <Option value="all">All Users</Option>
                   <Option value="new_users">New Users Only</Option>
-                  <Option value="existing_users">Existing Users Only</Option>
                   <Option value="specific_users">Specific Users</Option>
                 </Select>
               </Form.Item>
             </Col>
           </Row>
+
+          {/* Show user selection when specific_users is selected */}
+          {userRestrictions === 'specific_users' && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item
+                  name="restricted_user_ids"
+                  label="Select Users"
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (getFieldValue('user_restrictions') === 'specific_users') {
+                          if (!value || value.length === 0) {
+                            return Promise.reject(new Error('Please select at least one user'));
+                          }
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="Select users"
+                    showSearch
+                    filterOption={(input, option) => {
+                      const user = users.find(u => u.id === option?.value);
+                      if (!user) return false;
+                      const name = user.name?.toLowerCase() || '';
+                      const email = user.email?.toLowerCase() || '';
+                      return name.includes(input.toLowerCase()) || email.includes(input.toLowerCase());
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    {users.map(user => (
+                      <Option key={user.id} value={user.id}>
+                        {user.name} ({user.email})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
+          {/* Show product selection when specific_products is selected */}
+          {applicableTo === 'specific_products' && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item
+                  name="product_ids"
+                  label="Select Products"
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (getFieldValue('applicable_to') === 'specific_products') {
+                          if (!value || value.length === 0) {
+                            return Promise.reject(new Error('Please select at least one product'));
+                          }
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="Select products"
+                    showSearch
+                    filterOption={(input, option) => {
+                      const product = products.find(p => p.id === option?.value);
+                      if (!product) return false;
+                      const title = product.title?.toLowerCase() || '';
+                      return title.includes(input.toLowerCase());
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    {products.map(product => (
+                      <Option key={product.id} value={product.id}>
+                        {product.title}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
+          {/* Show category selection when categories is selected */}
+          {applicableTo === 'categories' && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item
+                  name="category_ids"
+                  label="Select Categories"
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (getFieldValue('applicable_to') === 'categories') {
+                          if (!value || value.length === 0) {
+                            return Promise.reject(new Error('Please select at least one category'));
+                          }
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="Select categories"
+                    showSearch
+                    filterOption={(input, option) => {
+                      const category = categories.find(c => c.id === option?.value);
+                      if (!category) return false;
+                      const name = category.name?.toLowerCase() || '';
+                      return name.includes(input.toLowerCase());
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    {categories.map(category => (
+                      <Option key={category.id} value={category.id}>
+                        {category.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Row gutter={16}>
             <Col span={12}>
@@ -718,10 +931,7 @@ const Discounts: React.FC = () => {
                 {selectedCoupon.description || 'No description'}
               </Descriptions.Item>
               <Descriptions.Item label="Discount">
-                {selectedCoupon.discount_type === 'percentage' 
-                  ? `${selectedCoupon.discount_value}%` 
-                  : `$${selectedCoupon.discount_value}`
-                }
+                {Number(selectedCoupon.discount_value).toFixed(3)}%
               </Descriptions.Item>
               <Descriptions.Item label="Minimum Order">
                 ${selectedCoupon.minimum_order_amount}

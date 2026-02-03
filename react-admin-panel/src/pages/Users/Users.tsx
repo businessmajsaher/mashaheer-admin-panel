@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Form, Input, Alert, Switch, Upload, Popconfirm } from 'antd';
 import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
@@ -20,10 +20,12 @@ interface Customer {
 
 export default function Users() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState('');
   const [passwordResetModal, setPasswordResetModal] = useState({
     isOpen: false,
     email: '',
@@ -44,7 +46,28 @@ export default function Users() {
 
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, pageSize]);
+  }, []);
+
+  // Filter customers based on search term
+  const filteredCustomers = useMemo(() => {
+    if (!search.trim()) {
+      return allCustomers;
+    }
+    const searchLower = search.toLowerCase();
+    return allCustomers.filter((customer) =>
+      customer.name?.toLowerCase().includes(searchLower) ||
+      customer.email?.toLowerCase().includes(searchLower) ||
+      customer.bio?.toLowerCase().includes(searchLower)
+    );
+  }, [allCustomers, search]);
+
+  // Update customers based on filtered results and pagination
+  useEffect(() => {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    setCustomers(filteredCustomers.slice(start, end));
+    setTotal(filteredCustomers.length);
+  }, [filteredCustomers, currentPage, pageSize]);
 
   // Populate edit form when modal opens
   useEffect(() => {
@@ -72,26 +95,18 @@ export default function Users() {
     try {
       setLoading(true);
       
-      // Get total count
-      const { count } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'customer');
-
-      // Get customers with pagination
+      // Fetch all customers for search functionality
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('role', 'customer')
-        .order('created_at', { ascending: false })
-        .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
       }
 
-      setCustomers(data || []);
-      setTotal(count || 0);
+      setAllCustomers(data || []);
     } catch (error) {
       console.error('Error fetching customers:', error);
       message.error('Failed to fetch customers');
@@ -414,6 +429,17 @@ export default function Users() {
             Add Customer
           </Button>
         </div>
+        
+        <Input.Search
+          placeholder="Search customers by name, email, or bio"
+          allowClear
+          style={{ width: 300, marginBottom: 16 }}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+        />
         
         <Table 
           columns={columns} 

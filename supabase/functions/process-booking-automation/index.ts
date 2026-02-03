@@ -217,14 +217,23 @@ serve(async (req: Request) => {
       statusMap[s.name] = s.id;
     });
 
-    // 1. Auto-reject: Influencer didn't approve within 12 hrs
+    // 1. Auto-reject: Influencer didn't approve within 12 hrs OR delivery date has passed
     if (statusMap['auto-reject']) {
-      const { data: bookingsToReject, error } = await supabase
+      // First, get bookings that match status
+      const { data: statusBookings, error: statusError } = await supabase
         .from('bookings')
         .select('*')
         .eq('status_id', statusMap['awaiting approval from influencer'] || '')
-        .lte('influencer_approval_deadline', now)
-        .not('influencer_approval_deadline', 'is', null);
+        .not('scheduled_time', 'is', null);
+
+      // Filter in JavaScript: deadline passed OR delivery date passed
+      const bookingsToReject = statusBookings?.filter((booking: Booking) => {
+        const deadlinePassed = booking.influencer_approval_deadline && booking.influencer_approval_deadline <= now;
+        const deliveryPassed = booking.scheduled_time && booking.scheduled_time <= now;
+        return deadlinePassed || deliveryPassed;
+      }) || [];
+      
+      const error = statusError;
 
       if (!error && bookingsToReject) {
         for (const booking of bookingsToReject) {
@@ -308,14 +317,23 @@ serve(async (req: Request) => {
       }
     }
 
-    // 2. Auto-cancel: Customer didn't pay within 12 hrs after influencer approval
+    // 2. Auto-cancel: Customer didn't pay within 12 hrs after influencer approval OR delivery date has passed
     if (statusMap['auto-cancel']) {
-      const { data: bookingsToCancel, error } = await supabase
+      // First, get bookings that match status
+      const { data: statusBookings, error: statusError } = await supabase
         .from('bookings')
         .select('*')
         .eq('status_id', statusMap['awaiting payment'] || '')
-        .lte('payment_deadline', now)
-        .not('payment_deadline', 'is', null);
+        .not('scheduled_time', 'is', null);
+
+      // Filter in JavaScript: deadline passed OR delivery date passed
+      const bookingsToCancel = statusBookings?.filter((booking: Booking) => {
+        const deadlinePassed = booking.payment_deadline && booking.payment_deadline <= now;
+        const deliveryPassed = booking.scheduled_time && booking.scheduled_time <= now;
+        return deadlinePassed || deliveryPassed;
+      }) || [];
+      
+      const error = statusError;
 
       if (!error && bookingsToCancel) {
         for (const booking of bookingsToCancel) {
