@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload } from 'antd';
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { uploadPlatformIcon } from '@/services/storageService';
+import { mapDeleteErrorToFriendlyMessage } from '@/utils/errorMessages';
 
 export default function Platforms() {
   const [platforms, setPlatforms] = useState<any[]>([]);
@@ -31,6 +33,20 @@ export default function Platforms() {
   };
   useEffect(() => { fetchPlatforms(); }, [modalOpen, editModalOpen]);
 
+  // Ensure edit form fields are populated after modal mounts
+  useEffect(() => {
+    if (editModalOpen && editingPlatform) {
+      editForm.resetFields();
+      editForm.setFieldsValue({
+        name: editingPlatform.name,
+        icon_url: editingPlatform.icon_url,
+      });
+    }
+    if (!editModalOpen) {
+      editForm.resetFields();
+    }
+  }, [editModalOpen, editingPlatform, editForm]);
+
   // Add Platform handler
   const handleAddPlatform = async (values: any) => {
     setFormLoading(true);
@@ -38,11 +54,9 @@ export default function Platforms() {
     try {
       let icon_url = values.icon_url;
       if (iconFile) {
-        const filePath = `platform-icons/${Date.now()}-${iconFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('platforms').upload(filePath, iconFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('platforms').getPublicUrl(filePath);
-        icon_url = publicUrlData?.publicUrl;
+        console.log('📤 Starting platform icon upload...');
+        icon_url = await uploadPlatformIcon(iconFile);
+        console.log('✅ Platform icon uploaded successfully:', icon_url);
       }
       const { error } = await supabase.from('social_media_platforms').insert([
         {
@@ -68,20 +82,29 @@ export default function Platforms() {
     setEditFormLoading(true);
     setEditFormError(null);
     try {
-      let icon_url = values.icon_url;
+      // Start from current icon_url; only replace if a new file was chosen
+      let icon_url: string | undefined = editingPlatform?.icon_url;
       if (editIconFile) {
-        const filePath = `platform-icons/${Date.now()}-${editIconFile.name}`;
-        const { error: uploadError } = await supabase.storage.from('platforms').upload(filePath, editIconFile, { upsert: true });
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('platforms').getPublicUrl(filePath);
-        icon_url = publicUrlData?.publicUrl;
+        icon_url = await uploadPlatformIcon(editIconFile);
       }
-      const { error } = await supabase.from('social_media_platforms').update({
-        name: values.name,
-        icon_url,
-      }).eq('id', editingPlatform.id);
+
+      // Build update payload, omitting icon_url if unchanged
+      const updatePayload: any = { name: values.name };
+      if (icon_url !== editingPlatform?.icon_url) {
+        updatePayload.icon_url = icon_url || null;
+      }
+
+      const { data: updated, error } = await supabase
+        .from('social_media_platforms')
+        .update(updatePayload)
+        .eq('id', editingPlatform.id)
+        .select('id, name');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error('Update did not apply. Please refresh and try again.');
+      }
       message.success('Platform updated!');
+      fetchPlatforms();
       setEditModalOpen(false);
       setEditingPlatform(null);
       setEditIconFile(null);
@@ -100,7 +123,8 @@ export default function Platforms() {
       message.success('Platform deleted!');
       fetchPlatforms();
     } catch (err: any) {
-      message.error(err.message || 'Failed to delete platform');
+      const friendly = mapDeleteErrorToFriendlyMessage('platform', err);
+      message.error(friendly);
     }
   };
 
@@ -116,7 +140,6 @@ export default function Platforms() {
           <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
             setEditingPlatform(record);
             setEditModalOpen(true);
-            editForm.setFieldsValue({ name: record.name, icon_url: record.icon_url });
             setEditIconFile(null);
           }}>Edit</Button>
           <Popconfirm title="Delete this platform?" onConfirm={() => handleDeletePlatform(record.id)} okText="Yes" cancelText="No">
@@ -205,7 +228,7 @@ export default function Platforms() {
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setIconFile(null); form.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form form={form} layout="vertical" onFinish={handleAddPlatform}>
@@ -254,13 +277,13 @@ export default function Platforms() {
       <Modal
         title="Edit Platform"
         open={editModalOpen}
-        onCancel={() => { setEditModalOpen(false); setEditingPlatform(null); setEditIconFile(null); }}
+        onCancel={() => { setEditModalOpen(false); setEditingPlatform(null); setEditIconFile(null); editForm.resetFields(); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form form={editForm} layout="vertical" onFinish={handleEditPlatform}>
-          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter a platform name' }]}> <Input autoFocus /> </Form.Item>
+        <Form key={editingPlatform?.id || 'new'} form={editForm} layout="vertical" onFinish={handleEditPlatform}>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Please enter a platform name' }]}><Input autoFocus /></Form.Item>
           <Form.Item label="Icon">
             <Upload
               accept="image/jpeg,image/png"

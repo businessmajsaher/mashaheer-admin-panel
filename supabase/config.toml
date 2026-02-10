@@ -1,0 +1,16 @@
+# Supabase Edge Functions Configuration
+
+# Hesabe webhook - allow public access (no authentication required)
+[functions.hesabe-webhook]
+verify_jwt = false
+
+# Also configure the payment webhook if it exists with different name
+[functions.hesabe-payment-webhook]
+verify_jwt = false
+
+# Optional: Set timeout (in seconds)
+# timeout = 60
+
+# Optional: Set memory limit (in MB)
+# memory = 256
+

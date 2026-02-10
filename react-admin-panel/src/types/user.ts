@@ -1,8 +1,32 @@
 export interface User {
   id: string;
-  email: string;
   name: string;
-  role: string;
+  email: string;
+  role: 'customer' | 'influencer' | 'admin';
+  bio?: string;
+  profile_image_url?: string;
+  is_verified: boolean;
+  is_suspended: boolean;
+  suspension_reason?: string;
+  created_by_admin_id?: string;
+  is_approved: boolean;
   created_at: string;
-  // Add more fields as needed
+}
+
+export interface CreateUserData {
+  name: string;
+  email: string;
+  role: 'customer' | 'influencer' | 'admin';
+  bio?: string;
+  profile_image_url?: string;
+}
+
+export interface UpdateUserData {
+  name?: string;
+  bio?: string;
+  profile_image_url?: string;
+  is_verified?: boolean;
+  is_suspended?: boolean;
+  suspension_reason?: string;
+  is_approved?: boolean;
 } 

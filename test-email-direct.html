@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email Service</title>
+</head>
+<body>
+    <h1>Test Email Service</h1>
+    <button onclick="sendTestEmail()">Send Test Email to akshaykc222@gmail.com</button>
+    <div id="result"></div>
+
+    <script type="module">
+        // Import the email service
+        import { sendWelcomeEmail } from './react-admin-panel/src/services/emailService.js';
+        
+        window.sendTestEmail = async () => {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Sending email...';
+            
+            try {
+                console.log('🧪 Sending test email to akshaykc222@gmail.com...');
+                
+                const result = await sendWelcomeEmail(
+                    'akshaykc222@gmail.com',
+                    'Test Influencer',
+                    'TestPass123!'
+                );
+                
+                console.log('📧 Email result:', result);
+                
+                if (result.success) {
+                    resultDiv.innerHTML = '✅ Test email sent successfully! Check akshaykc222@gmail.com inbox.';
+                    console.log('✅ Test email sent successfully!');
+                } else {
+                    resultDiv.innerHTML = '❌ Test email failed: ' + result.error;
+                    console.log('❌ Test email failed:', result.error);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '❌ Test email error: ' + error.message;
+                console.error('❌ Test email error:', error);
+            }
+        };
+    </script>
+</body>
+</html>
+

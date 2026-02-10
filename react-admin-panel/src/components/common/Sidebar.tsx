@@ -1,50 +1,180 @@
 import React from 'react';
-import { Menu } from 'antd';
+import { Layout, Menu, Typography } from 'antd';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
   UserOutlined,
-  StarOutlined,
+  TeamOutlined,
   AppstoreOutlined,
-  ShoppingCartOutlined,
-  WalletOutlined,
-  StarTwoTone,
+  ShoppingOutlined,
+  FileTextOutlined,
+  StarOutlined,
   CalendarOutlined,
   SettingOutlined,
+  GlobalOutlined,
+  SafetyOutlined,
+  QuestionCircleOutlined,
+  PhoneOutlined,
+  BookOutlined,
+  GiftOutlined,
+  BarChartOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
-import { Link, useLocation } from 'react-router-dom';
+import { useTheme } from '@/context/ThemeContext';
 
-const navItems = [
-  { label: 'Dashboard', to: '/dashboard', icon: <DashboardOutlined /> },
-  { label: 'Users', to: '/users', icon: <UserOutlined /> },
-  { label: 'Influencers', to: '/influencers', icon: <StarOutlined /> },
-  { label: 'Platforms', to: '/platforms', icon: <AppstoreOutlined /> },
-  { label: 'Services', to: '/services', icon: <AppstoreOutlined /> },
-  { label: 'Orders', to: '/orders', icon: <ShoppingCartOutlined /> },
-  { label: 'Wallets', to: '/wallets', icon: <WalletOutlined /> },
-  { label: 'Reviews', to: '/reviews', icon: <StarTwoTone twoToneColor="#faad14" /> },
-  { label: 'Bookings', to: '/bookings', icon: <CalendarOutlined /> },
-  { label: 'Settings', to: '/settings', icon: <SettingOutlined /> },
-];
+const { Sider } = Layout;
+const { Title } = Typography;
 
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark';
+
+  const menuItems = [
+    {
+      key: '/dashboard',
+      icon: <DashboardOutlined />,
+      label: 'Dashboard',
+    },
+    {
+      key: '/users',
+      icon: <UserOutlined />,
+      label: 'Users',
+    },
+    {
+      key: '/influencers',
+      icon: <TeamOutlined />,
+      label: 'Influencers',
+    },
+    {
+      key: '/categories',
+      icon: <AppstoreOutlined />,
+      label: 'Categories',
+    },
+    {
+      key: '/services',
+      icon: <ShoppingOutlined />,
+      label: 'Services',
+    },
+    {
+      key: '/contracts',
+      icon: <FileTextOutlined />,
+      label: 'Contracts',
+    },
+    {
+      key: '/reviews',
+      icon: <StarOutlined />,
+      label: 'Reviews',
+    },
+    {
+      key: '/bookings',
+      icon: <CalendarOutlined />,
+      label: 'Bookings',
+    },
+    {
+      key: '/cash-out',
+      icon: <WalletOutlined />,
+      label: 'Cash Out',
+    },
+    {
+      key: '/platforms',
+      icon: <GlobalOutlined />,
+      label: 'Platforms',
+    },
+    {
+      key: 'discounts',
+      icon: <GiftOutlined />,
+      label: 'Discounts',
+      children: [
+        {
+          key: '/discounts',
+          label: 'Manage Coupons',
+        },
+        {
+          key: '/discounts/analytics',
+          label: 'Analytics',
+        },
+      ],
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: '/legal-notices',
+      icon: <SafetyOutlined />,
+      label: 'Legal Notices',
+    },
+    {
+      key: '/privacy-policy',
+      icon: <BookOutlined />,
+      label: 'Privacy Policy',
+    },
+    {
+      key: '/terms-of-service',
+      icon: <FileTextOutlined />,
+      label: 'Terms of Service',
+    },
+    {
+      key: '/contact-support',
+      icon: <PhoneOutlined />,
+      label: 'Contact Support',
+    },
+    {
+      key: '/help-support',
+      icon: <QuestionCircleOutlined />,
+      label: 'Help & Support',
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: 'Settings',
+    },
+  ];
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key);
+  };
+
   return (
-    <div style={{ width: 220, minHeight: '100vh', background: '#001529', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 22, color: '#fff', letterSpacing: 2 }}>
-        ADMIN
+    <Sider
+      width={250}
+      style={{
+        background: isDarkMode ? '#001529' : '#fff',
+        borderRight: isDarkMode ? '1px solid #303030' : '1px solid #f0f0f0',
+      }}
+      theme={isDarkMode ? 'dark' : 'light'}
+    >
+      <div style={{ padding: '16px', textAlign: 'center' }}>
+        <Title
+          level={4}
+          style={{
+            margin: 0,
+            color: isDarkMode ? '#fff' : '#1890ff',
+            fontWeight: 'bold',
+          }}
+        >
+          Mashaheer Admin
+        </Title>
       </div>
+      
       <Menu
-        theme="dark"
         mode="inline"
         selectedKeys={[location.pathname]}
-        style={{ borderRight: 0, flex: 1 }}
-      >
-        {navItems.map((item) => (
-          <Menu.Item key={item.to} icon={item.icon}>
-            <Link to={item.to}>{item.label}</Link>
-          </Menu.Item>
-        ))}
-      </Menu>
-    </div>
+        defaultOpenKeys={location.pathname.startsWith('/discounts') ? ['discounts'] : []}
+        items={menuItems}
+        onClick={handleMenuClick}
+        style={{
+          background: 'transparent',
+          border: 'none',
+        }}
+        theme={isDarkMode ? 'dark' : 'light'}
+      />
+    </Sider>
   );
-}; 
+};
+
+export default Sidebar;

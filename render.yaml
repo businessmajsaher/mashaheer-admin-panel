@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: mashaheer-admin-panel
+    env: static
+    buildCommand: cd react-admin-panel && npm ci && npm run build
+    staticPublishPath: react-admin-panel/dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        value: https://wilshhncdehbnyldsjzs.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false  # You'll set this in Render dashboard
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+      - type: rewrite
+        source: /password-reset-callback
+        destination: /index.html
+      - type: rewrite
+        source: /routing-test
+        destination: /index.html
+      - type: rewrite
+        source: /login
+        destination: /index.html
+      - type: rewrite
+        source: /signup
+        destination: /index.html 

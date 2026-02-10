@@ -1,0 +1,42 @@
+To add the Contracts route to App.tsx, you need to:
+
+1. Add the import:
+```typescript
+const Contracts = lazy(() => import('@/pages/Contracts/Contracts'));
+```
+
+2. Add the route in the Routes section:
+```typescript
+<Route path="/contracts" element={
+  <ProtectedRoute>
+    <MainLayout>
+      <Contracts />
+    </MainLayout>
+  </ProtectedRoute>
+} />
+```
+
+3. Add the Contracts menu item to the sidebar navigation.
+
+The Contracts page is now ready with:
+- ✅ HTML-based contract templates with professional styling
+- ✅ Dynamic variable replacement ({{variable_name}})
+- ✅ CRUD operations for contract templates
+- ✅ Contract instances management
+- ✅ Preview functionality with sample data
+- ✅ Professional contract template with all sections from your specification
+
+The default template includes:
+- Parties to the Agreement
+- Purpose of the Agreement  
+- Campaign Details
+- Compensation & Payment Terms
+- Responsibilities
+- Cancellation & Refund Policy
+- Content Ownership & Usage
+- Non-Circumvention
+- Liability & Disclaimer
+- Agreement Acceptance
+- Digital Signatures
+
+All styled with professional CSS for print-ready contracts.

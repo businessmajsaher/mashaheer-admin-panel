@@ -1,0 +1,218 @@
+// Currency codes mapping for countries
+export const countryCurrencyMap: { [key: string]: string } = {
+  'US': 'USD',
+  'CA': 'CAD',
+  'GB': 'GBP',
+  'AU': 'AUD',
+  'DE': 'EUR',
+  'FR': 'EUR',
+  'IT': 'EUR',
+  'ES': 'EUR',
+  'NL': 'EUR',
+  'BE': 'EUR',
+  'CH': 'CHF',
+  'AT': 'EUR',
+  'SE': 'SEK',
+  'NO': 'NOK',
+  'DK': 'DKK',
+  'FI': 'EUR',
+  'IE': 'EUR',
+  'NZ': 'NZD',
+  'JP': 'JPY',
+  'KR': 'KRW',
+  'SG': 'SGD',
+  'HK': 'HKD',
+  'AE': 'AED',
+  'BH': 'BHD',
+  'KW': 'KWD',
+  'OM': 'OMR',
+  'QA': 'QAR',
+  'SA': 'SAR',
+  'IN': 'INR',
+  'BR': 'BRL',
+  'MX': 'MXN',
+  'AR': 'ARS',
+  'CL': 'CLP',
+  'CO': 'COP',
+  'PE': 'PEN',
+  'ZA': 'ZAR',
+  'EG': 'EGP',
+  'NG': 'NGN',
+  'KE': 'KES',
+  'MA': 'MAD',
+  'TH': 'THB',
+  'VN': 'VND',
+  'PH': 'PHP',
+  'MY': 'MYR',
+  'ID': 'IDR',
+  'TR': 'TRY',
+  'IL': 'ILS',
+  'PL': 'PLN',
+  'CZ': 'CZK',
+  'HU': 'HUF',
+  'RO': 'RON',
+  'BG': 'BGN',
+  'HR': 'EUR',
+  'SI': 'EUR',
+  'SK': 'EUR',
+  'LT': 'EUR',
+  'LV': 'EUR',
+  'EE': 'EUR',
+  'RU': 'RUB',
+  'UA': 'UAH',
+  'BY': 'BYN',
+  'KZ': 'KZT',
+  'UZ': 'UZS',
+  'KG': 'KGS',
+  'TJ': 'TJS',
+  'TM': 'TMT',
+  'AZ': 'AZN',
+  'GE': 'GEL',
+  'AM': 'AMD',
+  'MD': 'MDL',
+  'AL': 'ALL',
+  'MK': 'MKD',
+  'ME': 'EUR',
+  'RS': 'RSD',
+  'BA': 'BAM',
+  'XK': 'EUR',
+  'GR': 'EUR',
+  'CY': 'EUR',
+  'MT': 'EUR',
+  'PT': 'EUR',
+  'LU': 'EUR',
+  'IS': 'ISK',
+  'OTHER': 'USD'
+};
+
+/**
+ * Get currency code for a given country code
+ * @param countryCode - ISO country code (e.g., 'US', 'GB', 'DE')
+ * @returns Currency code (e.g., 'USD', 'GBP', 'EUR') or 'USD' as default
+ */
+export const getCurrencyByCountry = (countryCode: string): string => {
+  return countryCurrencyMap[countryCode] || 'USD';
+};
+
+/**
+ * Get currency symbol for a given currency code
+ * @param currencyCode - Currency code (e.g., 'USD', 'EUR', 'GBP')
+ * @returns Currency symbol (e.g., '$', '€', '£') or currency code as fallback
+ */
+export const getCurrencySymbol = (currencyCode: string): string => {
+  const symbols: { [key: string]: string } = {
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥',
+    'CAD': 'C$',
+    'AUD': 'A$',
+    'CHF': 'CHF',
+    'CNY': '¥',
+    'INR': '₹',
+    'BRL': 'R$',
+    'MXN': '$',
+    'SGD': 'S$',
+    'HKD': 'HK$',
+    'NZD': 'NZ$',
+    'SEK': 'kr',
+    'NOK': 'kr',
+    'DKK': 'kr',
+    'ZAR': 'R',
+    'TRY': '₺',
+    'RUB': '₽',
+    'KRW': '₩',
+    'THB': '฿',
+    'MYR': 'RM',
+    'IDR': 'Rp',
+    'PHP': '₱',
+    'VND': '₫',
+    'AED': 'د.إ',
+    'BHD': 'د.ب',
+    'KWD': 'د.ك',
+    'OMR': 'ر.ع.',
+    'QAR': 'ر.ق',
+    'SAR': 'ر.س',
+    'EGP': 'E£',
+    'NGN': '₦',
+    'KES': 'KSh',
+    'MAD': 'MAD',
+    'ARS': 'AR$',
+    'CLP': 'CL$',
+    'COP': 'CO$',
+    'PEN': 'S/',
+    'UAH': '₴',
+    'BYN': 'Br',
+    'KZT': '₸',
+    'UZS': 'so\'m',
+    'KGS': 'с',
+    'TJS': 'ЅM',
+    'TMT': 'T',
+    'AZN': '₼',
+    'GEL': '₾',
+    'AMD': '֏',
+    'MDL': 'L',
+    'ALL': 'L',
+    'MKD': 'ден',
+    'RSD': 'дин',
+    'BAM': 'KM',
+    'ISK': 'kr'
+  };
+  
+  return symbols[currencyCode] || currencyCode;
+};
+
+/**
+ * Get decimal places for a currency
+ * @param currencyCode - Currency code (e.g., 'KWD', 'USD', 'EUR')
+ * @returns Number of decimal places (KWD: 3, USD/EUR: 2, default: 2)
+ */
+export const getCurrencyDecimals = (currencyCode: string): number => {
+  const decimalMap: { [key: string]: number } = {
+    'KWD': 3,  // Kuwaiti Dinar uses 3 decimal places
+    'BHD': 3,  // Bahraini Dinar uses 3 decimal places
+    'OMR': 3,  // Omani Rial uses 3 decimal places
+    'JOD': 3,  // Jordanian Dinar uses 3 decimal places
+    'LYD': 3,  // Libyan Dinar uses 3 decimal places
+    'TND': 3,  // Tunisian Dinar uses 3 decimal places
+    'IQD': 3,  // Iraqi Dinar uses 3 decimal places
+  };
+  
+  return decimalMap[currencyCode] || 2; // Default to 2 decimals for most currencies
+};
+
+/**
+ * Round amount based on currency decimal places
+ * @param amount - Amount to round
+ * @param currencyCode - Currency code (e.g., 'KWD', 'USD')
+ * @returns Rounded amount
+ */
+export const roundByCurrency = (amount: number, currencyCode: string = 'KWD'): number => {
+  const decimals = getCurrencyDecimals(currencyCode);
+  const multiplier = Math.pow(10, decimals);
+  return Math.round(amount * multiplier) / multiplier;
+};
+
+/**
+ * Format price with currency symbol
+ * @param amount - Amount to format
+ * @param currencyCode - Currency code (defaults to KWD)
+ * @param locale - Locale for formatting (default: 'en-KW')
+ * @returns Formatted price string
+ */
+export const formatPrice = (amount: number, currencyCode: string = 'KWD', locale: string = 'en-KW'): string => {
+  // Always format in KWD
+  const displayCurrency = 'KWD';
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: displayCurrency,
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    }).format(amount);
+  } catch (error) {
+    // Fallback formatting if Intl is not supported or currency is invalid
+    const symbol = getCurrencySymbol(displayCurrency);
+    return `${symbol}${amount.toFixed(3)}`;
+  }
+}; 

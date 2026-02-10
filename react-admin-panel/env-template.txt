@@ -1,0 +1,14 @@
+# Supabase Configuration Template
+# Copy this content to a new file named .env in the same directory
+
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+
+# Instructions:
+# 1. Create a new file named .env in this directory
+# 2. Copy the VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY lines above into the .env file
+# 3. Go to your Supabase project dashboard
+# 4. Go to Settings > API
+# 5. Copy your Project URL and replace the VITE_SUPABASE_URL value
+# 6. Copy your anon/public key and replace the VITE_SUPABASE_ANON_KEY value
+# 7. Save the .env file and restart your development server
