@@ -64,7 +64,7 @@ export const cashOutService = {
       // Don't set periodStart and periodEnd - this will show all payments
       periodStart = null;
       periodEnd = null;
-      
+
       // Optional: Uncomment below if you want to default to current month
       // periodEnd = new Date();
       // if (periodType === 'weekly') {
@@ -86,7 +86,7 @@ export const cashOutService = {
       periodEnd = new Date(endDate);
       periodEnd.setHours(23, 59, 59, 999);
     }
-    
+
     // If both dates are explicitly cleared (empty strings), show all payments
     if (startDate === '' && endDate === '') {
       periodStart = null;
@@ -139,7 +139,7 @@ export const cashOutService = {
       const status = (p.status || '').toLowerCase().trim();
       return !['completed', 'paid', 'success', 'successful'].includes(status);
     });
-    
+
     if (filteredOut.length > 0) {
       console.log('Payments filtered out by status:', filteredOut.map(p => ({
         id: p.id,
@@ -157,7 +157,7 @@ export const cashOutService = {
       payments = payments.filter(p => {
         // Use paid_at if available, otherwise fall back to created_at
         const paymentDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
-        
+
         // Check if payment is within the date range
         if (paymentDate < periodStart!) return false;
         if (paymentDate > periodEnd!) return false;
@@ -179,7 +179,7 @@ export const cashOutService = {
     console.log('Payments With Payee ID:', (allPayments || []).filter(p => p.payee_id).length);
     console.log('Payments After Status Filter:', payments.length);
     console.log('Payments After Date Filter:', payments.length);
-    
+
     // Show specific payments we're looking for
     const targetPaymentIds = [
       '7f2333ed-6cf6-4100-b6e3-a3ba9c06c48d',
@@ -202,12 +202,12 @@ export const cashOutService = {
         created_at: p.created_at,
         date_match: dateMatch,
         will_appear: statusMatch && dateMatch && p.payee_id ? 'YES' : 'NO',
-        reason: !p.payee_id ? 'Missing payee_id' : 
-                !statusMatch ? `Status '${p.status}' not in allowed list` :
-                !dateMatch ? 'Outside date range' : 'Should appear'
+        reason: !p.payee_id ? 'Missing payee_id' :
+          !statusMatch ? `Status '${p.status}' not in allowed list` :
+            !dateMatch ? 'Outside date range' : 'Should appear'
       });
     });
-    
+
     console.log('Sample Payments (first 5):', payments.slice(0, 5).map(p => ({
       id: p.id,
       status: p.status,
@@ -220,18 +220,18 @@ export const cashOutService = {
 
     // Group payments by influencer
     const earningsMap = new Map<string, InfluencerEarning>();
-    
+
     console.log('Grouping payments. Total payments to group:', payments.length);
     console.log('Payment IDs to group:', payments.map(p => p.id));
 
     for (const payment of payments || []) {
       const influencerId = payment.payee_id;
-      
+
       if (!influencerId) {
         console.warn('Skipping payment without payee_id:', payment.id);
         continue;
       }
-      
+
       if (!earningsMap.has(influencerId)) {
         earningsMap.set(influencerId, {
           influencer_id: influencerId,
@@ -249,7 +249,7 @@ export const cashOutService = {
 
       const earning = earningsMap.get(influencerId)!;
       const paymentAmount = parseFloat(payment.amount) || 0;
-      
+
       // Fetch PG charge from Hesabe (if transaction_reference exists)
       let pgCharge = 0;
       if (payment.transaction_reference) {
@@ -294,7 +294,7 @@ export const cashOutService = {
 
     // Check settlement status for each influencer
     const settlements = await this.getSettlements(periodType, startDate, endDate);
-    
+
     earningsList.forEach(earning => {
       const settlement = settlements.get(earning.influencer_id);
       if (settlement) {
@@ -512,6 +512,25 @@ export const cashOutService = {
       .eq('period_end', periodEnd);
 
     if (error) throw error;
+  },
+
+  // Get all settlements history
+  async getAllSettlements(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('settlements')
+      .select(`
+        *,
+        influencer:profiles!settlements_influencer_id_fkey(id, name, email),
+        admin:profiles!settlements_settled_by_fkey(id, name, email)
+      `)
+      .order('settled_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching settlement history:', error);
+      throw error;
+    }
+
+    return data || [];
   }
 };
 

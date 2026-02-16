@@ -15,7 +15,8 @@ import {
   Spin,
   Descriptions,
   Modal,
-  Divider
+  Divider,
+  Tabs
 } from 'antd';
 import {
   DollarOutlined,
@@ -45,9 +46,31 @@ export default function CashOut() {
   const [selectedPayments, setSelectedPayments] = useState<PaymentEarning[]>([]);
   const [settling, setSettling] = useState<string | null>(null);
 
+  // Settlement History State
+  const [activeTab, setActiveTab] = useState('earnings');
+  const [settlementHistory, setSettlementHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
-    fetchEarnings();
-  }, [periodType, startDate, endDate]);
+    if (activeTab === 'earnings') {
+      fetchEarnings();
+    } else if (activeTab === 'history') {
+      fetchSettlementHistory();
+    }
+  }, [periodType, startDate, endDate, activeTab]);
+
+  const fetchSettlementHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const history = await cashOutService.getAllSettlements();
+      setSettlementHistory(history);
+    } catch (error: any) {
+      console.error('Error fetching settlement history:', error);
+      message.error(error.message || 'Failed to fetch settlement history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const fetchEarnings = async () => {
     setLoading(true);
@@ -110,7 +133,7 @@ export default function CashOut() {
       date.setHours(0, 0, 0, 0);
       return date.toISOString();
     })();
-    
+
     const periodEnd = endDate || new Date().toISOString();
 
     setSettling(influencer.influencer_id);
@@ -144,7 +167,7 @@ export default function CashOut() {
       date.setHours(0, 0, 0, 0);
       return date.toISOString();
     })();
-    
+
     const periodEnd = endDate || new Date().toISOString();
 
     setSettling(influencer.influencer_id);
@@ -340,211 +363,353 @@ export default function CashOut() {
       key: 'paid_at',
       render: (date) => dayjs(date).format('YYYY-MM-DD HH:mm'),
     },
+    {
+      title: 'Ref',
+      dataIndex: 'transaction_reference',
+      key: 'transaction_reference',
+      render: (text) => <Text copyable>{text || '-'}</Text>,
+    },
+  ];
+
+  const handleViewHistoryDetails = async (settlement: any) => {
+    setLoading(true);
+    try {
+      // Create a temporary influencer object for the modal header
+      const influencer: InfluencerEarning = {
+        influencer_id: settlement.influencer_id,
+        influencer_name: settlement.influencer?.name || 'Unknown',
+        influencer_email: settlement.influencer?.email || '',
+        total_earnings: settlement.total_earnings,
+        total_pg_charges: settlement.total_pg_charges,
+        total_platform_commission: settlement.total_platform_commission,
+        net_payout: settlement.net_payout,
+        currency: settlement.currency,
+        payment_count: settlement.payment_count,
+        payments: []
+      };
+      setSelectedInfluencer(influencer);
+
+      // Fetch specific payments for this settlement period
+      const earnings = await cashOutService.getInfluencerEarnings(
+        settlement.period_type,
+        settlement.period_start,
+        settlement.period_end
+      );
+
+      // Filter for this specific influencer
+      const influencerEarning = earnings.find(e => e.influencer_id === settlement.influencer_id);
+
+      if (influencerEarning) {
+        setSelectedPayments(influencerEarning.payments);
+      } else {
+        setSelectedPayments([]);
+        // Try to fetch all payments if specific period fetch fails to match logic
+        // But for now, just show empty or warning
+        console.warn('No specific payment details found for this period via getInfluencerEarnings');
+      }
+
+      setPaymentModalVisible(true);
+    } catch (error) {
+      console.error('Error fetching details:', error);
+      message.error('Failed to load settlement details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const historyColumns = [
+    {
+      title: 'Settled Date',
+      dataIndex: 'settled_at',
+      key: 'settled_at',
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm'),
+      sorter: (a: any, b: any) => new Date(a.settled_at).getTime() - new Date(b.settled_at).getTime(),
+    },
+    {
+      title: 'Influencer',
+      dataIndex: ['influencer', 'name'],
+      key: 'influencer_name',
+      render: (text: string, record: any) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{text || 'Unknown'}</div>
+          <div style={{ fontSize: '12px', color: '#999' }}>{record.influencer?.email}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Period',
+      key: 'period',
+      render: (_: any, record: any) => (
+        <Space direction="vertical" size={0}>
+          <Tag color="cyan">{(record.period_type || 'monthly').toUpperCase()}</Tag>
+          <Text style={{ fontSize: '12px', color: '#666' }}>
+            {record.period_start} to {record.period_end}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'total_earnings',
+      key: 'total_earnings',
+      align: 'right' as const,
+      render: (val: number) => formatCurrency(val, 'KWD'),
+    },
+    {
+      title: 'Net Payout',
+      dataIndex: 'net_payout',
+      key: 'net_payout',
+      align: 'right' as const,
+      render: (val: number, record: any) => (
+        <Text strong style={{ color: '#52c41a' }}>
+          {formatCurrency(val, record.currency || 'KWD')}
+        </Text>
+      ),
+    },
+    {
+      title: 'Admin',
+      dataIndex: ['admin', 'name'],
+      key: 'admin',
+      render: (text: string) => <Tag>{text || 'System'}</Tag>,
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: any, record: any) => (
+        <Button
+          type="link"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewHistoryDetails(record)}
+        >
+          Details
+        </Button>
+      ),
+    },
   ];
 
   return (
     <div style={{ padding: '24px' }}>
       <Title level={2}>Cash Out & Settlements</Title>
 
-      {/* Filters and Summary */}
-      <Card style={{ marginBottom: '24px' }}>
-        <Row gutter={16} align="middle" style={{ marginBottom: '16px' }}>
-          <Col>
-            <Space>
-              <Text strong>Period:</Text>
-              <Select
-                value={periodType}
-                onChange={handlePeriodChange}
-                style={{ width: 120 }}
-              >
-                <Option value="weekly">Weekly</Option>
-                <Option value="monthly">Monthly</Option>
-              </Select>
-            </Space>
-          </Col>
-          <Col>
-            <Space>
-              <Text strong>Date Range:</Text>
-              <RangePicker
-                onChange={handleDateRangeChange}
-                format="YYYY-MM-DD"
-                allowClear
-              />
-            </Space>
-          </Col>
-          <Col>
-            <Space>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={fetchEarnings}
-                loading={loading}
-              >
-                Refresh
-              </Button>
-              <Button
-                onClick={() => {
-                  setStartDate(undefined);
-                  setEndDate(undefined);
-                  fetchEarnings();
-                }}
-              >
-                Show All Payments
-              </Button>
-            </Space>
-          </Col>
-        </Row>
+      <Tabs activeKey={activeTab} onChange={setActiveTab} type="card">
+        <Tabs.TabPane tab="Current Earnings" key="earnings">
+          {/* Filters and Summary */}
+          <Card style={{ marginBottom: '24px' }}>
+            <Row gutter={16} align="middle" style={{ marginBottom: '16px' }}>
+              <Col>
+                <Space>
+                  <Text strong>Period:</Text>
+                  <Select
+                    value={periodType}
+                    onChange={handlePeriodChange}
+                    style={{ width: 120 }}
+                  >
+                    <Option value="weekly">Weekly</Option>
+                    <Option value="monthly">Monthly</Option>
+                  </Select>
+                </Space>
+              </Col>
+              <Col>
+                <Space>
+                  <Text strong>Date Range:</Text>
+                  <RangePicker
+                    onChange={handleDateRangeChange}
+                    format="YYYY-MM-DD"
+                    allowClear
+                  />
+                </Space>
+              </Col>
+              <Col>
+                <Space>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={fetchEarnings}
+                    loading={loading}
+                  >
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setStartDate(undefined);
+                      setEndDate(undefined);
+                      fetchEarnings();
+                    }}
+                  >
+                    Show All Payments
+                  </Button>
+                </Space>
+              </Col>
+            </Row>
 
-        {summary && (
-          <Row gutter={16}>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic
-                title="Total Earnings"
-                value={summary.total_earnings}
-                prefix={<DollarOutlined />}
-                suffix="KWD"
-                precision={3}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic
-                title="Total PG Charges"
-                value={summary.total_pg_charges}
-                prefix="-"
-                suffix="KWD"
-                precision={3}
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic
-                title="Platform Commission"
-                value={summary.total_platform_commission}
-                prefix="-"
-                suffix="KWD"
-                precision={3}
-                valueStyle={{ color: '#ff4d4f' }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic
-                title="Total Net Payout"
-                value={summary.total_net_payout}
-                prefix={<DollarOutlined />}
-                suffix="KWD"
-                precision={3}
-                valueStyle={{ color: '#52c41a', fontSize: '20px' }}
-              />
-            </Col>
-          </Row>
-        )}
-        {earnings.length > 0 && (
-          <Row gutter={16} style={{ marginTop: '16px' }}>
-            <Col xs={24} sm={12} md={8}>
-              <Statistic
-                title="Total Influencers"
-                value={earnings.length}
-                suffix={`(${earnings.filter(e => e.is_settled).length} settled, ${earnings.filter(e => !e.is_settled).length} unsettled)`}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Statistic
-                title="Settled Amount"
-                value={earnings.filter(e => e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
-                prefix={<DollarOutlined />}
-                suffix="KWD"
-                precision={3}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Statistic
-                title="Pending Settlement"
-                value={earnings.filter(e => !e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
-                prefix={<DollarOutlined />}
-                suffix="KWD"
-                precision={3}
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Col>
-          </Row>
-        )}
-      </Card>
+            {summary && (
+              <Row gutter={16}>
+                <Col xs={24} sm={12} md={6}>
+                  <Statistic
+                    title="Total Earnings"
+                    value={summary.total_earnings}
+                    prefix={<DollarOutlined />}
+                    suffix="KWD"
+                    precision={3}
+                  />
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Statistic
+                    title="Total PG Charges"
+                    value={summary.total_pg_charges}
+                    prefix="-"
+                    suffix="KWD"
+                    precision={3}
+                    valueStyle={{ color: '#faad14' }}
+                  />
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Statistic
+                    title="Platform Commission"
+                    value={summary.total_platform_commission}
+                    prefix="-"
+                    suffix="KWD"
+                    precision={3}
+                    valueStyle={{ color: '#ff4d4f' }}
+                  />
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Statistic
+                    title="Total Net Payout"
+                    value={summary.total_net_payout}
+                    prefix={<DollarOutlined />}
+                    suffix="KWD"
+                    precision={3}
+                    valueStyle={{ color: '#52c41a', fontSize: '20px' }}
+                  />
+                </Col>
+              </Row>
+            )}
+            {earnings.length > 0 && (
+              <Row gutter={16} style={{ marginTop: '16px' }}>
+                <Col xs={24} sm={12} md={8}>
+                  <Statistic
+                    title="Total Influencers"
+                    value={earnings.length}
+                    suffix={`(${earnings.filter(e => e.is_settled).length} settled, ${earnings.filter(e => !e.is_settled).length} unsettled)`}
+                  />
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Statistic
+                    title="Settled Amount"
+                    value={earnings.filter(e => e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
+                    prefix={<DollarOutlined />}
+                    suffix="KWD"
+                    precision={3}
+                    valueStyle={{ color: '#52c41a' }}
+                  />
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Statistic
+                    title="Pending Settlement"
+                    value={earnings.filter(e => !e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
+                    prefix={<DollarOutlined />}
+                    suffix="KWD"
+                    precision={3}
+                    valueStyle={{ color: '#faad14' }}
+                  />
+                </Col>
+              </Row>
+            )}
+          </Card>
 
-      {/* Earnings Table */}
-      <Card>
-        <Spin spinning={loading}>
-          {earnings.length === 0 && !loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <Text type="secondary" style={{ fontSize: '16px' }}>
-                No completed payments found for the selected period.
-              </Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: '14px', marginTop: '8px', display: 'block' }}>
-                Make sure payments have:
-                <ul style={{ textAlign: 'left', display: 'inline-block', marginTop: '8px' }}>
-                  <li>Status: "completed", "paid", "success", or "successful"</li>
-                  <li>Payee ID set (influencer receiving payment)</li>
-                  <li>Date within the selected period (if date range is selected)</li>
-                </ul>
-                <br />
-                <Text type="warning" style={{ fontSize: '14px', display: 'block', marginTop: '16px' }}>
-                  💡 Tip: Try clearing the date range filter to see all payments, or check the browser console (F12) for detailed payment information.
-                </Text>
-              </Text>
-            </div>
-          ) : (
+          {/* Earnings Table */}
+          <Card bodyStyle={{ padding: 0 }}>
+            <Spin spinning={loading}>
+              {earnings.length === 0 && !loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Text type="secondary" style={{ fontSize: '16px' }}>
+                    No completed payments found for the selected period.
+                  </Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: '14px', marginTop: '8px', display: 'block' }}>
+                    Make sure payments have:
+                    <ul style={{ textAlign: 'left', display: 'inline-block', marginTop: '8px' }}>
+                      <li>Status: "completed", "paid", "success", or "successful"</li>
+                      <li>Payee ID set (influencer receiving payment)</li>
+                      <li>Date within the selected period (if date range is selected)</li>
+                    </ul>
+                    <br />
+                    <Text type="warning" style={{ fontSize: '14px', display: 'block', marginTop: '16px' }}>
+                      💡 Tip: Try clearing the date range filter to see all payments, or check the browser console (F12) for detailed payment information.
+                    </Text>
+                  </Text>
+                </div>
+              ) : (
+                <Table
+                  columns={columns}
+                  dataSource={earnings}
+                  rowKey="influencer_id"
+                  pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    showTotal: (total) => `Total ${total} influencers`,
+                  }}
+                  summary={(pageData) => {
+                    const totalEarnings = pageData.reduce((sum, record) => sum + record.total_earnings, 0);
+                    const totalPgCharges = pageData.reduce((sum, record) => sum + record.total_pg_charges, 0);
+                    const totalCommission = pageData.reduce((sum, record) => sum + record.total_platform_commission, 0);
+                    const totalNetPayout = pageData.reduce((sum, record) => sum + record.net_payout, 0);
+                    return (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row>
+                          <Table.Summary.Cell index={0} colSpan={1}>
+                            <Text strong>Total</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={1} align="right">
+                            <Text strong>{formatCurrency(totalEarnings, 'KWD')}</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={2} align="right">
+                            <Text type="warning" strong>
+                              -{formatCurrency(totalPgCharges, 'KWD')}
+                            </Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={3} align="right">
+                            <Text type="danger" strong>
+                              -{formatCurrency(totalCommission, 'KWD')}
+                            </Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={4} align="right">
+                            <Text strong style={{ color: '#52c41a', fontSize: '18px' }}>
+                              {formatCurrency(totalNetPayout, 'KWD')}
+                            </Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={5} align="center">
+                            <Tag color="blue">
+                              {pageData.reduce((sum, record) => sum + record.payment_count, 0)}
+                            </Tag>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={6} />
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    );
+                  }}
+                />
+              )}
+            </Spin>
+          </Card>
+        </Tabs.TabPane>
+
+        <Tabs.TabPane tab="Settlement History" key="history">
+          <Card>
             <Table
-              columns={columns}
-              dataSource={earnings}
-              rowKey="influencer_id"
+              columns={historyColumns}
+              dataSource={settlementHistory}
+              loading={historyLoading}
+              rowKey="id"
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
-                showTotal: (total) => `Total ${total} influencers`,
+                showTotal: (total) => `Total ${total} settlements`,
               }}
-            summary={(pageData) => {
-              const totalEarnings = pageData.reduce((sum, record) => sum + record.total_earnings, 0);
-              const totalPgCharges = pageData.reduce((sum, record) => sum + record.total_pg_charges, 0);
-              const totalCommission = pageData.reduce((sum, record) => sum + record.total_platform_commission, 0);
-              const totalNetPayout = pageData.reduce((sum, record) => sum + record.net_payout, 0);
-              return (
-                <Table.Summary fixed>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={1}>
-                      <Text strong>Total</Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} align="right">
-                      <Text strong>{formatCurrency(totalEarnings, 'KWD')}</Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={2} align="right">
-                      <Text type="warning" strong>
-                        -{formatCurrency(totalPgCharges, 'KWD')}
-                      </Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="right">
-                      <Text type="danger" strong>
-                        -{formatCurrency(totalCommission, 'KWD')}
-                      </Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={4} align="right">
-                      <Text strong style={{ color: '#52c41a', fontSize: '18px' }}>
-                        {formatCurrency(totalNetPayout, 'KWD')}
-                      </Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={5} align="center">
-                      <Tag color="blue">
-                        {pageData.reduce((sum, record) => sum + record.payment_count, 0)}
-                      </Tag>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={6} />
-                  </Table.Summary.Row>
-                </Table.Summary>
-              );
-            }}
-          />
-          )}
-        </Spin>
-      </Card>
+            />
+          </Card>
+        </Tabs.TabPane>
+      </Tabs>
 
       {/* Payment Details Modal */}
       <Modal
@@ -583,6 +748,35 @@ export default function CashOut() {
               rowKey="payment_id"
               pagination={false}
               size="small"
+              summary={(pageData) => {
+                const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+                const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
+                const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
+                const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+
+                return (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0} colSpan={1}>
+                        <Text strong>Total</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={1} align="right">
+                        <Text strong>{formatCurrency(totalAmount, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={2} align="right">
+                        <Text type="warning">-{formatCurrency(totalPgCharge, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right">
+                        <Text type="danger">-{formatCurrency(totalCommission, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={4} align="right">
+                        <Text strong style={{ color: '#52c41a' }}>{formatCurrency(totalNet, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={5} />
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                );
+              }}
             />
           </>
         )}

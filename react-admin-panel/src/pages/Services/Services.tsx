@@ -122,7 +122,7 @@ export default function Services() {
           name
         )
       `).order('created_at', { ascending: false });
-      
+
       if (filters.category_id) {
         query = query.eq('category_id', filters.category_id);
       }
@@ -132,17 +132,17 @@ export default function Services() {
       if (filters.primary_influencer_id) {
         query = query.eq('primary_influencer_id', filters.primary_influencer_id);
       }
-      
+
       console.log('🔍 Services query:', query);
       const { data, error } = await query;
-      
+
       if (error) {
         console.error('❌ Services fetch error:', error);
         message.error(error.message);
       } else {
         console.log('✅ Services fetched successfully:', data?.length || 0, 'services');
       }
-      
+
       setServices(data || []);
     } catch (err) {
       console.error('❌ Services fetch exception:', err);
@@ -202,9 +202,9 @@ export default function Services() {
     }
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     console.log('🚀 Services component mounted, fetching data...');
-    fetchServices(); 
+    fetchServices();
     fetchCategories();
     fetchInfluencers();
     fetchPlatforms();
@@ -281,7 +281,7 @@ export default function Services() {
         thumbnail = publicUrlData?.publicUrl;
         console.log('✅ Thumbnail uploaded successfully:', thumbnail);
       }
-      
+
       // Set offer_price based on service type and flash deal status
       let offerPrice = values.price;
       if (values.is_flash_deal && values.offer_price) {
@@ -310,15 +310,15 @@ export default function Services() {
         invited_influencer_earnings_percentage: values.service_type === 'dual' ? (values.invited_influencer_earnings_percentage || 50) : null,
         created_at: new Date().toISOString(),
       };
-      
+
       console.log('📝 Inserting service data:', serviceData);
       const { error } = await supabase.from('services').insert([serviceData]);
-      
+
       if (error) {
         console.error('❌ Service insert error:', error);
         throw error;
       }
-      
+
       console.log('✅ Service added successfully!');
       message.success('Service added!');
       setModalOpen(false);
@@ -345,12 +345,12 @@ export default function Services() {
         const { data: publicUrlData } = supabase.storage.from('services').getPublicUrl(filePath);
         thumbnail = publicUrlData?.publicUrl;
       }
-      
+
       // Handle flash deal to normal transition
       let flashFrom = null;
       let flashTo = null;
       let offerPrice = values.price;
-      
+
       if (values.is_flash_deal) {
         // If it's a flash deal, set the flash dates and offer price
         if (values.flash_from && typeof values.flash_from.toISOString === 'function') {
@@ -359,14 +359,14 @@ export default function Services() {
           console.warn('⚠️ Flash from date is not a valid dayjs object:', values.flash_from);
           flashFrom = null;
         }
-        
+
         if (values.flash_to && typeof values.flash_to.toISOString === 'function') {
           flashTo = values.flash_to.toISOString();
         } else if (values.flash_to) {
           console.warn('⚠️ Flash to date is not a valid dayjs object:', values.flash_to);
           flashTo = null;
         }
-        
+
         if (values.offer_price) {
           offerPrice = values.offer_price;
         }
@@ -416,30 +416,30 @@ export default function Services() {
         console.error('❌ Supabase update error:', error);
         throw error;
       }
-      
+
       // Check if any rows were actually updated
       const { count, error: countError } = await supabase
         .from('services')
         .select('*', { count: 'exact', head: true })
         .eq('id', editingService.id);
-      
+
       if (countError) {
         console.error('❌ Count query error:', countError);
       } else {
         console.log('🔍 Rows affected by update:', count);
       }
-      
+
       console.log('✅ Service update successful!');
       console.log('📊 Updated service data:', updateData);
       console.log('🆔 Service ID:', editingService.id);
-      
+
       // Verify the update by querying the database
       const { data: verifyData, error: verifyError } = await supabase
         .from('services')
         .select('*')
         .eq('id', editingService.id)
         .single();
-      
+
       if (verifyError) {
         console.error('❌ Verification query error:', verifyError);
       } else {
@@ -447,12 +447,12 @@ export default function Services() {
         console.log('🔍 Service type in database:', verifyData.service_type);
         console.log('🔍 Is flash deal in database:', verifyData.is_flash_deal);
       }
-      
+
       message.success('Service updated!');
       setEditModalOpen(false);
       setEditingService(null);
       setEditThumbnailFile(null);
-      
+
       // Refresh the services list to show updated data
       fetchServices();
     } catch (err: any) {
@@ -491,7 +491,7 @@ export default function Services() {
         `)
         .eq('service_id', serviceId)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       setServiceBookings(data || []);
     } catch (err: any) {
@@ -510,19 +510,19 @@ export default function Services() {
   };
 
   const columns = [
-    { 
-      title: 'Thumbnail', 
-      dataIndex: 'thumbnail', 
-      key: 'thumbnail', 
-      render: (url: string) => url ? <img src={url} alt="thumbnail" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: '4px' }} /> : '-' 
+    {
+      title: 'Thumbnail',
+      dataIndex: 'thumbnail',
+      key: 'thumbnail',
+      render: (url: string) => url ? <img src={url} alt="thumbnail" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: '4px' }} /> : '-'
     },
     { title: 'Title', dataIndex: 'title', key: 'title' },
-    { 
-      title: 'Type', 
-      dataIndex: 'service_type', 
+    {
+      title: 'Type',
+      dataIndex: 'service_type',
       key: 'service_type',
       render: (type: string) => (
-        <span style={{ 
+        <span style={{
           color: type === 'flash' ? '#ff4d4f' : type === 'dual' ? '#1890ff' : '#52c41a',
           fontWeight: 'bold'
         }}>
@@ -530,9 +530,9 @@ export default function Services() {
         </span>
       )
     },
-    { 
-      title: 'Category', 
-      dataIndex: 'category_id', 
+    {
+      title: 'Category',
+      dataIndex: 'category_id',
       key: 'category',
       render: (categoryId: string, record: any) => {
         const category = record.service_categories;
@@ -544,15 +544,15 @@ export default function Services() {
         return cat ? <span style={{ color: '#1890ff', fontWeight: '500' }}>{cat.name}</span> : '-';
       }
     },
-    { 
-      title: 'Duration', 
-      dataIndex: 'min_duration_days', 
+    {
+      title: 'Duration',
+      dataIndex: 'min_duration_days',
       key: 'min_duration_days',
       render: (days: number) => days ? `${days} days` : '-'
     },
-    { 
-      title: 'Currency', 
-      dataIndex: 'currency', 
+    {
+      title: 'Currency',
+      dataIndex: 'currency',
       key: 'currency',
       render: (currency: string) => (
         <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
@@ -560,9 +560,9 @@ export default function Services() {
         </span>
       )
     },
-    { 
-      title: 'Price', 
-      dataIndex: 'price', 
+    {
+      title: 'Price',
+      dataIndex: 'price',
       key: 'price',
       render: (price: number, record: any) => {
         return (
@@ -572,9 +572,9 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'Offer Price', 
-      dataIndex: 'offer_price', 
+    {
+      title: 'Offer Price',
+      dataIndex: 'offer_price',
       key: 'offer_price',
       render: (offerPrice: number, record: any) => {
         if (record.is_flash_deal && offerPrice) {
@@ -591,8 +591,8 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'Commission', 
+    {
+      title: 'Commission',
       key: 'commission',
       render: (_: any, record: any) => {
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
@@ -610,8 +610,8 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'Card Charge', 
+    {
+      title: 'Card Charge',
       key: 'payment_gateway_charge_card',
       render: (_: any, record: any) => {
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
@@ -629,8 +629,8 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'KNET Charge', 
+    {
+      title: 'KNET Charge',
       key: 'payment_gateway_charge_knet',
       render: (_: any, record: any) => {
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
@@ -648,8 +648,8 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'Influencer Payout', 
+    {
+      title: 'Influencer Payout',
       key: 'influencer_payout',
       render: (_: any, record: any) => {
         const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
@@ -659,14 +659,62 @@ export default function Services() {
         const commissionAmount = (servicePrice * commissionPercentage) / 100;
         const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
         const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
-        
+
         // Calculate payout for both payment methods
         const payoutWithCard = servicePrice - commissionAmount - cardChargeAmount;
         const payoutWithKnet = servicePrice - commissionAmount - knetChargeAmount;
-        
+
         // Show range if charges differ, otherwise show single value
         const chargesDiffer = cardChargePercentage !== knetChargePercentage;
-        
+
+        if (record.service_type === 'dual') {
+          const primaryPct = record.primary_influencer_earnings_percentage || 50;
+          const invitedPct = record.invited_influencer_earnings_percentage || 50;
+
+          const primaryPayoutCard = (payoutWithCard * primaryPct) / 100;
+          const primaryPayoutKnet = (payoutWithKnet * primaryPct) / 100;
+
+          const invitedPayoutCard = (payoutWithCard * invitedPct) / 100;
+          const invitedPayoutKnet = (payoutWithKnet * invitedPct) / 100;
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '2px' }}>
+                  Primary ({primaryPct}%):
+                </div>
+                {chargesDiffer ? (
+                  <div style={{ fontSize: '12px' }}>
+                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(primaryPayoutCard, 'KWD')}</span> (Card)
+                    <br />
+                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(primaryPayoutKnet, 'KWD')}</span> (KNET)
+                  </div>
+                ) : (
+                  <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
+                    {formatPrice(primaryPayoutCard, 'KWD')}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '2px' }}>
+                  Invited ({invitedPct}%):
+                </div>
+                {chargesDiffer ? (
+                  <div style={{ fontSize: '12px' }}>
+                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(invitedPayoutCard, 'KWD')}</span> (Card)
+                    <br />
+                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(invitedPayoutKnet, 'KWD')}</span> (KNET)
+                  </div>
+                ) : (
+                  <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
+                    {formatPrice(invitedPayoutCard, 'KWD')}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div>
             {chargesDiffer ? (
@@ -692,12 +740,12 @@ export default function Services() {
         );
       }
     },
-    { 
-      title: 'Flash Deal', 
-      dataIndex: 'is_flash_deal', 
+    {
+      title: 'Flash Deal',
+      dataIndex: 'is_flash_deal',
       key: 'is_flash_deal',
       render: (isFlash: boolean) => (
-        <span style={{ 
+        <span style={{
           color: isFlash ? '#ff4d4f' : '#8c8c8c',
           fontWeight: 'bold'
         }}>
@@ -785,8 +833,8 @@ export default function Services() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Services</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { 
-            setModalOpen(true); 
+          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => {
+            setModalOpen(true);
             form.resetFields();
             form.setFieldsValue({ currency: 'KWD' });
             setSelectedCurrency('KWD');
@@ -796,7 +844,7 @@ export default function Services() {
           </Button>
         </div>
       </div>
-      
+
       {/* Filters */}
       <Form form={filterForm} layout="inline">
         <Row gutter={[16, 16]} style={{ marginBottom: 16, width: '100%' }}>
@@ -840,8 +888,8 @@ export default function Services() {
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={handleResetFilters}
               style={{ width: '100%' }}
             >
@@ -850,7 +898,7 @@ export default function Services() {
           </Col>
         </Row>
       </Form>
-      
+
       {loading ? <Spin size="large" /> : (
         <Table
           columns={columns}
@@ -865,7 +913,7 @@ export default function Services() {
           }}
         />
       )}
-      
+
       {/* Add Modal */}
       <Modal
         title="Add Service"
@@ -892,7 +940,7 @@ export default function Services() {
                 label="Service Type"
                 rules={[{ required: true, message: 'Please select service type' }]}
               >
-                <Select 
+                <Select
                   placeholder="Select service type"
                   onChange={(value) => {
                     setSelectedServiceType(value);
@@ -962,7 +1010,7 @@ export default function Services() {
                 label="Currency"
                 rules={[{ required: true, message: 'Please select currency' }]}
               >
-                <Select 
+                <Select
                   placeholder="Select currency"
                   value={selectedCurrency}
                   onChange={(value) => setSelectedCurrency(value)}
@@ -981,10 +1029,10 @@ export default function Services() {
                 label={`Price (${getCurrencySymbol(selectedCurrency)})`}
                 rules={[{ required: true, message: 'Please enter price' }]}
               >
-                <InputNumber 
-                  min={0} 
-                  step={0.01} 
-                  style={{ width: '100%' }} 
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
                   onChange={(value) => {
@@ -1011,11 +1059,11 @@ export default function Services() {
                   }),
                 ]}
               >
-                <InputNumber 
-                  min={0} 
+                <InputNumber
+                  min={0}
                   step={0.001}
                   precision={getCurrencyDecimals(selectedCurrency)}
-                  style={{ width: '100%' }} 
+                  style={{ width: '100%' }}
                   disabled={!isFlashDeal}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
@@ -1024,293 +1072,293 @@ export default function Services() {
             </Col>
           </Row>
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item
-                 name="primary_influencer_id"
-                 label="Primary Influencer"
-                 rules={[{ required: true, message: 'Please select primary influencer' }]}
-               >
-                 <Select 
-                   placeholder="Select primary influencer"
-                   showSearch
-                   filterOption={(input, option) => {
-                     const searchText = input.toLowerCase();
-                     const influencer = influencers.find(inf => inf.id === option?.value);
-                     if (!influencer) return false;
-                     
-                     const name = influencer.name?.toLowerCase() || '';
-                     const email = influencer.email?.toLowerCase() || '';
-                     const country = influencer.country?.toLowerCase() || '';
-                     
-                     return name.includes(searchText) || 
-                            email.includes(searchText) || 
-                            country.includes(searchText);
-                   }}
-                   onChange={(value) => handleInfluencerChange(value, false)}
-                 >
-                   {influencers.map(influencer => (
-                     <Option key={influencer.id} value={influencer.id}>
-                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
-                     </Option>
-                   ))}
-                 </Select>
-               </Form.Item>
-             </Col>
-             <Col span={12}>
-               {selectedServiceType === 'dual' && (
-                 <Form.Item
-                   name="invited_influencer_id"
-                   label="Invited Influencer"
-                 >
-                   <Select 
-                     placeholder="Select invited influencer" 
-                     allowClear
-                     showSearch
-                     filterOption={(input, option) => {
-                       const searchText = input.toLowerCase();
-                       const influencer = influencers.find(inf => inf.id === option?.value);
-                       if (!influencer) return false;
-                       
-                       const name = influencer.name?.toLowerCase() || '';
-                       const email = influencer.email?.toLowerCase() || '';
-                       const country = influencer.country?.toLowerCase() || '';
-                       
-                       return name.includes(searchText) || 
-                              email.includes(searchText) || 
-                              country.includes(searchText);
-                     }}
-                   >
-                     {influencers.map(influencer => (
-                       <Option key={influencer.id} value={influencer.id}>
-                         {influencer.name} ({influencer.email})
-                       </Option>
-                     ))}
-                   </Select>
-                 </Form.Item>
-               )}
-             </Col>
-           </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="primary_influencer_id"
+                label="Primary Influencer"
+                rules={[{ required: true, message: 'Please select primary influencer' }]}
+              >
+                <Select
+                  placeholder="Select primary influencer"
+                  showSearch
+                  filterOption={(input, option) => {
+                    const searchText = input.toLowerCase();
+                    const influencer = influencers.find(inf => inf.id === option?.value);
+                    if (!influencer) return false;
 
-           {selectedServiceType === 'dual' && (
-             <>
-               <Divider>Earnings Split</Divider>
-               <Row gutter={16}>
-                 <Col span={12}>
-                   <Form.Item
-                     name="primary_influencer_earnings_percentage"
-                     label="Primary Influencer Earnings (%)"
-                     rules={[
-                       { required: true, message: 'Please enter primary influencer earnings percentage' },
-                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
-                       {
-                         validator: (_, value) => {
-                           const invitedPercentage = form.getFieldValue('invited_influencer_earnings_percentage') || 0;
-                           const total = (value || 0) + invitedPercentage;
-                           if (total !== 100) {
-                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                     tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
-                   >
-                     <InputNumber 
-                       min={0} 
-                       max={100}
-                       step={0.01} 
-                       style={{ width: '100%' }} 
-                       placeholder="e.g., 60"
-                       suffix="%"
-                       onChange={() => {
-                         // Trigger validation for invited influencer percentage
-                         form.validateFields(['invited_influencer_earnings_percentage']);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-                 <Col span={12}>
-                   <Form.Item
-                     name="invited_influencer_earnings_percentage"
-                     label="Invited Influencer Earnings (%)"
-                     rules={[
-                       { required: true, message: 'Please enter invited influencer earnings percentage' },
-                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
-                       {
-                         validator: (_, value) => {
-                           const primaryPercentage = form.getFieldValue('primary_influencer_earnings_percentage') || 0;
-                           const total = primaryPercentage + (value || 0);
-                           if (total !== 100) {
-                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                     tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
-                   >
-                     <InputNumber 
-                       min={0} 
-                       max={100}
-                       step={0.01} 
-                       style={{ width: '100%' }} 
-                       placeholder="e.g., 40"
-                       suffix="%"
-                       onChange={() => {
-                         // Trigger validation for primary influencer percentage
-                         form.validateFields(['primary_influencer_earnings_percentage']);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-               </Row>
-             </>
-           )}
+                    const name = influencer.name?.toLowerCase() || '';
+                    const email = influencer.email?.toLowerCase() || '';
+                    const country = influencer.country?.toLowerCase() || '';
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item
-                 name="platform_id"
-                 label="Platforms"
-                 rules={[{ required: true, message: 'Please select platforms' }]}
-               >
-                 <Select 
-                   placeholder="Select platform"
-                   mode="multiple"
-                   showSearch
-                   filterOption={(input, option) =>
-                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                   }
-                 >
-                   {platforms.map(platform => (
-                     <Option key={platform.id} value={platform.id}>
-                       {platform.name}
-                     </Option>
-                   ))}
-                 </Select>
-               </Form.Item>
-             </Col>
-             <Col span={12}>
-               <Form.Item
-                 name="location_required"
-                 label="Location Required"
-                 valuePropName="checked"
-               >
-                 <Switch />
-               </Form.Item>
-             </Col>
-           </Row>
+                    return name.includes(searchText) ||
+                      email.includes(searchText) ||
+                      country.includes(searchText);
+                  }}
+                  onChange={(value) => handleInfluencerChange(value, false)}
+                >
+                  {influencers.map(influencer => (
+                    <Option key={influencer.id} value={influencer.id}>
+                      {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              {selectedServiceType === 'dual' && (
+                <Form.Item
+                  name="invited_influencer_id"
+                  label="Invited Influencer"
+                >
+                  <Select
+                    placeholder="Select invited influencer"
+                    allowClear
+                    showSearch
+                    filterOption={(input, option) => {
+                      const searchText = input.toLowerCase();
+                      const influencer = influencers.find(inf => inf.id === option?.value);
+                      if (!influencer) return false;
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item
-                 name="is_flash_deal"
-                 label="Is Flash Deal"
-                 valuePropName="checked"
-               >
-                 <Switch 
-                   onChange={(checked) => {
-                     setIsFlashDeal(checked);
-                     if (checked) {
-                       // When enabling flash deal, change service type to flash
-                       form.setFieldsValue({ service_type: 'flash' });
-                       setSelectedServiceType('flash');
-                       
-                       // When enabling flash deal, copy price to offer price if offer price is empty
-                       const currentPrice = form.getFieldValue('price');
-                       const currentOfferPrice = form.getFieldValue('offer_price');
-                       if (currentPrice && !currentOfferPrice) {
-                         form.setFieldsValue({ offer_price: currentPrice });
-                       }
-                     } else {
-                       // When disabling flash deal, change service type back to normal
-                       form.setFieldsValue({ service_type: 'normal' });
-                       setSelectedServiceType('normal');
-                     }
-                   }}
-                 />
-               </Form.Item>
-             </Col>
-           </Row>
+                      const name = influencer.name?.toLowerCase() || '';
+                      const email = influencer.email?.toLowerCase() || '';
+                      const country = influencer.country?.toLowerCase() || '';
 
-           {form.getFieldValue('is_flash_deal') && (
-             <>
-               <Divider>Flash Deal Settings</Divider>
-               
+                      return name.includes(searchText) ||
+                        email.includes(searchText) ||
+                        country.includes(searchText);
+                    }}
+                  >
+                    {influencers.map(influencer => (
+                      <Option key={influencer.id} value={influencer.id}>
+                        {influencer.name} ({influencer.email})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
+            </Col>
+          </Row>
 
-               
-               <Row gutter={16}>
-                 <Col span={12}>
-                   <Form.Item
-                     name="flash_from"
-                     label="Flash Deal From"
-                     rules={[
-                       { required: true, message: 'Please select flash deal start date' },
-                       {
-                         validator: (_, value) => {
-                           if (!value) {
-                             return Promise.reject(new Error('Please select flash deal start date'));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                   >
-                     <DatePicker 
-                       showTime={{ format: 'HH:mm' }}
-                       style={{ width: '100%' }}
-                       format="YYYY-MM-DD HH:mm"
-                       placeholder="Select start date and time"
-                       showNow={false}
-                       onChange={(date, dateString) => {
-                         console.log('DatePicker onChange - date:', date);
-                         console.log('DatePicker onChange - dateString:', dateString);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-                 <Col span={12}>
-                   <Form.Item
-                     name="flash_to"
-                     label="Flash Deal To"
-                     rules={[
-                       { required: true, message: 'Please select flash deal end date' },
-                       {
-                         validator: (_, value) => {
-                           if (!value) {
-                             return Promise.reject(new Error('Please select flash deal end date'));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                   >
-                     <DatePicker 
-                       showTime={{ format: 'HH:mm' }}
-                       style={{ width: '100%' }}
-                       format="YYYY-MM-DD HH:mm"
-                       placeholder="Select end date and time"
-                       showNow={false}
-                       onChange={(date, dateString) => {
-                         console.log('DatePicker onChange - date:', date);
-                         console.log('DatePicker onChange - dateString:', dateString);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-               </Row>
-             </>
-           )}
+          {selectedServiceType === 'dual' && (
+            <>
+              <Divider>Earnings Split</Divider>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="primary_influencer_earnings_percentage"
+                    label="Primary Influencer Earnings (%)"
+                    rules={[
+                      { required: true, message: 'Please enter primary influencer earnings percentage' },
+                      { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                      {
+                        validator: (_, value) => {
+                          const invitedPercentage = form.getFieldValue('invited_influencer_earnings_percentage') || 0;
+                          const total = (value || 0) + invitedPercentage;
+                          if (total !== 100) {
+                            return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                    tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
+                  >
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      style={{ width: '100%' }}
+                      placeholder="e.g., 60"
+                      suffix="%"
+                      onChange={() => {
+                        // Trigger validation for invited influencer percentage
+                        form.validateFields(['invited_influencer_earnings_percentage']);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="invited_influencer_earnings_percentage"
+                    label="Invited Influencer Earnings (%)"
+                    rules={[
+                      { required: true, message: 'Please enter invited influencer earnings percentage' },
+                      { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                      {
+                        validator: (_, value) => {
+                          const primaryPercentage = form.getFieldValue('primary_influencer_earnings_percentage') || 0;
+                          const total = primaryPercentage + (value || 0);
+                          if (total !== 100) {
+                            return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                    tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
+                  >
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      style={{ width: '100%' }}
+                      placeholder="e.g., 40"
+                      suffix="%"
+                      onChange={() => {
+                        // Trigger validation for primary influencer percentage
+                        form.validateFields(['primary_influencer_earnings_percentage']);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
 
-                     {selectedServiceType === 'dual' && (
-             <Form.Item
-               name="about_us"
-               label="About Us"
-             >
-               <TextArea rows={3} />
-             </Form.Item>
-           )}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="platform_id"
+                label="Platforms"
+                rules={[{ required: true, message: 'Please select platforms' }]}
+              >
+                <Select
+                  placeholder="Select platform"
+                  mode="multiple"
+                  showSearch
+                  filterOption={(input, option) =>
+                    String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {platforms.map(platform => (
+                    <Option key={platform.id} value={platform.id}>
+                      {platform.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="location_required"
+                label="Location Required"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="is_flash_deal"
+                label="Is Flash Deal"
+                valuePropName="checked"
+              >
+                <Switch
+                  onChange={(checked) => {
+                    setIsFlashDeal(checked);
+                    if (checked) {
+                      // When enabling flash deal, change service type to flash
+                      form.setFieldsValue({ service_type: 'flash' });
+                      setSelectedServiceType('flash');
+
+                      // When enabling flash deal, copy price to offer price if offer price is empty
+                      const currentPrice = form.getFieldValue('price');
+                      const currentOfferPrice = form.getFieldValue('offer_price');
+                      if (currentPrice && !currentOfferPrice) {
+                        form.setFieldsValue({ offer_price: currentPrice });
+                      }
+                    } else {
+                      // When disabling flash deal, change service type back to normal
+                      form.setFieldsValue({ service_type: 'normal' });
+                      setSelectedServiceType('normal');
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {form.getFieldValue('is_flash_deal') && (
+            <>
+              <Divider>Flash Deal Settings</Divider>
+
+
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_from"
+                    label="Flash Deal From"
+                    rules={[
+                      { required: true, message: 'Please select flash deal start date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal start date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select start date and time"
+                      showNow={false}
+                      onChange={(date, dateString) => {
+                        console.log('DatePicker onChange - date:', date);
+                        console.log('DatePicker onChange - dateString:', dateString);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_to"
+                    label="Flash Deal To"
+                    rules={[
+                      { required: true, message: 'Please select flash deal end date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal end date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select end date and time"
+                      showNow={false}
+                      onChange={(date, dateString) => {
+                        console.log('DatePicker onChange - date:', date);
+                        console.log('DatePicker onChange - dateString:', dateString);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
+
+          {selectedServiceType === 'dual' && (
+            <Form.Item
+              name="about_us"
+              label="About Us"
+            >
+              <TextArea rows={3} />
+            </Form.Item>
+          )}
 
           <Form.Item label="Thumbnail">
             <Upload
@@ -1347,25 +1395,25 @@ export default function Services() {
           </Form.Item>
         </Form>
       </Modal>
-      
+
       {/* Edit Modal */}
       <Modal
         title="Edit Service"
         open={editModalOpen}
-        onCancel={() => { 
-          setEditModalOpen(false); 
-          setEditingService(null); 
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingService(null);
           editForm.resetFields();
-          setEditThumbnailFile(null); 
+          setEditThumbnailFile(null);
         }}
         footer={null}
         width={800}
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form 
+        <Form
           key={editingService?.id || 'new'}
-          form={editForm} 
-          layout="vertical" 
+          form={editForm}
+          layout="vertical"
           onFinish={handleEditService}
           initialValues={editingService ? {
             title: editingService.title,
@@ -1397,7 +1445,7 @@ export default function Services() {
             </Col>
             <Col span={12}>
               <Form.Item name="service_type" label="Service Type" rules={[{ required: true, message: 'Please select service type' }]}>
-                <Select 
+                <Select
                   placeholder="Select service type"
                   onChange={(value) => {
                     setSelectedServiceType(value);
@@ -1434,9 +1482,9 @@ export default function Services() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item 
-                name="min_duration_days" 
-                label="Minimum Duration (Days)" 
+              <Form.Item
+                name="min_duration_days"
+                label="Minimum Duration (Days)"
                 rules={[
                   { required: true, message: 'Please enter minimum duration' },
                   { type: 'number', min: 2, message: 'Minimum duration must be greater than 1 day' }
@@ -1463,7 +1511,7 @@ export default function Services() {
                 label="Currency"
                 rules={[{ required: true, message: 'Please select currency' }]}
               >
-                <Select 
+                <Select
                   placeholder="Select currency"
                   value={editSelectedCurrency}
                   onChange={(value) => setEditSelectedCurrency(value)}
@@ -1482,10 +1530,10 @@ export default function Services() {
                 label={`Price (${getCurrencySymbol(editSelectedCurrency)})`}
                 rules={[{ required: true, message: 'Please enter price' }]}
               >
-                <InputNumber 
-                  min={0} 
-                  step={0.01} 
-                  style={{ width: '100%' }} 
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
                   onChange={(value) => {
@@ -1512,11 +1560,11 @@ export default function Services() {
                   }),
                 ]}
               >
-                <InputNumber 
-                  min={0} 
+                <InputNumber
+                  min={0}
                   step={0.001}
                   precision={getCurrencyDecimals(editSelectedCurrency)}
-                  style={{ width: '100%' }} 
+                  style={{ width: '100%' }}
                   disabled={!editIsFlashDeal}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
@@ -1525,273 +1573,273 @@ export default function Services() {
             </Col>
           </Row>
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item name="primary_influencer_id" label="Primary Influencer" rules={[{ required: true, message: 'Please select primary influencer' }]}>
-                 <Select 
-                   placeholder="Select primary influencer"
-                   showSearch
-                   filterOption={(input, option) => {
-                     const searchText = input.toLowerCase();
-                     const influencer = influencers.find(inf => inf.id === option?.value);
-                     if (!influencer) return false;
-                     
-                     const name = influencer.name?.toLowerCase() || '';
-                     const email = influencer.email?.toLowerCase() || '';
-                     const country = influencer.country?.toLowerCase() || '';
-                     
-                     return name.includes(searchText) || 
-                            email.includes(searchText) || 
-                            country.includes(searchText);
-                   }}
-                   onChange={(value) => handleInfluencerChange(value, true)}
-                 >
-                   {influencers.map(influencer => (
-                     <Option key={influencer.id} value={influencer.id}>
-                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
-                     </Option>
-                   ))}
-                 </Select>
-               </Form.Item>
-             </Col>
-             <Col span={12}>
-               {selectedServiceType === 'dual' && (
-                 <Form.Item name="invited_influencer_id" label="Invited Influencer">
-                   <Select 
-                     placeholder="Select invited influencer" 
-                     allowClear
-                     showSearch
-                     filterOption={(input, option) => {
-                       const searchText = input.toLowerCase();
-                       const influencer = influencers.find(inf => inf.id === option?.value);
-                       if (!influencer) return false;
-                       
-                       const name = influencer.name?.toLowerCase() || '';
-                       const email = influencer.email?.toLowerCase() || '';
-                       const country = influencer.country?.toLowerCase() || '';
-                       
-                       return name.includes(searchText) || 
-                              email.includes(searchText) || 
-                              country.includes(searchText);
-                     }}
-                   >
-                     {influencers.map(influencer => (
-                       <Option key={influencer.id} value={influencer.id}>
-                         {influencer.name} ({influencer.email})
-                       </Option>
-                     ))}
-                   </Select>
-                 </Form.Item>
-               )}
-             </Col>
-           </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="primary_influencer_id" label="Primary Influencer" rules={[{ required: true, message: 'Please select primary influencer' }]}>
+                <Select
+                  placeholder="Select primary influencer"
+                  showSearch
+                  filterOption={(input, option) => {
+                    const searchText = input.toLowerCase();
+                    const influencer = influencers.find(inf => inf.id === option?.value);
+                    if (!influencer) return false;
 
-           {selectedServiceType === 'dual' && (
-             <>
-               <Divider>Earnings Split</Divider>
-               <Row gutter={16}>
-                 <Col span={12}>
-                   <Form.Item
-                     name="primary_influencer_earnings_percentage"
-                     label="Primary Influencer Earnings (%)"
-                     rules={[
-                       { required: true, message: 'Please enter primary influencer earnings percentage' },
-                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
-                       {
-                         validator: (_, value) => {
-                           const invitedPercentage = editForm.getFieldValue('invited_influencer_earnings_percentage') || 0;
-                           const total = (value || 0) + invitedPercentage;
-                           if (total !== 100) {
-                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                     tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
-                   >
-                     <InputNumber 
-                       min={0} 
-                       max={100}
-                       step={0.01} 
-                       style={{ width: '100%' }} 
-                       placeholder="e.g., 60"
-                       suffix="%"
-                       onChange={() => {
-                         // Trigger validation for invited influencer percentage
-                         editForm.validateFields(['invited_influencer_earnings_percentage']);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-                 <Col span={12}>
-                   <Form.Item
-                     name="invited_influencer_earnings_percentage"
-                     label="Invited Influencer Earnings (%)"
-                     rules={[
-                       { required: true, message: 'Please enter invited influencer earnings percentage' },
-                       { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
-                       {
-                         validator: (_, value) => {
-                           const primaryPercentage = editForm.getFieldValue('primary_influencer_earnings_percentage') || 0;
-                           const total = primaryPercentage + (value || 0);
-                           if (total !== 100) {
-                             return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                     tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
-                   >
-                     <InputNumber 
-                       min={0} 
-                       max={100}
-                       step={0.01} 
-                       style={{ width: '100%' }} 
-                       placeholder="e.g., 40"
-                       suffix="%"
-                       onChange={() => {
-                         // Trigger validation for primary influencer percentage
-                         editForm.validateFields(['primary_influencer_earnings_percentage']);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-               </Row>
-             </>
-           )}
+                    const name = influencer.name?.toLowerCase() || '';
+                    const email = influencer.email?.toLowerCase() || '';
+                    const country = influencer.country?.toLowerCase() || '';
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item name="platform_id" label="Platforms" rules={[{ required: true, message: 'Please select platforms' }]}>
-                 <Select 
-                   placeholder="Select platform"
-                   mode="multiple"
-                   showSearch
-                   filterOption={(input, option) =>
-                     String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                   }
-                 >
-                   {platforms.map(platform => (
-                     <Option key={platform.id} value={platform.id}>
-                       {platform.name}
-                     </Option>
-                   ))}
-                 </Select>
-               </Form.Item>
-             </Col>
-             <Col span={12}>
-               <Form.Item name="location_required" label="Location Required" valuePropName="checked">
-                 <Switch />
-               </Form.Item>
-             </Col>
-           </Row>
+                    return name.includes(searchText) ||
+                      email.includes(searchText) ||
+                      country.includes(searchText);
+                  }}
+                  onChange={(value) => handleInfluencerChange(value, true)}
+                >
+                  {influencers.map(influencer => (
+                    <Option key={influencer.id} value={influencer.id}>
+                      {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              {selectedServiceType === 'dual' && (
+                <Form.Item name="invited_influencer_id" label="Invited Influencer">
+                  <Select
+                    placeholder="Select invited influencer"
+                    allowClear
+                    showSearch
+                    filterOption={(input, option) => {
+                      const searchText = input.toLowerCase();
+                      const influencer = influencers.find(inf => inf.id === option?.value);
+                      if (!influencer) return false;
+
+                      const name = influencer.name?.toLowerCase() || '';
+                      const email = influencer.email?.toLowerCase() || '';
+                      const country = influencer.country?.toLowerCase() || '';
+
+                      return name.includes(searchText) ||
+                        email.includes(searchText) ||
+                        country.includes(searchText);
+                    }}
+                  >
+                    {influencers.map(influencer => (
+                      <Option key={influencer.id} value={influencer.id}>
+                        {influencer.name} ({influencer.email})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
+            </Col>
+          </Row>
+
+          {selectedServiceType === 'dual' && (
+            <>
+              <Divider>Earnings Split</Divider>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="primary_influencer_earnings_percentage"
+                    label="Primary Influencer Earnings (%)"
+                    rules={[
+                      { required: true, message: 'Please enter primary influencer earnings percentage' },
+                      { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                      {
+                        validator: (_, value) => {
+                          const invitedPercentage = editForm.getFieldValue('invited_influencer_earnings_percentage') || 0;
+                          const total = (value || 0) + invitedPercentage;
+                          if (total !== 100) {
+                            return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                    tooltip="Percentage of earnings for the primary influencer. Must sum to 100% with invited influencer percentage."
+                  >
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      style={{ width: '100%' }}
+                      placeholder="e.g., 60"
+                      suffix="%"
+                      onChange={() => {
+                        // Trigger validation for invited influencer percentage
+                        editForm.validateFields(['invited_influencer_earnings_percentage']);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="invited_influencer_earnings_percentage"
+                    label="Invited Influencer Earnings (%)"
+                    rules={[
+                      { required: true, message: 'Please enter invited influencer earnings percentage' },
+                      { type: 'number', min: 0, max: 100, message: 'Percentage must be between 0 and 100' },
+                      {
+                        validator: (_, value) => {
+                          const primaryPercentage = editForm.getFieldValue('primary_influencer_earnings_percentage') || 0;
+                          const total = primaryPercentage + (value || 0);
+                          if (total !== 100) {
+                            return Promise.reject(new Error(`Total must equal 100%. Current total: ${total}%`));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                    tooltip="Percentage of earnings for the invited influencer. Must sum to 100% with primary influencer percentage."
+                  >
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      style={{ width: '100%' }}
+                      placeholder="e.g., 40"
+                      suffix="%"
+                      onChange={() => {
+                        // Trigger validation for primary influencer percentage
+                        editForm.validateFields(['primary_influencer_earnings_percentage']);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="platform_id" label="Platforms" rules={[{ required: true, message: 'Please select platforms' }]}>
+                <Select
+                  placeholder="Select platform"
+                  mode="multiple"
+                  showSearch
+                  filterOption={(input, option) =>
+                    String(option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {platforms.map(platform => (
+                    <Option key={platform.id} value={platform.id}>
+                      {platform.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="location_required" label="Location Required" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Divider>Flash Deal Settings</Divider>
 
-                     <Row gutter={16}>
-             <Col span={12}>
-               <Form.Item name="is_flash_deal" label="Is Flash Deal" valuePropName="checked"> 
-                 <Switch 
-                   onChange={(checked) => {
-                     setEditIsFlashDeal(checked);
-                     if (checked) {
-                       // When enabling flash deal, change service type to flash
-                       editForm.setFieldsValue({ service_type: 'flash' });
-                       setSelectedServiceType('flash');
-                       
-                       // When enabling flash deal, copy price to offer price if offer price is empty
-                       const currentPrice = editForm.getFieldValue('price');
-                       const currentOfferPrice = editForm.getFieldValue('offer_price');
-                       if (currentPrice && !currentOfferPrice) {
-                         editForm.setFieldsValue({ offer_price: currentPrice });
-                       }
-                     } else {
-                       // When disabling flash deal, change service type back to normal
-                       editForm.setFieldsValue({ service_type: 'normal' });
-                       setSelectedServiceType('normal');
-                     }
-                   }}
-                 /> 
-               </Form.Item>
-             </Col>
-           </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="is_flash_deal" label="Is Flash Deal" valuePropName="checked">
+                <Switch
+                  onChange={(checked) => {
+                    setEditIsFlashDeal(checked);
+                    if (checked) {
+                      // When enabling flash deal, change service type to flash
+                      editForm.setFieldsValue({ service_type: 'flash' });
+                      setSelectedServiceType('flash');
 
-           {editForm.getFieldValue('is_flash_deal') && (
-             <>
-               <Divider>Flash Deal Settings</Divider>
-               
+                      // When enabling flash deal, copy price to offer price if offer price is empty
+                      const currentPrice = editForm.getFieldValue('price');
+                      const currentOfferPrice = editForm.getFieldValue('offer_price');
+                      if (currentPrice && !currentOfferPrice) {
+                        editForm.setFieldsValue({ offer_price: currentPrice });
+                      }
+                    } else {
+                      // When disabling flash deal, change service type back to normal
+                      editForm.setFieldsValue({ service_type: 'normal' });
+                      setSelectedServiceType('normal');
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
-               
-               <Row gutter={16}>
-                 <Col span={12}>
-                   <Form.Item
-                     name="flash_from"
-                     label="Flash Deal From"
-                     rules={[
-                       { required: true, message: 'Please select flash deal start date' },
-                       {
-                         validator: (_, value) => {
-                           if (!value) {
-                             return Promise.reject(new Error('Please select flash deal start date'));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                   >
-                     <DatePicker 
-                       showTime={{ format: 'HH:mm' }}
-                       style={{ width: '100%' }}
-                       format="YYYY-MM-DD HH:mm"
-                       placeholder="Select start date and time"
-                       showNow={false}
-                       onChange={(date, dateString) => {
-                         console.log('DatePicker onChange - date:', date);
-                         console.log('DatePicker onChange - dateString:', dateString);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-                 <Col span={12}>
-                   <Form.Item
-                     name="flash_to"
-                     label="Flash Deal To"
-                     rules={[
-                       { required: true, message: 'Please select flash deal end date' },
-                       {
-                         validator: (_, value) => {
-                           if (!value) {
-                             return Promise.reject(new Error('Please select flash deal end date'));
-                           }
-                           return Promise.resolve();
-                         }
-                       }
-                     ]}
-                   >
-                     <DatePicker 
-                       showTime={{ format: 'HH:mm' }}
-                       style={{ width: '100%' }}
-                       format="YYYY-MM-DD HH:mm"
-                       placeholder="Select end date and time"
-                       showNow={false}
-                       onChange={(date, dateString) => {
-                         console.log('DatePicker onChange - date:', date);
-                         console.log('DatePicker onChange - dateString:', dateString);
-                       }}
-                     />
-                   </Form.Item>
-                 </Col>
-               </Row>
-             </>
-           )}
+          {editForm.getFieldValue('is_flash_deal') && (
+            <>
+              <Divider>Flash Deal Settings</Divider>
 
-                     {selectedServiceType === 'dual' && (
-             <Form.Item name="about_us" label="About Us">
-               <TextArea rows={3} />
-             </Form.Item>
-           )}
+
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_from"
+                    label="Flash Deal From"
+                    rules={[
+                      { required: true, message: 'Please select flash deal start date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal start date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select start date and time"
+                      showNow={false}
+                      onChange={(date, dateString) => {
+                        console.log('DatePicker onChange - date:', date);
+                        console.log('DatePicker onChange - dateString:', dateString);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_to"
+                    label="Flash Deal To"
+                    rules={[
+                      { required: true, message: 'Please select flash deal end date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal end date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select end date and time"
+                      showNow={false}
+                      onChange={(date, dateString) => {
+                        console.log('DatePicker onChange - date:', date);
+                        console.log('DatePicker onChange - dateString:', dateString);
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
+
+          {selectedServiceType === 'dual' && (
+            <Form.Item name="about_us" label="About Us">
+              <TextArea rows={3} />
+            </Form.Item>
+          )}
 
           <Form.Item label="Thumbnail">
             <Upload
@@ -1859,7 +1907,7 @@ export default function Services() {
                 {selectedServiceDetails.description || 'No description'}
               </Descriptions.Item>
               <Descriptions.Item label="Service Type">
-                <span style={{ 
+                <span style={{
                   color: selectedServiceDetails.service_type === 'flash' ? '#ff4d4f' : selectedServiceDetails.service_type === 'dual' ? '#1890ff' : '#52c41a',
                   fontWeight: 'bold'
                 }}>
@@ -1902,7 +1950,7 @@ export default function Services() {
             </Descriptions>
 
             <Divider>Bookings</Divider>
-            
+
             {bookingsLoading ? (
               <Spin />
             ) : serviceBookings.length > 0 ? (
@@ -1918,7 +1966,7 @@ export default function Services() {
                       title: 'Booking ID',
                       dataIndex: 'id',
                       key: 'id',
-                      render: (id: string) => <Text code>{id.substring(0, 8)}...</Text>
+                      render: (id: string) => <Typography.Text code>{id.substring(0, 8)}...</Typography.Text>
                     },
                     {
                       title: 'Created At',

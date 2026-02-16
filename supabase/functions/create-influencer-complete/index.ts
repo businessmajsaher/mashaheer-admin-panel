@@ -16,14 +16,14 @@ async function checkAuthorization(req: Request) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new Error('Unauthorized: Missing token');
   }
-  
+
   const token = authHeader.replace('Bearer ', '');
-  
+
   // For now, just check if token exists (you can add more validation later)
   if (!token) {
     throw new Error('Unauthorized: Invalid token');
   }
-  
+
   return { token };
 }
 
@@ -33,7 +33,7 @@ serve(async (req: Request) => {
   console.log('Method:', req.method);
   console.log('URL:', req.url);
   console.log('Headers:', Object.fromEntries(req.headers.entries()));
-  
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     console.log('Handling CORS preflight request');
@@ -53,17 +53,17 @@ serve(async (req: Request) => {
 
   try {
     console.log('Processing POST request...');
-    
+
     // Check authorization (basic token check)
     await checkAuthorization(req);
     console.log('Authorization passed');
-    
+
     // Log the raw request body for debugging
     const rawBody = await req.text();
     console.log('=== REQUEST BODY DETAILS ===');
     console.log('Raw request body length:', rawBody.length);
     console.log('Raw request body:', rawBody);
-    
+
     // Parse request body
     let bodyData;
     try {
@@ -86,22 +86,22 @@ serve(async (req: Request) => {
         }
       });
     }
-    
-    const { 
-      email, 
-      password, 
-      name, 
-      bio, 
+
+    const {
+      email,
+      password,
+      name,
+      bio,
       country,
-      profile_image_url, 
-      is_verified, 
+      profile_image_url,
+      is_verified,
       commission_percentage,
-      social_links, 
+      social_links,
       media_files,
       is_update,
-      influencer_id 
+      influencer_id
     } = bodyData;
-    
+
     // Log individual fields for debugging
     console.log('=== EXTRACTED FIELDS ===');
     console.log('Email:', email, 'Type:', typeof email, 'Present:', !!email);
@@ -115,11 +115,11 @@ serve(async (req: Request) => {
     console.log('Media Files:', media_files, 'Type:', typeof media_files, 'Present:', !!media_files);
     console.log('Is Update:', is_update, 'Type:', typeof is_update, 'Present:', !!is_update);
     console.log('Influencer ID:', influencer_id, 'Type:', typeof influencer_id, 'Present:', !!influencer_id);
-    
+
     if (!email || !name) {
       console.log('=== MISSING REQUIRED FIELDS ===');
       console.log('Missing required fields. Email:', !!email, 'Name:', !!name);
-      
+
       return new Response(JSON.stringify({
         error: 'Missing required fields: email, name',
         received: {
@@ -143,7 +143,7 @@ serve(async (req: Request) => {
     console.log('=== SUPABASE CLIENT SETUP ===');
     console.log('SUPABASE_URL:', SUPABASE_URL ? 'Present' : 'Missing');
     console.log('SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? 'Present (length: ' + SERVICE_ROLE_KEY.length + ')' : 'Missing');
-    
+
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
       console.error('Missing environment variables');
       return new Response(JSON.stringify({
@@ -157,25 +157,68 @@ serve(async (req: Request) => {
         }
       });
     }
-    
+
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
       }
     });
-    
+
     console.log('Supabase client created successfully');
 
     let userId: string;
     let isNewUser = false;
+    let debugInfo: any = {};
 
     if (is_update && influencer_id) {
       // Update existing influencer
       console.log('=== UPDATING EXISTING INFLUENCER ===');
       userId = influencer_id;
-      
+
       // Update profile
+      // Build update data object
+      // Check for email change
+      let emailChanged = false;
+      if (email) {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', userId)
+          .single();
+
+        debugInfo.currentProfile = currentProfile;
+        debugInfo.requestedEmail = email;
+
+        if (currentProfile && currentProfile.email && currentProfile.email.toLowerCase() !== email.toLowerCase()) {
+          console.log(`Email changed from ${currentProfile.email} to ${email}. Updating Auth user...`);
+          // verification required: do NOT set email_confirm: true
+          const { error: authUpdateError } = await supabase.auth.admin.updateUserById(
+            userId,
+            { email: email }
+          );
+
+          if (authUpdateError) {
+            console.error('Auth email update failed:', authUpdateError);
+            // Return a clear error to the client
+            return new Response(JSON.stringify({
+              error: 'Failed to update email',
+              details: authUpdateError.message
+            }), {
+              status: 400,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+              }
+            });
+          }
+          console.log('Auth email update initiated (verification email sent)');
+          emailChanged = true;
+          debugInfo.authUpdateSuccess = true;
+        }
+        debugInfo.emailChanged = emailChanged;
+      }
+
       // Build update data object
       const updateData: any = {
         name,
@@ -184,6 +227,11 @@ serve(async (req: Request) => {
         profile_image_url: profile_image_url || null,
         is_verified: is_verified || false
       };
+
+      // Include email in profile update if it changed
+      if (emailChanged) {
+        updateData.email = email;
+      }
 
       // Add commission_percentage only if explicitly provided
       if (commission_percentage !== undefined && commission_percentage !== null && commission_percentage !== '') {
@@ -198,7 +246,7 @@ serve(async (req: Request) => {
         .from('profiles')
         .update(updateData)
         .eq('id', influencer_id);
-      
+
       if (updateError) {
         console.error('Profile update error:', updateError);
         return new Response(JSON.stringify({
@@ -212,20 +260,21 @@ serve(async (req: Request) => {
           }
         });
       }
-      
+
       console.log('Profile updated successfully');
-      
+
     } else {
       // Create new influencer
       console.log('=== CREATING NEW INFLUENCER ===');
-      
+      console.log(`Reason for creation: is_update=${is_update}, influencer_id=${influencer_id}`);
+
       // Create user in Auth (only if password provided)
       if (password) {
         console.log('=== AUTH USER CREATION ===');
         console.log('Email:', email);
         console.log('Password:', password ? '[HIDDEN]' : 'missing');
         console.log('Name:', name);
-        
+
         try {
           const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
             email,
@@ -242,7 +291,7 @@ serve(async (req: Request) => {
             console.error('Error code:', authError.status);
             console.error('Error message:', authError.message);
             console.error('Error details:', authError);
-            
+
             return new Response(JSON.stringify({
               error: 'Failed to create user in authentication system',
               details: authError.message,
@@ -264,7 +313,7 @@ serve(async (req: Request) => {
           console.error('Error code:', authError.status);
           console.error('Error message:', authError.message);
           console.error('Error details:', authError);
-          
+
           return new Response(JSON.stringify({
             error: 'Failed to create user in authentication system',
             details: authError.message,
@@ -285,7 +334,7 @@ serve(async (req: Request) => {
 
       // Check if profile already exists by ID or email (might be from a previous failed attempt)
       console.log('Checking for existing profile with ID:', userId, 'or email:', email);
-      
+
       const { data: existingProfileById, error: checkByIdError } = await supabase
         .from('profiles')
         .select('id, email, role')
@@ -299,7 +348,7 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       const existingProfile = existingProfileById || existingProfileByEmail;
-      
+
       if (checkByIdError && checkByIdError.code !== 'PGRST116') {
         console.warn('Error checking existing profile by ID:', checkByIdError);
       }
@@ -309,11 +358,11 @@ serve(async (req: Request) => {
 
       if (existingProfile) {
         console.log('Found existing profile:', existingProfile);
-        
+
         // If profile exists with different ID but same email, that's a problem
         if (existingProfile.id !== userId) {
           console.error('Profile with email already exists with different ID:', existingProfile.id, 'vs', userId);
-          
+
           // If auth user was created, clean it up
           if (isNewUser) {
             try {
@@ -323,7 +372,7 @@ serve(async (req: Request) => {
               console.error('Failed to cleanup auth user:', cleanupError);
             }
           }
-          
+
           return new Response(JSON.stringify({
             error: 'Influencer with this email already exists',
             details: `An influencer with email "${email}" already exists with ID ${existingProfile.id}. Please edit the existing influencer instead.`,
@@ -341,7 +390,7 @@ serve(async (req: Request) => {
       // If profile exists with same ID, update it instead of creating
       if (existingProfile && existingProfile.id === userId) {
         console.log('Profile already exists with same ID, updating instead of creating:', existingProfile);
-        
+
         // Build update data object
         const updateData: any = {
           name,
@@ -370,7 +419,7 @@ serve(async (req: Request) => {
 
         if (updateError) {
           console.error('Profile update error:', updateError);
-          
+
           // If auth user was created, clean it up
           if (isNewUser) {
             try {
@@ -380,7 +429,7 @@ serve(async (req: Request) => {
               console.error('Failed to cleanup auth user:', cleanupError);
             }
           }
-          
+
           return new Response(JSON.stringify({
             error: 'Failed to update existing influencer profile',
             details: updateError.message,
@@ -429,7 +478,7 @@ serve(async (req: Request) => {
 
         // Check if error is due to duplicate key
         const isDuplicateKey = profileError && (
-          profileError.code === '23505' || 
+          profileError.code === '23505' ||
           profileError.message?.includes('duplicate key') ||
           profileError.message?.includes('profiles_pkey')
         );
@@ -437,7 +486,7 @@ serve(async (req: Request) => {
         if (isDuplicateKey) {
           console.log('Duplicate key detected during insert, attempting to update existing profile instead');
           console.log('Profile ID:', userId);
-          
+
           // Try to update instead
           const updateData: any = {
             name,
@@ -474,7 +523,7 @@ serve(async (req: Request) => {
                 console.error('Failed to cleanup auth user:', cleanupError);
               }
             }
-            
+
             return new Response(JSON.stringify({
               error: 'Failed to create or update influencer profile',
               details: `Profile with ID ${userId} already exists but update also failed: ${updateError.message}`,
@@ -498,7 +547,7 @@ serve(async (req: Request) => {
           console.error('Error message:', profileError.message);
           console.error('Error details:', JSON.stringify(profileError, null, 2));
           console.error('Profile data attempted:', JSON.stringify(profileData, null, 2));
-          
+
           // If auth user was created, clean it up
           if (isNewUser) {
             try {
@@ -508,11 +557,11 @@ serve(async (req: Request) => {
               console.error('Failed to cleanup auth user:', cleanupError);
             }
           }
-          
+
           // Check if error is due to missing column
           const errorMessage = profileError.message || '';
           const isColumnError = errorMessage.includes('column') && errorMessage.includes('does not exist');
-          
+
           return new Response(JSON.stringify({
             error: 'Failed to create influencer profile',
             details: profileError.message,
@@ -534,7 +583,7 @@ serve(async (req: Request) => {
     // Handle social links
     if (social_links && social_links.length > 0) {
       console.log('=== PROCESSING SOCIAL LINKS ===');
-      
+
       try {
         // Delete existing social links if updating
         if (is_update) {
@@ -579,7 +628,7 @@ serve(async (req: Request) => {
       console.log('Media files received:', media_files);
       console.log('Media files count:', media_files.length);
       console.log('User ID for media:', userId);
-      
+
       try {
         // First, check if the table exists
         console.log('Checking if influencer_media table exists...');
@@ -587,11 +636,11 @@ serve(async (req: Request) => {
           .from('influencer_media')
           .select('id')
           .limit(1);
-        
+
         if (tableError) {
           console.error('❌ Table check error - influencer_media table might not exist:', tableError);
           console.error('❌ Error details:', JSON.stringify(tableError, null, 2));
-          
+
           if (tableError.message && tableError.message.includes('relation "influencer_media" does not exist')) {
             console.error('❌ CRITICAL: influencer_media table does not exist!');
             console.error('❌ Please run the create_influencer_media_table.sql script in your Supabase database');
@@ -601,9 +650,9 @@ serve(async (req: Request) => {
           }
           return;
         }
-        
+
         console.log('✅ Table check successful, influencer_media table exists');
-        
+
         // Delete existing media if updating
         if (is_update) {
           console.log('Deleting existing media for user:', userId);
@@ -623,13 +672,24 @@ serve(async (req: Request) => {
         console.log('Preparing media data for insertion...');
         const mediaData = media_files.map((media: any, index: number) => {
           console.log(`Processing media file ${index + 1}:`, media);
+
+          // Normalize file_type to match database constraints (image, video)
+          let fileType = 'image';
+          if (media.file_type && media.file_type.startsWith('video/')) {
+            fileType = 'video';
+          } else if (media.mime_type && media.mime_type.startsWith('video/')) {
+            fileType = 'video';
+          } else if (media.file_type === 'video') {
+            fileType = 'video';
+          }
+
           return {
             influencer_id: userId,
             file_url: media.file_url,
-            file_type: media.file_type || 'image',
+            file_type: fileType,
             file_name: media.file_name,
             file_size: media.file_size || 0,
-            mime_type: media.mime_type || 'image/jpeg',
+            mime_type: media.mime_type || media.file_type || 'image/jpeg',
             created_at: new Date().toISOString()
           };
         });
@@ -696,7 +756,8 @@ serve(async (req: Request) => {
         role: 'influencer',
         is_new: isNewUser
       },
-      message: is_update ? 'Influencer updated successfully' : 'Influencer created successfully'
+      message: is_update ? 'Influencer updated successfully' : 'Influencer created successfully',
+      debug: debugInfo
     }), {
       status: 201,
       headers: {
@@ -710,7 +771,7 @@ serve(async (req: Request) => {
     console.error('Error type:', typeof error);
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
-    
+
     return new Response(JSON.stringify({
       error: error.message || 'Internal Server Error'
     }), {

@@ -385,308 +385,97 @@ export default function Influencers() {
       let influencerId: string;
 
       if (editingInfluencer) {
-        // Update existing influencer - handle media files too
-        console.log('13. Updating existing influencer with media files');
+        // Update existing influencer - use Edge Function
+        console.log('13. Updating existing influencer via Edge Function');
 
-        try {
-          // Update profile first
-          const profileUpdateData = {
-            name: values.name,
-            bio: values.bio || null,
-            country: values.country,
-            is_verified: values.is_verified || false,
-            profile_image_url: values.profile_image_url || null,
-            commission_percentage: values.commission_percentage !== undefined && values.commission_percentage !== null ? Number(values.commission_percentage) : 0
-          };
+        // 1. Prepare existing media
+        const existingMedia = detailMedia.map(m => ({
+          file_url: m.file_url,
+          file_type: m.file_type || (m.mime_type?.startsWith('video/') ? 'video' : 'image'),
+          file_name: m.file_name,
+          mime_type: m.mime_type,
+          file_size: m.file_size
+        }));
 
-          console.log('13a. Profile update data:', profileUpdateData);
-          console.log('13b. Profile image URL value:', values.profile_image_url);
-          console.log('13c. Social links value:', values.social_links);
-          console.log('13d. Verification status value:', values.is_verified, 'Type:', typeof values.is_verified);
+        // 2. Upload new media files
+        let uploadedNewMediaFiles: any[] = [];
+        const newMediaFilesToUpload = mediaFiles.filter(mediaFile => mediaFile.file !== null);
 
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update(profileUpdateData)
-            .eq('id', editingInfluencer.id);
-
-          if (updateError) {
-            console.error('Error updating profile:', updateError);
-            throw new Error(`Failed to update influencer: ${updateError.message}`);
+        if (newMediaFilesToUpload.length > 0) {
+          console.log('13a. Uploading new media files:', newMediaFilesToUpload);
+          try {
+            uploadedNewMediaFiles = await uploadFilesToStorage(newMediaFilesToUpload);
+            console.log('13b. New media files uploaded:', uploadedNewMediaFiles);
+          } catch (uploadError: any) {
+            console.error('Error uploading new media files:', uploadError);
+            throw new Error(`Failed to upload media files: ${uploadError.message}`);
           }
-
-          console.log('14. Profile updated successfully');
-
-          // Verify the profile update
-          const { data: verifyProfile, error: verifyError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', editingInfluencer.id)
-            .single();
-
-          if (verifyError) {
-            console.error('Profile verification error:', verifyError);
-          } else {
-            console.log('14a. Profile verification after update:', verifyProfile);
-            console.log('14b. Updated profile image URL:', verifyProfile.profile_image_url);
-            console.log('14c. Updated verification status:', verifyProfile.is_verified);
-
-            // Send notification if verification status changed to true
-            if (verifyProfile && verifyProfile.is_verified && !editingInfluencer.is_verified) {
-              console.log('🎉 Verification status changed to TRUE. Sending notification...');
-              try {
-                // Send email can FCM notification using the Edge Function
-                const notifResult = await notificationService.sendAccountNotification({
-                  user_id: editingInfluencer.id,
-                  notification_type: 'verification_approved',
-                  message: 'Congratulations! Your influencer profile has been verified. You are now visible to brands and customers.'
-                });
-
-                if (notifResult.success) {
-                  message.success('Verification notification sent to influencer');
-                  console.log('✅ Verification notification sent successfully');
-                } else {
-                  console.error('❌ Failed to send verification notification:', notifResult.error);
-                  // Don't block the UI, just log the error
-                }
-              } catch (notifErr) {
-                console.error('❌ Exception sending verification notification:', notifErr);
-              }
-            }
-          }
-
-          influencerId = editingInfluencer.id;
-
-          // Update social links for existing influencer
-          if (values.social_links && values.social_links.length > 0) {
-            console.log('14a. Updating social links for existing influencer...');
-            console.log('14b. Social links to update:', values.social_links);
-            console.log('14c. Social links structure check:', values.social_links.map((link: any) => ({
-              platform_id: link.platform_id,
-              handle: link.handle,
-              profile_url: link.profile_url,
-              url: link.url // Check if this exists
-            })));
-
-            try {
-              // First, delete existing social links
-              const { error: deleteError } = await supabase
-                .from('social_links')
-                .delete()
-                .eq('user_id', influencerId);
-
-              if (deleteError) {
-                console.error('14c. Error deleting existing social links:', deleteError);
-                throw new Error(`Failed to delete existing social links: ${deleteError.message}`);
-              }
-
-              console.log('14d. Existing social links deleted successfully');
-
-              // Then, insert new social links
-              const socialLinksData = values.social_links.map((link: any) => ({
-                user_id: influencerId,
-                platform_id: link.platform_id,
-                handle: link.handle,
-                profile_url: link.profile_url,
-                created_at: new Date().toISOString()
-              }));
-
-              const { data: insertedSocialLinks, error: socialError } = await supabase
-                .from('social_links')
-                .insert(socialLinksData)
-                .select();
-
-              if (socialError) {
-                console.error('14e. Error inserting social links:', socialError);
-                throw new Error(`Failed to insert social links: ${socialError.message}`);
-              }
-
-              console.log('14f. Social links updated successfully:', insertedSocialLinks);
-
-            } catch (socialError: any) {
-              console.error('Social links update error:', socialError);
-              throw new Error(`Failed to update social links: ${socialError.message}`);
-            }
-          } else {
-            console.log('14a. No social links to update for existing influencer');
-          }
-
-          // Handle media files for existing influencer
-          if (mediaFiles.length > 0) {
-            console.log('15. Processing media files for existing influencer...');
-            console.log('15a. Media files to process:', mediaFiles);
-
-            // Filter out existing media files (they don't have actual File objects)
-            const newMediaFiles = mediaFiles.filter(mediaFile => mediaFile.file !== null);
-            console.log('15b. New media files to upload:', newMediaFiles);
-
-            if (newMediaFiles.length > 0) {
-              // Test storage bucket access
-              try {
-                const { data: bucketTest, error: bucketError } = await supabase.storage
-                  .from('influencer-media')
-                  .list('', { limit: 1 });
-
-                if (bucketError) {
-                  console.error('15c. Storage bucket test failed:', bucketError);
-                  throw new Error(`Storage bucket not accessible: ${bucketError.message}`);
-                }
-
-                console.log('15d. Storage bucket test successful');
-              } catch (bucketTestError) {
-                console.error('15e. Storage bucket test error:', bucketTestError);
-                throw bucketTestError;
-              }
-
-              try {
-                const uploadPromises = newMediaFiles.map(async (mediaFile, index) => {
-                  console.log(`15f. Processing new media file ${index + 1}:`, mediaFile);
-                  const file = mediaFile.file;
-
-                  if (!file) {
-                    console.warn(`15g. Skipping media file ${index + 1} - no file object`);
-                    return null;
-                  }
-
-                  // Validate file before upload
-                  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-                  const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
-                  const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-
-                  if (!allAllowedTypes.includes(file.type)) {
-                    const errorMsg = `File ${file.name} has invalid type: ${file.type || 'unknown'}`;
-                    console.error(`15g1. ${errorMsg}`);
-                    throw new Error(errorMsg);
-                  }
-
-                  const maxImageSize = 10 * 1024 * 1024; // 10MB
-                  const maxVideoSize = 100 * 1024 * 1024; // 100MB
-                  const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
-
-                  if (file.size > maxSize) {
-                    const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
-                    console.error(`15g2. ${errorMsg}`);
-                    throw new Error(errorMsg);
-                  }
-
-                  if (file.size === 0) {
-                    const errorMsg = `File ${file.name} appears to be empty or corrupted`;
-                    console.error(`15g3. ${errorMsg}`);
-                    throw new Error(errorMsg);
-                  }
-
-                  const filePath = `influencer-media/${Date.now()}-${file.name}`;
-
-                  console.log(`15h. Uploading file ${index + 1} to path:`, filePath);
-
-                  // Upload to storage with better error handling
-                  let uploadError;
-                  try {
-                    const uploadResult = await supabase.storage
-                      .from('influencer-media')
-                      .upload(filePath, file, { upsert: true });
-                    uploadError = uploadResult.error;
-                  } catch (storageError: any) {
-                    console.error(`15h1. Storage upload exception for file ${index + 1}:`, storageError);
-                    throw new Error(`Storage upload failed: ${storageError.message || 'Unknown error'}`);
-                  }
-
-                  if (uploadError) {
-                    console.error(`15i. Upload error for file ${index + 1}:`, uploadError);
-
-                    // Provide specific error messages
-                    let errorMessage = `Failed to upload ${file.name}`;
-                    if (uploadError.message?.includes('duplicate') || uploadError.message?.includes('already exists')) {
-                      errorMessage = `File ${file.name} already exists. Please rename the file.`;
-                    } else if (uploadError.message?.includes('size') || uploadError.message?.includes('too large')) {
-                      errorMessage = `File ${file.name} is too large. Maximum size: ${file.type.startsWith('image/') ? '10MB' : '100MB'}`;
-                    } else if (uploadError.message?.includes('permission') || uploadError.message?.includes('access')) {
-                      errorMessage = `Permission denied for ${file.name}. Please check storage permissions.`;
-                    } else if (uploadError.message?.includes('network') || uploadError.message?.includes('timeout')) {
-                      errorMessage = `Network error uploading ${file.name}. Please check your connection and try again.`;
-                    } else {
-                      errorMessage = `Failed to upload ${file.name}: ${uploadError.message || 'Unknown error'}`;
-                    }
-
-                    throw new Error(errorMessage);
-                  }
-
-                  console.log(`15j. File ${index + 1} uploaded successfully to storage`);
-
-                  // Get public URL
-                  const { data: publicUrlData } = supabase.storage
-                    .from('influencer-media')
-                    .getPublicUrl(filePath);
-
-                  const fileUrl = publicUrlData?.publicUrl;
-                  console.log(`15k. Public URL for file ${index + 1}:`, fileUrl);
-
-                  return {
-                    file_url: fileUrl,
-                    file_type: file.type,
-                    file_name: file.name
-                  };
-                });
-
-                const uploadResults = await Promise.all(uploadPromises);
-                const uploadedMediaFiles = uploadResults.filter(result => result !== null);
-                console.log('15l. Media files uploaded successfully:', uploadedMediaFiles);
-
-                if (uploadedMediaFiles.length > 0) {
-                  // Insert media files into database
-                  console.log('15m. Inserting media files into database...');
-                  const mediaData = uploadedMediaFiles.map((media) => {
-                    // Determine file type based on MIME type - only use 'image' and 'video' for now
-                    let fileType = 'image'; // Default to image
-                    if (media!.file_type.startsWith('video/')) {
-                      fileType = 'video';
-                    } else if (!media!.file_type.startsWith('image/')) {
-                      // For non-image, non-video files, default to image for now
-                      // This can be updated once the constraint is fixed
-                      fileType = 'image';
-                    }
-
-                    return {
-                      influencer_id: influencerId,
-                      file_url: media!.file_url,
-                      file_type: fileType, // Use the mapped file type
-                      file_name: media!.file_name,
-                      file_size: 0, // Default value since we don't have it in the uploaded media
-                      mime_type: media!.file_type, // Store the original MIME type
-                      created_at: new Date().toISOString()
-                    };
-                  });
-
-                  const { data: insertedMedia, error: mediaError } = await supabase
-                    .from('influencer_media')
-                    .insert(mediaData)
-                    .select();
-
-                  if (mediaError) {
-                    console.error('❌ Media insertion error:', mediaError);
-                    console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
-                    throw new Error(`Failed to save media files: ${mediaError.message}`);
-                  }
-
-                  console.log('✅ Media files saved to database:', insertedMedia);
-                } else {
-                  console.log('15m. No new media files to insert into database');
-                }
-
-              } catch (uploadError: any) {
-                console.error('Media upload error:', uploadError);
-                throw new Error(`Failed to upload media files: ${uploadError.message}`);
-              }
-            } else {
-              console.log('15c. No new media files to upload for existing influencer');
-            }
-          } else {
-            console.log('15. No media files to process for existing influencer');
-          }
-
-        } catch (updateError: any) {
-          console.error('Error updating influencer:', updateError);
-          throw new Error(`Failed to update influencer: ${updateError.message}`);
         }
+
+        // 3. Combine media
+        const allMediaFiles = [...existingMedia, ...uploadedNewMediaFiles];
+
+        // 4. Prepare payload
+        const influencerData = {
+          influencer_id: editingInfluencer.id,
+          is_update: true,
+          email: values.email,
+          password: null,
+          name: values.name,
+          bio: values.bio || null,
+          country: values.country,
+          profile_image_url: values.profile_image_url || null,
+          is_verified: values.is_verified || false,
+          commission_percentage: values.commission_percentage !== undefined && values.commission_percentage !== null ? Number(values.commission_percentage) : 0,
+          social_links: values.social_links || [],
+          media_files: allMediaFiles
+        };
+
+        console.log('13c. Sending update payload to Edge Function:', influencerData);
+
+        // 5. Call Edge Function
+        const response = await fetch('https://wilshhncdehbnyldsjzs.supabase.co/functions/v1/create-influencer-complete', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(influencerData)
+        });
+
+        let result;
+        try {
+          result = await response.json();
+          console.log('14. Edge Function response:', result);
+        } catch (parseError) {
+          console.error('Failed to parse Edge Function response:', parseError);
+          throw new Error('Invalid response from Edge Function');
+        }
+
+        if (!response.ok && response.status !== 201 && response.status !== 200) {
+          console.error('Edge Function error:', result);
+          throw new Error(result.error || result.details || 'Failed to update influencer');
+        }
+
+        influencerId = editingInfluencer.id;
+        console.log('15. Influencer updated successfully via Edge Function');
+
+        // Check verification status change for notification (handled by Edge Function logic ideally, but we kept it manual before)
+        // If we want notification, we should probably add it here since Edge Function might not do it?
+        // Wait, previous code checked verification status change manually.
+        // Let's add it back if needed.
+        if (values.is_verified && !editingInfluencer.is_verified) {
+          // ... notification logic ...
+          try {
+            const notifResult = await notificationService.sendAccountNotification({
+              user_id: influencerId,
+              notification_type: 'verification_approved',
+              message: 'Congratulations! Your influencer profile has been verified. YOU are now visible to brands and customers.'
+            });
+            if (notifResult.success) message.success('Verification notification sent');
+          } catch (e) { console.error('Notification error', e); }
+        }
+
       } else {
         // For new influencers, create profile directly with a generated UUID
         console.log('13. Creating new influencer profile directly in database');
@@ -999,16 +788,18 @@ export default function Influencers() {
     }
   };
 
-  // Helper function to upload media files
-  const uploadMediaFiles = async (userId: string, mediaFiles: any[]) => {
+  // Helper function to upload media files to storage
+  const uploadFilesToStorage = async (mediaFiles: any[]) => {
     try {
-      console.log('📁 Starting media file upload for user:', userId);
+      console.log('📁 Starting media file upload');
       console.log('📁 Number of files to upload:', mediaFiles.length);
 
       const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
         console.log(`📁 Processing file ${index + 1}:`, mediaFile);
         const file = mediaFile.file;
-        const filePath = `influencer-media/${userId}/${Date.now()}-${file.name}`;
+
+        // Use generic path, simpler for Edge Function processing later
+        const filePath = `influencer-media/${Date.now()}-${file.name}`;
 
         console.log(`📁 Uploading file ${index + 1} to storage path:`, filePath);
 
@@ -1032,54 +823,13 @@ export default function Influencers() {
         const fileUrl = publicUrlData?.publicUrl;
         console.log(`📁 Public URL for file ${index + 1}:`, fileUrl);
 
-        // Determine file type
-        const fileType = file.type.startsWith('image/') ? 'image' : 'video';
-
-        // Insert into database (if table exists)
-        try {
-          console.log(`📁 Attempting to insert file ${index + 1} into influencer_media table`);
-
-          const { data: insertData, error: dbError } = await supabase
-            .from('influencer_media')
-            .insert({
-              influencer_id: userId,
-              file_url: fileUrl,
-              file_type: fileType,
-              file_name: file.name,
-              file_size: file.size,
-              mime_type: file.type,
-              created_at: new Date().toISOString()
-            })
-            .select();
-
-          if (dbError) {
-            console.error(`📁 Database insert error for file ${index + 1}:`, dbError);
-            console.error(`📁 Error details:`, JSON.stringify(dbError, null, 2));
-
-            // Check if it's a table not found error
-            if (dbError.message && dbError.message.includes('relation "influencer_media" does not exist')) {
-              console.error('📁 CRITICAL: influencer_media table does not exist!');
-              console.error('📁 Please run the create_influencer_media_table.sql script in your Supabase database');
-              throw new Error('influencer_media table does not exist. Please create it first.');
-            }
-
-            // Continue even if DB insert fails for other reasons
-            console.warn(`📁 Continuing without database insert for file ${index + 1}`);
-          } else {
-            console.log(`📁 File ${index + 1} inserted into database successfully:`, insertData);
-          }
-        } catch (dbTableError: any) {
-          console.error(`📁 Database table error for file ${index + 1}:`, dbTableError);
-
-          if (dbTableError.message && dbTableError.message.includes('relation "influencer_media" does not exist')) {
-            console.error('📁 CRITICAL: influencer_media table does not exist!');
-            throw new Error('influencer_media table does not exist. Please create it first.');
-          }
-
-          console.warn(`📁 Continuing without database insert for file ${index + 1}`);
-        }
-
-        return { success: true, fileUrl };
+        return {
+          file_url: fileUrl,
+          file_type: file.type,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type
+        };
       });
 
       const results = await Promise.all(uploadPromises);
