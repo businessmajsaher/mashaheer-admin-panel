@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col, Drawer, Descriptions, Tag } from 'antd';
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { settingsService } from '@/services/settingsService';
 import dayjs from 'dayjs';
 import { getCurrencyByCountry, getCurrencySymbol, formatPrice, getCurrencyDecimals } from '@/utils/currencyUtils';
 
@@ -76,6 +77,7 @@ export default function Services() {
   const [categories, setCategories] = useState<any[]>([]);
   const [influencers, setInfluencers] = useState<any[]>([]);
   const [platforms, setPlatforms] = useState<any[]>([]);
+  const [platformSettings, setPlatformSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -202,12 +204,23 @@ export default function Services() {
     }
   };
 
+  // Fetch platform settings
+  const fetchPlatformSettings = async () => {
+    try {
+      const settings = await settingsService.getSettings();
+      setPlatformSettings(settings);
+    } catch (error) {
+      console.error('Error fetching platform settings:', error);
+    }
+  };
+
   useEffect(() => {
     console.log('🚀 Services component mounted, fetching data...');
     fetchServices();
     fetchCategories();
     fetchInfluencers();
     fetchPlatforms();
+    fetchPlatformSettings();
   }, [modalOpen, editModalOpen, filters]);
 
   // Set form values when editing service changes
@@ -592,152 +605,33 @@ export default function Services() {
       }
     },
     {
-      title: 'Commission',
-      key: 'commission',
-      render: (_: any, record: any) => {
-        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
-        const commissionPercentage = record.commission_percentage || 0;
-        const commissionAmount = (servicePrice * commissionPercentage) / 100;
-        return (
-          <div>
-            <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
-              {formatPrice(commissionAmount, 'KWD')}
-            </div>
-            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
-              ({commissionPercentage}%)
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      title: 'Card Charge',
-      key: 'payment_gateway_charge_card',
-      render: (_: any, record: any) => {
-        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
-        const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
-        const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
-        return (
-          <div>
-            <div style={{ fontWeight: 'bold', color: '#f44336' }}>
-              {formatPrice(cardChargeAmount, 'KWD')}
-            </div>
-            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
-              Card ({cardChargePercentage}%)
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      title: 'KNET Charge',
-      key: 'payment_gateway_charge_knet',
-      render: (_: any, record: any) => {
-        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
-        const knetChargePercentage = record.payment_gateway_charge_knet_percentage || 0;
-        const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
-        return (
-          <div>
-            <div style={{ fontWeight: 'bold', color: '#ff9800' }}>
-              {formatPrice(knetChargeAmount, 'KWD')}
-            </div>
-            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
-              KNET ({knetChargePercentage}%)
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      title: 'Influencer Payout',
+      title: 'Influencer Share',
       key: 'influencer_payout',
       render: (_: any, record: any) => {
-        const servicePrice = (record.is_flash_deal && record.offer_price) ? record.offer_price : (record.price || 0);
-        const commissionPercentage = record.commission_percentage || 0;
-        const cardChargePercentage = record.payment_gateway_charge_card_percentage || 0;
-        const knetChargePercentage = record.payment_gateway_charge_knet_percentage || 0;
-        const commissionAmount = (servicePrice * commissionPercentage) / 100;
-        const cardChargeAmount = (servicePrice * cardChargePercentage) / 100;
-        const knetChargeAmount = (servicePrice * knetChargePercentage) / 100;
-
-        // Calculate payout for both payment methods
-        const payoutWithCard = servicePrice - commissionAmount - cardChargeAmount;
-        const payoutWithKnet = servicePrice - commissionAmount - knetChargeAmount;
-
-        // Show range if charges differ, otherwise show single value
-        const chargesDiffer = cardChargePercentage !== knetChargePercentage;
-
         if (record.service_type === 'dual') {
           const primaryPct = record.primary_influencer_earnings_percentage || 50;
           const invitedPct = record.invited_influencer_earnings_percentage || 50;
-
-          const primaryPayoutCard = (payoutWithCard * primaryPct) / 100;
-          const primaryPayoutKnet = (payoutWithKnet * primaryPct) / 100;
-
-          const invitedPayoutCard = (payoutWithCard * invitedPct) / 100;
-          const invitedPayoutKnet = (payoutWithKnet * invitedPct) / 100;
+          const platformComm = platformSettings?.commission_percentage || 5; // Default to 5% if not set
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <div>
-                <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '2px' }}>
-                  Primary ({primaryPct}%):
-                </div>
-                {chargesDiffer ? (
-                  <div style={{ fontSize: '12px' }}>
-                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(primaryPayoutCard, 'KWD')}</span> (Card)
-                    <br />
-                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(primaryPayoutKnet, 'KWD')}</span> (KNET)
-                  </div>
-                ) : (
-                  <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
-                    {formatPrice(primaryPayoutCard, 'KWD')}
-                  </div>
-                )}
+                <span style={{ fontWeight: '500', color: '#faad14' }}>Platform:</span> {platformComm}%
               </div>
               <div>
-                <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '2px' }}>
-                  Invited ({invitedPct}%):
-                </div>
-                {chargesDiffer ? (
-                  <div style={{ fontSize: '12px' }}>
-                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(invitedPayoutCard, 'KWD')}</span> (Card)
-                    <br />
-                    <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{formatPrice(invitedPayoutKnet, 'KWD')}</span> (KNET)
-                  </div>
-                ) : (
-                  <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
-                    {formatPrice(invitedPayoutCard, 'KWD')}
-                  </div>
-                )}
+                <span style={{ fontWeight: '500', color: '#1890ff' }}>Primary:</span> {primaryPct}%
+              </div>
+              <div>
+                <span style={{ fontWeight: '500', color: '#722ed1' }}>Invited:</span> {invitedPct}%
               </div>
             </div>
           );
         }
 
-        return (
-          <div>
-            {chargesDiffer ? (
-              <>
-                <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '13px' }}>
-                  {formatPrice(Math.min(payoutWithCard, payoutWithKnet), 'KWD')} - {formatPrice(Math.max(payoutWithCard, payoutWithKnet), 'KWD')}
-                </div>
-                <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                  Card: {formatPrice(payoutWithCard, 'KWD')} | KNET: {formatPrice(payoutWithKnet, 'KWD')}
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontWeight: 'bold', color: '#4caf50', fontSize: '14px' }}>
-                  {formatPrice(payoutWithCard, 'KWD')}
-                </div>
-                <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
-                  Net payout
-                </div>
-              </>
-            )}
-          </div>
-        );
+        // For normal services, it's typically 100% of the net payout to the single influencer
+        // or we can show the commission % deducted? 
+        // "Influencer Payout (percentage needed)" -> likely just wants to know the split or that it's full.
+        return <span style={{ color: '#52c41a', fontWeight: 'bold' }}>100%</span>;
       }
     },
     {
@@ -1034,7 +928,7 @@ export default function Services() {
                   step={0.01}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                   onChange={(value) => {
                     // Auto-update offer price for normal/duo services
                     if (!isFlashDeal && value) {
@@ -1066,7 +960,7 @@ export default function Services() {
                   style={{ width: '100%' }}
                   disabled={!isFlashDeal}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                 />
               </Form.Item>
             </Col>
@@ -1535,7 +1429,7 @@ export default function Services() {
                   step={0.01}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                   onChange={(value) => {
                     // Auto-update offer price for normal/duo services
                     if (!editIsFlashDeal && value) {
@@ -1567,7 +1461,7 @@ export default function Services() {
                   style={{ width: '100%' }}
                   disabled={!editIsFlashDeal}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value!.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')}
+                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                 />
               </Form.Item>
             </Col>

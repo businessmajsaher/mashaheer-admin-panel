@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, InputNumber, Button, message, Row, Col, Divider, Typography, Space } from 'antd';
-import { SaveOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { SaveOutlined, ClockCircleOutlined, DollarOutlined } from '@ant-design/icons';
 import { settingsService, PlatformSettings } from '../../services/settingsService';
 
 const { Title, Text } = Typography;
@@ -22,11 +22,11 @@ export default function Settings() {
       // Fetch platform settings
       const data = await settingsService.getSettings();
       setSettings(data);
-      
+
       // Fetch app settings
       const appSettingsData = await settingsService.getAppSettings();
       setAppSettings(appSettingsData);
-      
+
       if (data) {
         form.setFieldsValue({
           influencer_approval_hours: data.influencer_approval_hours || 12,
@@ -37,6 +37,8 @@ export default function Settings() {
           appointment_end_hour: data.appointment_end_hour || 23,
           appointment_end_minute: data.appointment_end_minute || 59,
           booking_cooldown_days: appSettingsData.booking_cooldown_days ? parseInt(appSettingsData.booking_cooldown_days) : 2,
+          commission_percentage: data.commission_percentage || 5,
+          platform_commission_fixed: data.platform_commission_fixed || 0,
         });
       }
     } catch (error: any) {
@@ -54,13 +56,13 @@ export default function Settings() {
       const { booking_cooldown_days, ...platformSettings } = values;
       const updated = await settingsService.updateSettings(platformSettings);
       setSettings(updated);
-      
+
       // Save app settings (booking_cooldown_days)
       if (booking_cooldown_days !== undefined) {
         await settingsService.updateAppSetting('booking_cooldown_days', booking_cooldown_days.toString());
         setAppSettings(prev => ({ ...prev, booking_cooldown_days: booking_cooldown_days.toString() }));
       }
-      
+
       message.success('Settings saved successfully');
     } catch (error: any) {
       console.error('Error saving settings:', error);
@@ -73,7 +75,7 @@ export default function Settings() {
   return (
     <div style={{ padding: '24px' }}>
       <Title level={2}>App Settings</Title>
-      
+
       <Card loading={loading}>
         <Form
           form={form}
@@ -88,8 +90,59 @@ export default function Settings() {
             appointment_end_hour: 23,
             appointment_end_minute: 59,
             booking_cooldown_days: 2,
+            commission_percentage: 5,
+            platform_commission_fixed: 0,
           }}
         >
+          {/* Platform Commission Settings */}
+          <Divider orientation="left">
+            <Space>
+              <DollarOutlined />
+              <span>Platform Commission Settings</span>
+            </Space>
+          </Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Platform Commission (%)"
+                name="commission_percentage"
+                tooltip="Percentage taken by the platform from each transaction"
+                rules={[
+                  { required: true, message: 'Please enter percentage' },
+                  { type: 'number', min: 0, max: 100, message: 'Must be between 0 and 100' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  max={100}
+                  precision={2}
+                  addonAfter="%"
+                  placeholder="5"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Fixed Platform Fee (KWD)"
+                name="platform_commission_fixed"
+                tooltip="Fixed amount taken by the platform from each transaction (in addition to percentage)"
+                rules={[
+                  { required: true, message: 'Please enter fixed amount' },
+                  { type: 'number', min: 0, message: 'Must be at least 0' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  precision={3}
+                  addonBefore="KWD"
+                  placeholder="0.000"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
           {/* Automation Timing Settings */}
           <Divider orientation="left">
             <Space>

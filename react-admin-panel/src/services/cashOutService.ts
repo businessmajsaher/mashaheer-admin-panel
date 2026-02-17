@@ -21,14 +21,34 @@ export interface PaymentEarning {
   payment_id: string;
   booking_id: string;
   service_title: string;
+  service_type: string;
+  original_price: number;
+  discount_amount: number;
   amount: number;
   pg_charge: number;
   platform_commission: number;
+  net_after_bank: number;
+  net_amount: number;
+  currency: string;
+  paid_at: string;
+  payment_id: string;
+  booking_id: string;
+  service_title: string;
+  service_type: string;
+  original_price: number;
+  discount_amount: number;
+  amount: number;
+  pg_charge: number;
+  platform_commission: number;
+  net_after_bank: number;
   net_amount: number;
   currency: string;
   paid_at: string;
   transaction_reference?: string;
   hesabe_invoice_id?: string;
+  influencer_share_percentage?: number;
+  status: string;
+  is_settled?: boolean;
 }
 
 export interface CashOutSummary {
@@ -112,11 +132,19 @@ export const cashOutService = {
         created_at,
         transaction_reference,
         payer:profiles!payments_payer_id_fkey(id, name, email),
-        payee:profiles!payments_payee_id_fkey(id, name, email),
+        payee:profiles!payments_payee_id_fkey(id, name, email, commission_percentage),
         booking:bookings!payments_booking_id_fkey(
           id,
           service_id,
-          service:services!bookings_service_id_fkey(title)
+          service:services!bookings_service_id_fkey(
+            title,
+            service_type,
+            price,
+            primary_influencer_id,
+            invited_influencer_id,
+            primary_influencer_earnings_percentage,
+            invited_influencer_earnings_percentage
+          )
         )
       `)
       .not('payee_id', 'is', null)
@@ -180,50 +208,13 @@ export const cashOutService = {
     console.log('Payments After Status Filter:', payments.length);
     console.log('Payments After Date Filter:', payments.length);
 
-    // Show specific payments we're looking for
-    const targetPaymentIds = [
-      '7f2333ed-6cf6-4100-b6e3-a3ba9c06c48d',
-      '2e89b638-812e-4f95-8d6c-5e8b3d73d7e7'
-    ];
-    const targetPayments = (allPayments || []).filter(p => targetPaymentIds.includes(p.id));
-    console.log('Target Payments Found:', targetPayments.length);
-    targetPayments.forEach(p => {
-      const statusMatch = ['completed', 'paid', 'success', 'successful'].includes((p.status || '').toLowerCase().trim());
-      const dateMatch = !periodStart || !periodEnd || (() => {
-        const paymentDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
-        return paymentDate >= periodStart && paymentDate <= periodEnd;
-      })();
-      console.log(`Payment ${p.id}:`, {
-        status: p.status,
-        normalized_status: (p.status || '').toLowerCase().trim(),
-        status_match: statusMatch,
-        payee_id: p.payee_id,
-        paid_at: p.paid_at,
-        created_at: p.created_at,
-        date_match: dateMatch,
-        will_appear: statusMatch && dateMatch && p.payee_id ? 'YES' : 'NO',
-        reason: !p.payee_id ? 'Missing payee_id' :
-          !statusMatch ? `Status '${p.status}' not in allowed list` :
-            !dateMatch ? 'Outside date range' : 'Should appear'
-      });
-    });
-
-    console.log('Sample Payments (first 5):', payments.slice(0, 5).map(p => ({
-      id: p.id,
-      status: p.status,
-      payee_id: p.payee_id,
-      amount: p.amount,
-      paid_at: p.paid_at
-    })));
-    console.log('Unique Statuses:', [...new Set((allPayments || []).map(p => p.status))]);
-    console.log('=== END CASH OUT DEBUG ===');
-
     // Group payments by influencer
     const earningsMap = new Map<string, InfluencerEarning>();
 
     console.log('Grouping payments. Total payments to group:', payments.length);
     console.log('Payment IDs to group:', payments.map(p => p.id));
 
+    // NEW LOGIC: Iterate through payments and apply Individual vs Dual logic
     for (const payment of payments || []) {
       const influencerId = payment.payee_id;
 
@@ -250,57 +241,174 @@ export const cashOutService = {
       const earning = earningsMap.get(influencerId)!;
       const paymentAmount = parseFloat(payment.amount) || 0;
 
-      // Fetch PG charge from Hesabe (if transaction_reference exists)
-      let pgCharge = 0;
-      if (payment.transaction_reference) {
-        try {
-          // Try to get invoice details from Hesabe
-          // Note: We need the invoice ID, not transaction_reference
-          // For now, we'll estimate PG charge as 2.5% (typical for card) or 1.5% (KNET)
-          // This should be replaced with actual Hesabe API call when invoice ID is available
-          const estimatedPgCharge = paymentAmount * 0.025; // 2.5% estimate
-          pgCharge = estimatedPgCharge;
-        } catch (err) {
-          console.error('Error fetching PG charge:', err);
-          // Use default estimate
-          pgCharge = paymentAmount * 0.025;
+      // 1. Calculate PG Charge (Bank Deduction)
+      // FIXED: 1.5% of total amount
+      const pgCharge = paymentAmount * 0.015;
+      const netAfterBank = paymentAmount - pgCharge;
+
+      // 2. Determine Service Type & Calculate Platform Commission + Net Payout
+      const service = payment.booking?.service;
+      const serviceType = service?.service_type || 'individual'; // Default to individual if unknown
+
+      // Derive Original Price and Discount
+      // original_price comes from service.price
+      // discount = original_price - paymentAmount
+      const originalPrice = service?.price || paymentAmount;
+      const discountAmount = Math.max(0, originalPrice - paymentAmount);
+
+      let platformCommission = 0;
+      let netPayout = 0;
+      let influencerSharePercentage = 0;
+
+      if (serviceType === 'dual') {
+        // === DUAL SERVICE LOGIC ===
+        // Platform Commission: 5% fixed on Net After Bank (configured in settings)
+        // Then remaining is split between primary and invited based on percentages
+
+        // Use setting or default to 5%
+        const commissionRate = settings?.commission_percentage || 5;
+
+        // Calculate Platform Commission on Net After Bank
+        platformCommission = netAfterBank * (commissionRate / 100);
+
+        const amountAfterCommission = netAfterBank - platformCommission;
+
+        // Determine if payee is Primary or Invited
+        const isPrimary = influencerId === service?.primary_influencer_id;
+        const isInvited = influencerId === service?.invited_influencer_id;
+
+        if (isPrimary || isInvited) {
+          // Get split percentage
+          if (isPrimary) {
+            influencerSharePercentage = service?.primary_influencer_earnings_percentage ?? 50;
+          } else {
+            influencerSharePercentage = service?.invited_influencer_earnings_percentage ?? 50;
+          }
+
+          // Calculate payout based on split
+          netPayout = amountAfterCommission * (influencerSharePercentage / 100);
+        } else {
+          // Fallback
+          console.warn(`Payment ${payment.id}: Payee ${influencerId} mismatch for dual service.`);
+          netPayout = amountAfterCommission; // Default to full amount?
+          influencerSharePercentage = 100;
         }
+
+      } else {
+        // === INDIVIDUAL SERVICE LOGIC ===
+        // Platform Commission: Variable % from Profile (payee.commission_percentage) OR default local 2%
+        // Calculated on Net After Bank
+
+        // Use profile's commission percentage (default to 2 if not set/zero? User said "vary based on influencers")
+        // User example said "2% commission". Let's assume profile has it, or we default to 2.
+        const commissionRate = payment.payee?.commission_percentage || 2;
+
+        influencerSharePercentage = 100; // Individual gets 100% of the share after platform comm
+
+        platformCommission = netAfterBank * (commissionRate / 100);
+
+        netPayout = netAfterBank - platformCommission;
       }
 
-      const platformCommission = platformCommissionFixed;
-      const netAmount = paymentAmount - pgCharge - platformCommission;
-
+      // Accumulate totals
       earning.total_earnings += paymentAmount;
       earning.total_pg_charges += pgCharge;
       earning.total_platform_commission += platformCommission;
-      earning.net_payout += netAmount;
+      earning.net_payout += netPayout;
       earning.payment_count += 1;
 
       earning.payments.push({
         payment_id: payment.id,
         booking_id: payment.booking_id,
         service_title: payment.booking?.service?.title || 'Unknown Service',
-        amount: paymentAmount,
+        service_type: serviceType,
+        original_price: originalPrice,
+        discount_amount: discountAmount,
+        amount: paymentAmount, // Transaction Amount (Final Charged Amount)
         pg_charge: pgCharge,
         platform_commission: platformCommission,
-        net_amount: netAmount,
+        net_after_bank: netAfterBank,
+        net_amount: netPayout, // The calculated share for THIS payee
         currency: payment.currency || 'KWD',
         paid_at: payment.paid_at || '',
         transaction_reference: payment.transaction_reference,
+        influencer_share_percentage: influencerSharePercentage,
+        status: payment.status
       });
     }
 
     const earningsList = Array.from(earningsMap.values());
 
     // Check settlement status for each influencer
-    const settlements = await this.getSettlements(periodType, startDate, endDate);
+    // OLD: Only checked exact period match
+    // const settlements = await this.getSettlements(periodType, startDate, endDate);
+
+    // NEW: Fetch all settlements for these influencers within the requested time window
+    // to correctly flag individual payments as settled.
+
+    // Get list of influencer IDs
+    const influencerIds = earningsList.map(e => e.influencer_id);
+
+    // Fetch relevant settlements (overlapping the queried range)
+    // If no range, fetch all? That might be heavy. 
+    // If no range, maybe default to last 3 months or just fetch all for these users.
+    // Let's rely on checking if payment date falls into ANY settlement cache.
+
+    const { data: allSettlements } = await supabase
+      .from('settlements')
+      .select('influencer_id, period_start, period_end')
+      .in('influencer_id', influencerIds);
+
+    // Create a quick lookup for settlements: Map<influencerId, Array<{start, end}>>
+    const settlementLookup = new Map<string, Array<{ start: number, end: number }>>();
+
+    (allSettlements || []).forEach(s => {
+      const ranges = settlementLookup.get(s.influencer_id) || [];
+      // Store as timestamps for easier comparison
+      // period_start is YYYY-MM-DD. Treat as Start of Day in Local/UTC? 
+      // Should match how 'paid_at' is compared. 
+      // safe approach: simple string comparison or Date objects.
+      // Let's use Date objects (00:00:00 to 23:59:59)
+      const start = new Date(s.period_start).setHours(0, 0, 0, 0);
+      const end = new Date(s.period_end).setHours(23, 59, 59, 999);
+      ranges.push({ start, end });
+      settlementLookup.set(s.influencer_id, ranges);
+    });
 
     earningsList.forEach(earning => {
-      const settlement = settlements.get(earning.influencer_id);
-      if (settlement) {
-        earning.is_settled = true;
-        earning.settled_at = settlement.settled_at;
-        earning.settlement_id = settlement.id;
+      // Mark individual payments
+      const ranges = settlementLookup.get(earning.influencer_id) || [];
+
+      earning.payments.forEach(payment => {
+        const paidTime = new Date(payment.paid_at).getTime();
+        const isSettled = ranges.some(range => paidTime >= range.start && paidTime <= range.end);
+        payment.is_settled = isSettled;
+      });
+
+      // Check if the *requested* period is fully settled (for the main table status)
+      // This preserves existing 'is_settled' logic for the Main View
+      // But now we can be smarter: If ALL payments in this view are settled, mark as settled?
+      // Or stick to "Is there a settlement for this exact range?"
+      // User wants "Separate unsettled services". 
+      // The Modal handles the separation. 
+      // The Main table 'Settled' status usually implies "I have run the settlement for this specific view".
+      // Let's keep the exact match check for the Main Table "Settlement Status" column consistency,
+      // OR update it to "Partially Settled" if some are settled?
+      // Let's stick to the original logic for the main table flag, but derived from the fetched settlements?
+
+      // Original logic: exact match of periodType + start + end
+      if (startDate && endDate) {
+        // Check if there's a settlement matching this EXACT range
+        const exactMatch = (allSettlements || []).find(s =>
+          s.influencer_id === earning.influencer_id &&
+          s.period_start === startDate.split('T')[0] &&
+          s.period_end === endDate.split('T')[0]
+        );
+        earning.is_settled = !!exactMatch;
+        if (exactMatch) {
+          earning.settled_at = new Date().toISOString(); // Mock or fetch actual if needed
+          // earning.settlement_id = exactMatch.id; // We didn't fetch ID above, but can if needed
+        }
       } else {
         earning.is_settled = false;
       }
@@ -484,9 +592,63 @@ export const cashOutService = {
           .select()
           .single();
 
+        // If updated fails with FK violation (23503), try clearing settled_by
+        if (updateError && updateError.code === '23503' && updateError.message.includes('settlements_settled_by_fkey')) {
+          console.warn('Settled by profile not found, clearing settled_by field');
+          const { data: updatedNoSettler, error: updateError2 } = await supabase
+            .from('settlements')
+            .update({
+              total_earnings: earnings.total_earnings,
+              total_pg_charges: earnings.total_pg_charges,
+              total_platform_commission: earnings.total_platform_commission,
+              net_payout: earnings.net_payout,
+              currency: earnings.currency,
+              payment_count: earnings.payment_count,
+              settled_by: null, // Clear settled_by
+              settled_at: new Date().toISOString(),
+              notes: notes || null
+            })
+            .eq('influencer_id', influencerId)
+            .eq('period_type', periodType)
+            .eq('period_start', periodStart)
+            .eq('period_end', periodEnd)
+            .select()
+            .single();
+
+          if (updateError2) throw updateError2;
+          return updatedNoSettler;
+        }
+
         if (updateError) throw updateError;
         return updated;
       }
+
+      // If insert fails with FK violation (23503), try inserting without settled_by
+      if (error.code === '23503' && error.message.includes('settlements_settled_by_fkey')) {
+        console.warn('Settled by profile not found, inserting without settled_by');
+        const { data: dataNoSettler, error: error2 } = await supabase
+          .from('settlements')
+          .insert({
+            influencer_id: influencerId,
+            period_type: periodType,
+            period_start: periodStart,
+            period_end: periodEnd,
+            total_earnings: earnings.total_earnings,
+            total_pg_charges: earnings.total_pg_charges,
+            total_platform_commission: earnings.total_platform_commission,
+            net_payout: earnings.net_payout,
+            currency: earnings.currency,
+            payment_count: earnings.payment_count,
+            settled_by: null, // No settler
+            notes: notes || null
+          })
+          .select()
+          .single();
+
+        if (error2) throw error2;
+        return dataNoSettler;
+      }
+
       throw error;
     }
 

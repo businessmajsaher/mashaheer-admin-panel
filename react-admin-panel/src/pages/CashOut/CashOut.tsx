@@ -317,37 +317,76 @@ export default function CashOut() {
 
   const paymentColumns: ColumnsType<PaymentEarning> = [
     {
-      title: 'Service',
-      dataIndex: 'service_title',
-      key: 'service_title',
+      title: 'Transaction ID',
+      dataIndex: 'transaction_reference',
+      key: 'transaction_reference',
+      width: 150,
+      render: (text) => <Text copyable={{ text: text || '' }}>{text?.substring(0, 8) || '-'}</Text>,
     },
     {
-      title: 'Amount',
-      dataIndex: 'amount',
+      title: 'Booking ID',
+      dataIndex: 'booking_id',
+      key: 'booking_id',
+      width: 150,
+      render: (text) => <Text copyable={{ text: text || '' }}>{text?.substring(0, 8)}</Text>,
+    },
+    {
+      title: 'Service Type',
+      dataIndex: 'service_type',
+      key: 'service_type',
+      render: (text) => <Tag color={text === 'dual' ? 'purple' : 'blue'}>{(text || 'NORMAL').toUpperCase()}</Tag>,
+    },
+    {
+      title: 'Original Price',
+      dataIndex: 'original_price',
+      key: 'original_price',
+      align: 'right',
+      render: (amount) => formatCurrency(amount, 'KWD'),
+    },
+    {
+      title: 'Discount',
+      dataIndex: 'discount_amount',
+      key: 'discount_amount',
+      align: 'right',
+      render: (amount) => amount > 0 ? <Text type="danger">-{formatCurrency(amount, 'KWD')}</Text> : '-',
+    },
+    {
+      title: 'Final Amount',
+      dataIndex: 'amount', // This is the transaction amount
       key: 'amount',
       align: 'right',
-      render: (amount, record) => formatCurrency(amount, 'KWD'),
+      render: (amount, record) => <Text strong>{formatCurrency(amount, 'KWD')}</Text>,
     },
     {
-      title: 'PG Charge',
+      title: 'PG Charge (1.5%)',
       dataIndex: 'pg_charge',
       key: 'pg_charge',
       align: 'right',
-      render: (amount, record) => (
-        <Text type="warning">-{formatCurrency(amount, 'KWD')}</Text>
-      ),
+      render: (amount) => <Text type="warning">-{formatCurrency(amount, 'KWD')}</Text>,
     },
     {
-      title: 'Platform Commission',
+      title: 'Net After Bank',
+      dataIndex: 'net_after_bank',
+      key: 'net_after_bank',
+      align: 'right',
+      render: (amount) => formatCurrency(amount, 'KWD'),
+    },
+    {
+      title: 'Commission',
       dataIndex: 'platform_commission',
       key: 'platform_commission',
       align: 'right',
-      render: (amount, record) => (
-        <Text type="danger">-{formatCurrency(amount, 'KWD')}</Text>
-      ),
+      render: (amount) => <Text type="danger">-{formatCurrency(amount, 'KWD')}</Text>,
     },
     {
-      title: 'Net Amount',
+      title: 'Influencer Share %',
+      dataIndex: 'influencer_share_percentage',
+      key: 'influencer_share_percentage',
+      align: 'center',
+      render: (pct) => pct ? `${pct}%` : '-',
+    },
+    {
+      title: 'Influencer Earnings',
       dataIndex: 'net_amount',
       key: 'net_amount',
       align: 'right',
@@ -358,16 +397,16 @@ export default function CashOut() {
       ),
     },
     {
-      title: 'Paid At',
-      dataIndex: 'paid_at',
-      key: 'paid_at',
-      render: (date) => dayjs(date).format('YYYY-MM-DD HH:mm'),
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => <Tag color="success">{(status || 'PAID').toUpperCase()}</Tag>,
     },
     {
-      title: 'Ref',
-      dataIndex: 'transaction_reference',
-      key: 'transaction_reference',
-      render: (text) => <Text copyable>{text || '-'}</Text>,
+      title: 'Date',
+      dataIndex: 'paid_at',
+      key: 'paid_at',
+      render: (date) => dayjs(date).format('YYYY-MM-DD'),
     },
   ];
 
@@ -717,67 +756,95 @@ export default function CashOut() {
         open={paymentModalVisible}
         onCancel={() => setPaymentModalVisible(false)}
         footer={null}
-        width={1000}
+        width={1400}
       >
         {selectedInfluencer && (
           <>
-            <Descriptions bordered size="small" column={2} style={{ marginBottom: '16px' }}>
-              <Descriptions.Item label="Total Earnings">
-                {formatCurrency(selectedInfluencer.total_earnings, 'KWD')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Total PG Charges">
-                <Text type="warning">
-                  -{formatCurrency(selectedInfluencer.total_pg_charges, 'KWD')}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Platform Commission">
-                <Text type="danger">
-                  -{formatCurrency(selectedInfluencer.total_platform_commission, 'KWD')}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Net Payout">
-                <Text strong style={{ color: '#52c41a', fontSize: '16px' }}>
-                  {formatCurrency(selectedInfluencer.net_payout, 'KWD')}
-                </Text>
-              </Descriptions.Item>
-            </Descriptions>
-            <Divider />
-            <Table
-              columns={paymentColumns}
-              dataSource={selectedPayments}
-              rowKey="payment_id"
-              pagination={false}
-              size="small"
-              summary={(pageData) => {
-                const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
-                const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
-                const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
-                const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+            {/* Unsettled Transactions */}
+            <div style={{ marginBottom: '24px' }}>
+              <Title level={5} style={{ color: '#faad14' }}>
+                <Space><CloseCircleOutlined /> Unsettled / Pending Transactions</Space>
+              </Title>
+              <Table
+                columns={paymentColumns}
+                dataSource={selectedPayments.filter(p => !p.is_settled)}
+                rowKey="payment_id"
+                pagination={false}
+                size="small"
+                scroll={{ x: 1300 }}
+                locale={{ emptyText: 'No unsettled transactions' }}
+                summary={(pageData) => {
+                  const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+                  const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
+                  const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
+                  const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+                  const totalNetAfterBank = pageData.reduce((sum, record) => sum + Number(record.net_after_bank || 0), 0);
 
-                return (
-                  <Table.Summary fixed>
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={1}>
-                        <Text strong>Total</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} align="right">
-                        <Text strong>{formatCurrency(totalAmount, 'KWD')}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={2} align="right">
-                        <Text type="warning">-{formatCurrency(totalPgCharge, 'KWD')}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right">
-                        <Text type="danger">-{formatCurrency(totalCommission, 'KWD')}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={4} align="right">
-                        <Text strong style={{ color: '#52c41a' }}>{formatCurrency(totalNet, 'KWD')}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={5} />
-                    </Table.Summary.Row>
-                  </Table.Summary>
-                );
-              }}
-            />
+                  return (
+                    <Table.Summary fixed>
+                      <Table.Summary.Row style={{ background: '#fffbe6' }}>
+                        <Table.Summary.Cell index={0} colSpan={5}>
+                          <Text strong>Unsettled Total</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={5} align="right">
+                          <Text strong>{formatCurrency(totalAmount, 'KWD')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={6} align="right">
+                          <Text type="warning" strong>-{formatCurrency(totalPgCharge, 'KWD')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={7} align="right">
+                          <Text strong>{formatCurrency(totalNetAfterBank, 'KWD')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={8} align="right">
+                          <Text type="danger" strong>-{formatCurrency(totalCommission, 'KWD')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={9} />
+                        <Table.Summary.Cell index={10} align="right">
+                          <Text strong style={{ color: '#faad14', fontSize: '16px' }}>{formatCurrency(totalNet, 'KWD')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={11} />
+                        <Table.Summary.Cell index={12} />
+                      </Table.Summary.Row>
+                    </Table.Summary>
+                  );
+                }}
+              />
+            </div>
+
+            {/* Settled Transactions */}
+            {selectedPayments.some(p => p.is_settled) && (
+              <div style={{ marginTop: '32px' }}>
+                <Title level={5} style={{ color: '#52c41a' }}>
+                  <Space><CheckCircleOutlined /> Previously Settled Transactions</Space>
+                </Title>
+                <Table
+                  columns={paymentColumns}
+                  dataSource={selectedPayments.filter(p => p.is_settled)}
+                  rowKey="payment_id"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: 1300 }}
+                  style={{ opacity: 0.8 }}
+                  summary={(pageData) => {
+                    const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+                    return (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row style={{ background: '#f6ffed' }}>
+                          <Table.Summary.Cell index={0} colSpan={10}>
+                            <Text strong>Settled Total</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={10} align="right">
+                            <Text strong style={{ color: '#52c41a' }}>{formatCurrency(totalNet, 'KWD')}</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={11} />
+                          <Table.Summary.Cell index={12} />
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    );
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
       </Modal>
