@@ -27,6 +27,7 @@ const HelpSupport = lazy(() => import('@/pages/HelpSupport/HelpSupport'));
 const Discounts = lazy(() => import('@/pages/Discounts/Discounts'));
 const DiscountAnalytics = lazy(() => import('@/pages/Discounts/Analytics'));
 const CashOut = lazy(() => import('@/pages/CashOut/CashOut'));
+const Refunds = lazy(() => import('@/pages/Refunds/Refunds'));
 const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 const Diagnostics = lazy(() => import('@/pages/Diagnostics'));
@@ -219,7 +220,14 @@ export default function App() {
                   </ProtectedRoute>
                 } />
 
-                {/* Legal and Support routes */}
+                <Route path="/refunds" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Refunds />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
                 <Route path="/legal-notices" element={
                   <ProtectedRoute>
                     <MainLayout>

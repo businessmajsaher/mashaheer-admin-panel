@@ -68,18 +68,13 @@ export const settingsService = {
       .from('platform_settings')
       .select('*')
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No settings found, return null
-        return null;
-      }
       throw error;
     }
 
-    return data as PlatformSettings;
+    return data && data.length > 0 ? (data[0] as PlatformSettings) : null;
   },
 
   // Update platform settings
@@ -92,7 +87,7 @@ export const settingsService = {
 
     // Get existing settings or create new
     const existing = await this.getSettings();
-    
+
     if (existing) {
       // Update existing
       const { data, error } = await supabase

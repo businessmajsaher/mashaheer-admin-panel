@@ -12,6 +12,10 @@ export interface Service {
   service_type: 'normal' | 'dual' | 'flash';
   primary_influencer_id: string;
   invited_influencer_id?: string;
+  invited_influencer?: {
+    name: string;
+    email: string;
+  };
   category_id?: string;
   platform_id?: string;
   price?: number;

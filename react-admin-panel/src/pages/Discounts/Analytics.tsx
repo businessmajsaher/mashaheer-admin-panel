@@ -104,10 +104,10 @@ const Analytics: React.FC = () => {
       // Calculate analytics
       const now = new Date();
       const totalCoupons = coupons?.length || 0;
-      const activeCoupons = coupons?.filter(c => 
+      const activeCoupons = coupons?.filter(c =>
         c.is_active && (!c.valid_until || new Date(c.valid_until) > now)
       ).length || 0;
-      const expiredCoupons = coupons?.filter(c => 
+      const expiredCoupons = coupons?.filter(c =>
         c.valid_until && new Date(c.valid_until) <= now
       ).length || 0;
 
@@ -195,24 +195,22 @@ const Analytics: React.FC = () => {
   const handleExport = () => {
     if (!analyticsData) return;
 
-    const csvData = [
+    const data = [
       ['Metric', 'Value'],
       ['Total Coupons', analyticsData.totalCoupons],
       ['Active Coupons', analyticsData.activeCoupons],
       ['Expired Coupons', analyticsData.expiredCoupons],
       ['Total Usage', analyticsData.totalUsage],
       ['Total Savings', analyticsData.totalSavings],
-      ['Average Order Value', analyticsData.averageOrderValue]
+      ['Average Order Value', analyticsData.averageOrderValue.toFixed(3)]
     ];
 
-    const csvContent = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `coupon-analytics-${dayjs().format('YYYY-MM-DD')}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    import('xlsx').then(XLSX => {
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Analytics");
+      XLSX.writeFile(wb, `coupon-analytics-${dayjs().format('YYYY-MM-DD')}.xlsx`);
+    });
   };
 
   if (!analyticsData) {
@@ -368,9 +366,9 @@ const Analytics: React.FC = () => {
                   render: (count: number) => (
                     <Space>
                       <Text>{count}</Text>
-                      <Progress 
-                        percent={Math.min((count / Math.max(...analyticsData.usageByDay.map(d => d.usage_count))) * 100, 100)} 
-                        size="small" 
+                      <Progress
+                        percent={Math.min((count / Math.max(...analyticsData.usageByDay.map(d => d.usage_count))) * 100, 100)}
+                        size="small"
                         showInfo={false}
                       />
                     </Space>

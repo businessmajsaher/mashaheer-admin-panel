@@ -17,6 +17,9 @@ export const bookingService = {
       `, { count: 'exact' });
 
     // Apply filters
+    if (filters?.id) {
+      query = query.eq('id', filters.id);
+    }
     if (filters?.service_id) {
       query = query.eq('service_id', filters.service_id);
     }
@@ -56,7 +59,7 @@ export const bookingService = {
       .from('bookings')
       .select(`
         *,
-        service:services(title, thumbnail, description),
+        service:services(title, thumbnail, description, service_type, invited_influencer_id),
         influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
         status:booking_statuses(id, name, description),
@@ -67,6 +70,31 @@ export const bookingService = {
       .single();
 
     if (error) throw error;
+
+    // Fetch contract if exists
+    const { data: contractData } = await supabase
+      .from('contract_instances')
+      .select('*')
+      .eq('booking_id', id)
+      .single();
+
+    if (contractData) {
+      (data as any).contract = contractData;
+    }
+
+    // Fetch invited partner if dual booking
+    if (data.service?.service_type === 'dual' && data.service?.invited_influencer_id) {
+      const { data: invitedPartner } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('id', data.service.invited_influencer_id)
+        .single();
+
+      if (invitedPartner) {
+        data.service.invited_influencer = invitedPartner;
+      }
+    }
+
     return data as Booking;
   },
 

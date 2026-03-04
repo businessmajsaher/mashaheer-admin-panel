@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, InputNumber, Button, message, Row, Col, Divider, Typography, Space } from 'antd';
-import { SaveOutlined, ClockCircleOutlined, DollarOutlined } from '@ant-design/icons';
+import { Card, Form, InputNumber, Button, message, Row, Col, Divider, Typography, Space, Select } from 'antd';
+
+import { SaveOutlined, ClockCircleOutlined, DollarOutlined, CalendarOutlined } from '@ant-design/icons';
 import { settingsService, PlatformSettings } from '../../services/settingsService';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
+
 
 export default function Settings() {
   const [form] = Form.useForm();
@@ -36,7 +39,9 @@ export default function Settings() {
           auto_approval_minute: data.auto_approval_minute || 30,
           appointment_end_hour: data.appointment_end_hour || 23,
           appointment_end_minute: data.appointment_end_minute || 59,
+
           booking_cooldown_days: appSettingsData.booking_cooldown_days ? parseInt(appSettingsData.booking_cooldown_days) : 2,
+          payment_recurrence: appSettingsData.payment_recurrence || 'monthly',
           commission_percentage: data.commission_percentage || 5,
           platform_commission_fixed: data.platform_commission_fixed || 0,
         });
@@ -52,15 +57,20 @@ export default function Settings() {
   const handleSave = async (values: any) => {
     setSaving(true);
     try {
-      // Save platform settings (excluding booking_cooldown_days)
-      const { booking_cooldown_days, ...platformSettings } = values;
+      // Save platform settings (excluding booking_cooldown_days, payment_recurrence)
+      const { booking_cooldown_days, payment_recurrence, ...platformSettings } = values;
       const updated = await settingsService.updateSettings(platformSettings);
       setSettings(updated);
 
-      // Save app settings (booking_cooldown_days)
+      // Save app settings
       if (booking_cooldown_days !== undefined) {
         await settingsService.updateAppSetting('booking_cooldown_days', booking_cooldown_days.toString());
         setAppSettings(prev => ({ ...prev, booking_cooldown_days: booking_cooldown_days.toString() }));
+      }
+
+      if (payment_recurrence !== undefined) {
+        await settingsService.updateAppSetting('payment_recurrence', payment_recurrence);
+        setAppSettings(prev => ({ ...prev, payment_recurrence: payment_recurrence }));
       }
 
       message.success('Settings saved successfully');
@@ -89,12 +99,36 @@ export default function Settings() {
             auto_approval_minute: 30,
             appointment_end_hour: 23,
             appointment_end_minute: 59,
+            payment_recurrence: 'monthly',
             booking_cooldown_days: 2,
             commission_percentage: 5,
             platform_commission_fixed: 0,
           }}
         >
           {/* Platform Commission Settings */}
+          <Divider orientation="left">
+            <Space>
+              <DollarOutlined />
+              <span>Platform Commission Settings</span>
+            </Space>
+          </Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Payment Recurrence"
+                name="payment_recurrence"
+                tooltip="Frequency of payouts (Weekly or Monthly)"
+                rules={[{ required: true, message: 'Please select recurrence' }]}
+              >
+                <Select>
+                  <Option value="weekly">Weekly</Option>
+                  <Option value="monthly">Monthly</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Divider orientation="left">
             <Space>
               <DollarOutlined />
@@ -356,6 +390,6 @@ export default function Settings() {
           </Form.Item>
         </Form>
       </Card>
-    </div>
+    </div >
   );
 }

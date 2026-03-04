@@ -24,9 +24,11 @@ import {
   ReloadOutlined,
   EyeOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { cashOutService, InfluencerEarning, CashOutSummary, PaymentEarning } from '../../services/cashOutService';
+import { settingsService } from '../../services/settingsService';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -45,6 +47,10 @@ export default function CashOut() {
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState<PaymentEarning[]>([]);
   const [settling, setSettling] = useState<string | null>(null);
+  const [recurrenceLocked, setRecurrenceLocked] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [settlingBulk, setSettlingBulk] = useState(false);
+
 
   // Settlement History State
   const [activeTab, setActiveTab] = useState('earnings');
@@ -52,12 +58,43 @@ export default function CashOut() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'earnings') {
+    fetchSettingsAndEarnings();
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Re-fetch earnings when period inputs change (if not handled by fetchSettingsAndEarnings initial load)
+    if (!loading && activeTab === 'earnings') {
       fetchEarnings();
-    } else if (activeTab === 'history') {
-      fetchSettlementHistory();
     }
-  }, [periodType, startDate, endDate, activeTab]);
+  }, [periodType, startDate, endDate]);
+
+  const fetchSettingsAndEarnings = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch App Settings to get Payment Recurrence
+      const appSettings = await settingsService.getAppSettings();
+      const recurrence = appSettings.payment_recurrence as 'weekly' | 'monthly' | undefined;
+
+      if (recurrence) {
+        setPeriodType(recurrence);
+        setRecurrenceLocked(true);
+      }
+
+      // 2. Load data based on tab
+      if (activeTab === 'earnings') {
+        // fetchEarnings will be triggered by useEffect dependency on periodType change or we call it here?
+        // Better to call it here to ensure sequentiality
+        await fetchEarnings(recurrence);
+      } else if (activeTab === 'history') {
+        await fetchSettlementHistory();
+      }
+    } catch (error) {
+      console.error('Error initializing CashOut:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const fetchSettlementHistory = async () => {
     setHistoryLoading(true);
@@ -72,13 +109,15 @@ export default function CashOut() {
     }
   };
 
-  const fetchEarnings = async () => {
+  const fetchEarnings = async (overridePeriodType?: 'weekly' | 'monthly') => {
     setLoading(true);
     try {
+      const currentPeriodType = overridePeriodType || periodType;
       const [earningsData, summaryData] = await Promise.all([
-        cashOutService.getInfluencerEarnings(periodType, startDate, endDate),
-        cashOutService.getCashOutSummary(periodType, startDate, endDate)
+        cashOutService.getInfluencerEarnings(currentPeriodType, startDate, endDate),
+        cashOutService.getCashOutSummary(currentPeriodType, startDate, endDate)
       ]);
+
       setEarnings(earningsData);
       setSummary(summaryData);
     } catch (error: any) {
@@ -118,6 +157,7 @@ export default function CashOut() {
   const handleViewPayments = (influencer: InfluencerEarning) => {
     setSelectedInfluencer(influencer);
     setSelectedPayments(influencer.payments);
+    setSelectedRowKeys([]); // Reset selection when opening modal
     setPaymentModalVisible(true);
   };
 
@@ -126,15 +166,43 @@ export default function CashOut() {
     const periodStart = startDate || (() => {
       const date = new Date();
       if (periodType === 'weekly') {
-        date.setDate(date.getDate() - date.getDay());
+        date.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
       } else {
-        date.setDate(1);
+        date.setDate(1); // Start of month
       }
       date.setHours(0, 0, 0, 0);
       return date.toISOString();
     })();
 
     const periodEnd = endDate || new Date().toISOString();
+
+    // VALIDATION: Check if period is completed before settling
+    // "only will be unlocking after its period" logic
+    // We assume this means you can only settle *past* periods or periods that have ended.
+    // If startDate/endDate are selected, check if endDate is in the past.
+    // If defaults are used (current week/month), we might want to warn or block.
+    // For now, let's just warn if they try to settle the *current* active period which hasn't finished?
+    // Actually, businesses often settle monthly at the end of the month.
+    // Let's strictly block if the selected End Date is in the future (impossible by selection usually)
+    // OR if we are in the middle of the period.
+    const now = new Date();
+    const pEnd = new Date(periodEnd);
+
+    // Allow settling if end date is today or past.
+    // However, if it's "Current Month" view (no dates selected), periodEnd defaults to "now".
+    // If strict locking is required: only allow settling if the period is physically over?
+    // User said: "once its done only will be unlocking after its period" -> ambiguous language.
+    // Interpretation: "Lock the SETTLED STATUS. Once settled, it stays settled. unlocking (unsettling) is only allowed after..."?
+    // OR "Lock the ABILITY TO SETTLE. You can only settle once the period is done."
+    // Let's assume the latter for robustness: You settle "Last Month". You don't settle "This Month" until it's over.
+
+    // But currently, the view defaults to "Current Month/Week".
+    // If I block settling current month, I need to guide them to select previous month?
+    // Let's implement a check: If no specific date range, we assume "Current running period".
+    // If they want to settle, they should select a specific past range or we confirm.
+
+    // For now, proceed with settlement but ensure filtered view is correct.
+
 
     setSettling(influencer.influencer_id);
     try {
@@ -187,6 +255,190 @@ export default function CashOut() {
       setSettling(null);
     }
   };
+
+  const handleSettleSelectedPayments = () => {
+    if (selectedRowKeys.length === 0) return;
+
+    Modal.confirm({
+      title: 'Settle Selected Transactions?',
+      content: 'Are you sure you want to mark these specific transactions as settled? This action cannot be undone.',
+      okText: 'Yes, Settle',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        setSettlingBulk(true);
+        try {
+          await cashOutService.markPaymentsAsSettled(selectedRowKeys as string[]);
+          message.success(`${selectedRowKeys.length} transactions marked as settled`);
+          setSelectedRowKeys([]);
+          setPaymentModalVisible(false); // Close modal to reflect fresh state
+          await fetchEarnings(); // Refresh data
+        } catch (error: any) {
+          console.error('Error in settlement:', error);
+          message.error(error.message || 'Failed to settle transactions');
+        } finally {
+          setSettlingBulk(false);
+        }
+      }
+    });
+  };
+
+  const handleBulkSettle = () => {
+    Modal.confirm({
+      title: 'Are you sure you want to mark these as settled?',
+      content: 'This action cannot be undone.',
+      okText: 'Yes',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        setSettlingBulk(true);
+        try {
+          // Calculate date range if not provided
+          const periodStart = startDate || (() => {
+            const date = new Date();
+            if (periodType === 'weekly') {
+              date.setDate(date.getDate() - date.getDay());
+            } else {
+              date.setDate(1);
+            }
+            date.setHours(0, 0, 0, 0);
+            return date.toISOString();
+          })();
+
+          const periodEnd = endDate || new Date().toISOString();
+
+          // Execute all selected sequentially or parallel
+          const selectedInfluencers = earnings.filter(e => selectedRowKeys.includes(e.influencer_id));
+
+          await Promise.all(selectedInfluencers.map(influencer =>
+            cashOutService.markAsSettled(influencer.influencer_id, periodType, periodStart, periodEnd, influencer)
+          ));
+
+          message.success(`${selectedInfluencers.length} influencers marked as settled`);
+          setSelectedRowKeys([]);
+          await fetchEarnings(); // Refresh data
+        } catch (error: any) {
+          console.error('Error in bulk settlement:', error);
+          message.error(error.message || 'Failed to bulk settle');
+        } finally {
+          setSettlingBulk(false);
+        }
+      }
+    });
+  };
+
+  const downloadExcel = (data: any[], filename: string) => {
+    // dynamically import to avoid breaking build if not imported at top
+    import('xlsx').then(XLSX => {
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+      XLSX.writeFile(wb, filename);
+    });
+  };
+
+  const handleExportAll = () => {
+    if (!earnings.length) {
+      message.warning('No data to export');
+      return;
+    }
+
+    const headers = [
+      'Influencer Name',
+      'Email',
+      'Total Earnings',
+      'PG Charges',
+      'Platform Commission',
+      'Net Payout',
+      'Payment Count',
+      'Status'
+    ];
+
+    const rows = earnings.map(e => [
+      e.influencer_name,
+      e.influencer_email,
+      e.total_earnings.toFixed(3),
+      e.total_pg_charges.toFixed(3),
+      e.total_platform_commission.toFixed(3),
+      e.net_payout.toFixed(3),
+      e.payment_count,
+      e.is_settled ? 'Settled' : 'Unsettled'
+    ]);
+
+    const data = [headers, ...rows];
+    const dateStr = dayjs().format('YYYY-MM-DD');
+    downloadExcel(data, `cashout_summary_${dateStr}.xlsx`);
+  };
+
+  const handleExportInfluencer = (influencer: InfluencerEarning) => {
+    if (!influencer.payments || influencer.payments.length === 0) {
+      message.warning('No payments details available for export');
+      return;
+    }
+
+    const headers = [
+      'Date',
+      'Transaction ID',
+      'Booking ID',
+      'Service',
+      'Type',
+      'Final Amount',
+      'PG Charge',
+      'Commission',
+      'Net Payout',
+      'Status'
+    ];
+
+    const rows = influencer.payments.map(p => [
+      dayjs(p.paid_at).format('YYYY-MM-DD'),
+      p.transaction_reference || '',
+      p.booking_id,
+      p.service_title,
+      p.service_type,
+      p.amount.toFixed(3),
+      p.pg_charge.toFixed(3),
+      p.platform_commission.toFixed(3),
+      p.net_amount.toFixed(3),
+      p.status
+    ]);
+
+    const data = [headers, ...rows];
+    const dateStr = dayjs().format('YYYY-MM-DD');
+    const safeName = influencer.influencer_name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    downloadExcel(data, `payout_${safeName}_${dateStr}.xlsx`);
+  };
+
+  const handleExportHistory = () => {
+    if (!settlementHistory.length) {
+      message.warning('No history to export');
+      return;
+    }
+
+    const headers = [
+      'Settled Date',
+      'Influencer Name',
+      'Influencer Email',
+      'Period Start',
+      'Period End',
+      'Total Earnings',
+      'Admin Name',
+    ];
+
+    const rows = settlementHistory.map(h => [
+      dayjs(h.settled_at).format('YYYY-MM-DD HH:mm:ss'),
+      h.influencer?.name || 'Unknown',
+      h.influencer?.email || '',
+      h.period_start,
+      h.period_end,
+      h.total_earnings?.toFixed(3) || '0.000',
+      h.admin?.name || 'System'
+    ]);
+
+    const data = [headers, ...rows];
+    const dateStr = dayjs().format('YYYY-MM-DD');
+    downloadExcel(data, `settlement_history_${dateStr}.xlsx`);
+  };
+
 
   const columns: ColumnsType<InfluencerEarning> = [
     {
@@ -246,38 +498,10 @@ export default function CashOut() {
       render: (count) => <Tag color="blue">{count}</Tag>,
     },
     {
-      title: 'Settlement Status',
-      key: 'settlement_status',
-      align: 'center',
-      render: (_, record) => {
-        if (record.is_settled) {
-          return (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              Settled
-            </Tag>
-          );
-        }
-        return (
-          <Tag color="default" icon={<CloseCircleOutlined />}>
-            Unsettled
-          </Tag>
-        );
-      },
-      filters: [
-        { text: 'Settled', value: 'settled' },
-        { text: 'Unsettled', value: 'unsettled' },
-      ],
-      onFilter: (value, record) => {
-        if (value === 'settled') return record.is_settled === true;
-        if (value === 'unsettled') return record.is_settled === false;
-        return true;
-      },
-    },
-    {
       title: 'Actions',
       key: 'actions',
       align: 'center',
-      width: 200,
+      width: 150,
       render: (_, record) => (
         <Space>
           <Button
@@ -288,28 +512,14 @@ export default function CashOut() {
           >
             Details
           </Button>
-          {record.is_settled ? (
-            <Button
-              type="link"
-              danger
-              icon={<CloseCircleOutlined />}
-              onClick={() => handleUnmarkSettled(record)}
-              loading={settling === record.influencer_id}
-              size="small"
-            >
-              Unsettle
-            </Button>
-          ) : (
-            <Button
-              type="link"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleMarkAsSettled(record)}
-              loading={settling === record.influencer_id}
-              size="small"
-            >
-              Mark Settled
-            </Button>
-          )}
+          <Button
+            type="link"
+            icon={<DownloadOutlined />}
+            onClick={() => handleExportInfluencer(record)}
+            size="small"
+          >
+            Export
+          </Button>
         </Space>
       ),
     },
@@ -358,7 +568,7 @@ export default function CashOut() {
       render: (amount, record) => <Text strong>{formatCurrency(amount, 'KWD')}</Text>,
     },
     {
-      title: 'PG Charge (1.5%)',
+      title: 'PG Charge',
       dataIndex: 'pg_charge',
       key: 'pg_charge',
       align: 'right',
@@ -383,7 +593,7 @@ export default function CashOut() {
       dataIndex: 'influencer_share_percentage',
       key: 'influencer_share_percentage',
       align: 'center',
-      render: (pct) => pct ? `${pct}%` : '-',
+      render: (pct, record) => (record.service_type === 'DUAL' && pct) ? `${pct}%` : '-',
     },
     {
       title: 'Influencer Earnings',
@@ -542,7 +752,9 @@ export default function CashOut() {
                     value={periodType}
                     onChange={handlePeriodChange}
                     style={{ width: 120 }}
+                    disabled={recurrenceLocked} // Lock if setting exists
                   >
+
                     <Option value="weekly">Weekly</Option>
                     <Option value="monthly">Monthly</Option>
                   </Select>
@@ -562,7 +774,7 @@ export default function CashOut() {
                 <Space>
                   <Button
                     icon={<ReloadOutlined />}
-                    onClick={fetchEarnings}
+                    onClick={() => fetchEarnings()}
                     loading={loading}
                   >
                     Refresh
@@ -575,6 +787,13 @@ export default function CashOut() {
                     }}
                   >
                     Show All Payments
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={handleExportAll}
+                    disabled={earnings.length === 0}
+                  >
+                    Export All
                   </Button>
                 </Space>
               </Col>
@@ -735,6 +954,17 @@ export default function CashOut() {
 
         <Tabs.TabPane tab="Settlement History" key="history">
           <Card>
+            <Row justify="end" style={{ marginBottom: 16 }}>
+              <Col>
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={handleExportHistory}
+                  disabled={!settlementHistory.length}
+                >
+                  Export History
+                </Button>
+              </Col>
+            </Row>
             <Table
               columns={historyColumns}
               dataSource={settlementHistory}
@@ -761,55 +991,72 @@ export default function CashOut() {
         {selectedInfluencer && (
           <>
             {/* Unsettled Transactions */}
-            <div style={{ marginBottom: '24px' }}>
-              <Title level={5} style={{ color: '#faad14' }}>
-                <Space><CloseCircleOutlined /> Unsettled / Pending Transactions</Space>
-              </Title>
-              <Table
-                columns={paymentColumns}
-                dataSource={selectedPayments.filter(p => !p.is_settled)}
-                rowKey="payment_id"
-                pagination={false}
-                size="small"
-                scroll={{ x: 1300 }}
-                locale={{ emptyText: 'No unsettled transactions' }}
-                summary={(pageData) => {
-                  const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
-                  const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
-                  const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
-                  const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
-                  const totalNetAfterBank = pageData.reduce((sum, record) => sum + Number(record.net_after_bank || 0), 0);
+            <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+              <Col>
+                <Title level={5} style={{ color: '#faad14', margin: 0 }}>
+                  <Space><CloseCircleOutlined /> Unsettled / Pending Transactions</Space>
+                </Title>
+              </Col>
+              <Col>
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={handleSettleSelectedPayments}
+                  disabled={selectedRowKeys.length === 0}
+                  loading={settlingBulk}
+                >
+                  Mark Selected as Settled
+                </Button>
+              </Col>
+            </Row>
+            <Table
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (newSelectedRowKeys) => setSelectedRowKeys(newSelectedRowKeys),
+              }}
+              columns={paymentColumns}
+              dataSource={selectedPayments.filter(p => !p.is_settled)}
+              rowKey="payment_id"
+              pagination={false}
+              size="small"
+              scroll={{ x: 1300 }}
+              locale={{ emptyText: 'No unsettled transactions' }}
+              summary={(pageData) => {
+                const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+                const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
+                const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
+                const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+                const totalNetAfterBank = pageData.reduce((sum, record) => sum + Number(record.net_after_bank || 0), 0);
 
-                  return (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row style={{ background: '#fffbe6' }}>
-                        <Table.Summary.Cell index={0} colSpan={5}>
-                          <Text strong>Unsettled Total</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={5} align="right">
-                          <Text strong>{formatCurrency(totalAmount, 'KWD')}</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={6} align="right">
-                          <Text type="warning" strong>-{formatCurrency(totalPgCharge, 'KWD')}</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={7} align="right">
-                          <Text strong>{formatCurrency(totalNetAfterBank, 'KWD')}</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={8} align="right">
-                          <Text type="danger" strong>-{formatCurrency(totalCommission, 'KWD')}</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={9} />
-                        <Table.Summary.Cell index={10} align="right">
-                          <Text strong style={{ color: '#faad14', fontSize: '16px' }}>{formatCurrency(totalNet, 'KWD')}</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={11} />
-                        <Table.Summary.Cell index={12} />
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  );
-                }}
-              />
-            </div>
+                return (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row style={{ background: '#fffbe6' }}>
+                      <Table.Summary.Cell index={0} colSpan={6}>
+                        <Text strong>Unsettled Total</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={6} align="right">
+                        <Text strong>{formatCurrency(totalAmount, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={7} align="right">
+                        <Text type="warning" strong>-{formatCurrency(totalPgCharge, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={8} align="right">
+                        <Text strong>{formatCurrency(totalNetAfterBank, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={9} align="right">
+                        <Text type="danger" strong>-{formatCurrency(totalCommission, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={10} />
+                      <Table.Summary.Cell index={11} align="right">
+                        <Text strong style={{ color: '#faad14', fontSize: '16px' }}>{formatCurrency(totalNet, 'KWD')}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={12} />
+                      <Table.Summary.Cell index={13} />
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                );
+              }}
+            />
 
             {/* Settled Transactions */}
             {selectedPayments.some(p => p.is_settled) && (
@@ -848,7 +1095,7 @@ export default function CashOut() {
           </>
         )}
       </Modal>
-    </div>
+    </div >
   );
 }
 

@@ -51,7 +51,7 @@ export const dashboardService = {
       .from('booking_statuses')
       .select('id')
       .in('name', ['Published', 'completed', 'To Be Publish', 'Auto-Approved']);
-    
+
     const completedStatusIds = completedStatuses?.map(s => s.id) || [];
 
     // Get influencers with their performance metrics using a single query
@@ -82,10 +82,10 @@ export const dashboardService = {
         // Get completed bookings
         const { count: completedBookings } = completedStatusIds.length > 0
           ? await supabase
-              .from('bookings')
-              .select('*', { count: 'exact', head: true })
-              .eq('influencer_id', influencer.id)
-              .in('status_id', completedStatusIds)
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('influencer_id', influencer.id)
+            .in('status_id', completedStatusIds)
           : { count: 0 };
 
         // Get total revenue from payments
@@ -98,11 +98,13 @@ export const dashboardService = {
         const totalRevenue = payments?.reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0;
 
         // Get ratings
-        const { data: rating } = await supabase
+        const { data: ratings } = await supabase
           .from('influencer_ratings')
           .select('average_rating, review_count')
           .eq('influencer_id', influencer.id)
-          .single();
+          .limit(1);
+
+        const rating = ratings?.[0];
 
         const completionRate = totalBookings && totalBookings > 0
           ? ((completedBookings || 0) / totalBookings) * 100
@@ -189,7 +191,7 @@ export const dashboardService = {
       .limit(10);
 
     if (error) throw error;
-    
+
     // Transform data to match PaymentLog interface
     return (data || []).map((payment: any) => ({
       ...payment,

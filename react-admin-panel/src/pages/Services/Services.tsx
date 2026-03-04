@@ -534,14 +534,20 @@ export default function Services() {
       title: 'Type',
       dataIndex: 'service_type',
       key: 'service_type',
-      render: (type: string) => (
-        <span style={{
-          color: type === 'flash' ? '#ff4d4f' : type === 'dual' ? '#1890ff' : '#52c41a',
-          fontWeight: 'bold'
-        }}>
-          {type?.toUpperCase() || '-'}
-        </span>
-      )
+      render: (type: string, record: any) => {
+        let displayType = type?.toUpperCase() || '-';
+        if (record.is_flash_deal && type !== 'flash') {
+          displayType = `FLASH ${displayType}`;
+        }
+        return (
+          <span style={{
+            color: type === 'flash' || record.is_flash_deal ? '#ff4d4f' : type === 'dual' ? '#1890ff' : '#52c41a',
+            fontWeight: 'bold'
+          }}>
+            {displayType}
+          </span>
+        );
+      }
     },
     {
       title: 'Category',
@@ -628,10 +634,7 @@ export default function Services() {
           );
         }
 
-        // For normal services, it's typically 100% of the net payout to the single influencer
-        // or we can show the commission % deducted? 
-        // "Influencer Payout (percentage needed)" -> likely just wants to know the split or that it's full.
-        return <span style={{ color: '#52c41a', fontWeight: 'bold' }}>100%</span>;
+        return <span style={{ color: '#8c8c8c' }}>-</span>;
       }
     },
     {
@@ -766,7 +769,6 @@ export default function Services() {
               >
                 <Option value="normal">Normal</Option>
                 <Option value="dual">Dual</Option>
-                <Option value="flash">Flash</Option>
               </Select>
             </Form.Item>
           </Col>
@@ -855,7 +857,6 @@ export default function Services() {
                 >
                   <Option value="normal">Normal</Option>
                   <Option value="dual">Dual</Option>
-                  <Option value="flash">Flash</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -948,6 +949,10 @@ export default function Services() {
                       if (getFieldValue('is_flash_deal') && !value) {
                         return Promise.reject(new Error('Please enter offer price for flash deals'));
                       }
+                      const price = getFieldValue('price');
+                      if (value && price && value >= price) {
+                        return Promise.reject(new Error('Offer price must be less than regular price'));
+                      }
                       return Promise.resolve();
                     },
                   }),
@@ -958,7 +963,7 @@ export default function Services() {
                   step={0.001}
                   precision={getCurrencyDecimals(selectedCurrency)}
                   style={{ width: '100%' }}
-                  disabled={!isFlashDeal}
+                  disabled={false}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                 />
@@ -1364,7 +1369,6 @@ export default function Services() {
                 >
                   <Option value="normal">Normal</Option>
                   <Option value="dual">Dual</Option>
-                  <Option value="flash">Flash</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1449,6 +1453,10 @@ export default function Services() {
                       if (getFieldValue('is_flash_deal') && !value) {
                         return Promise.reject(new Error('Please enter offer price for flash deals'));
                       }
+                      const price = getFieldValue('price');
+                      if (value && price && value >= price) {
+                        return Promise.reject(new Error('Offer price must be less than regular price'));
+                      }
                       return Promise.resolve();
                     },
                   }),
@@ -1459,7 +1467,7 @@ export default function Services() {
                   step={0.001}
                   precision={getCurrencyDecimals(editSelectedCurrency)}
                   style={{ width: '100%' }}
-                  disabled={!editIsFlashDeal}
+                  disabled={false}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
                 />

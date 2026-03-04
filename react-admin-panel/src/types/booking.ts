@@ -49,6 +49,7 @@ export interface Booking {
     name: string;
     description?: string;
   };
+  contract?: any;
 }
 
 export interface CreateBookingData {
@@ -70,6 +71,7 @@ export interface UpdateBookingData {
 }
 
 export interface BookingFilters {
+  id?: string;
   service_id?: string;
   influencer_id?: string;
   status?: string;

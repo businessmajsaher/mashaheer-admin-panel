@@ -19,6 +19,7 @@ import {
   GiftOutlined,
   BarChartOutlined,
   WalletOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -76,6 +77,11 @@ export const Sidebar: React.FC = () => {
       key: '/cash-out',
       icon: <WalletOutlined />,
       label: 'Cash Out',
+    },
+    {
+      key: '/refunds',
+      icon: <RollbackOutlined />,
+      label: 'Refunds',
     },
     {
       key: '/platforms',
@@ -160,7 +166,7 @@ export const Sidebar: React.FC = () => {
           Mashaheer Admin
         </Title>
       </div>
-      
+
       <Menu
         mode="inline"
         selectedKeys={[location.pathname]}
