@@ -13,49 +13,67 @@ export const getSession = async () => {
 };
 
 export const resetPassword = async (email: string, redirectUrl?: string) => {
+  const redirectTo =
+    redirectUrl || `${window.location.origin}/password-reset-callback`;
+
   try {
-    // Get the current session to get the access token
     const { data: session } = await supabase.auth.getSession();
-    
-    if (!session.session) {
-      throw new Error('No active session found. Please log in again.');
+
+    if (session.session) {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/password-reset`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.session.access_token}`
+            },
+            body: JSON.stringify({
+              email,
+              redirect_url: redirectTo
+            })
+          }
+        );
+
+        if (response.ok) {
+          return await response.json();
+        }
+        const errorData = await response.json().catch(() => ({}));
+        const msg = String((errorData as { error?: string }).error || '').toLowerCase();
+        if (response.status === 429 || msg.includes('rate') || msg.includes('too many')) {
+          throw new Error('Too many reset requests. Please wait before requesting another email.');
+        }
+        throw new Error((errorData as { error?: string }).error || `HTTP ${response.status}`);
+      } catch (edgeErr: unknown) {
+        const edgeMsg = (edgeErr as { message?: string })?.message || '';
+        if (edgeMsg.toLowerCase().includes('too many') || edgeMsg.toLowerCase().includes('rate limit')) {
+          throw edgeErr;
+        }
+        console.warn('password-reset edge function failed, using Supabase email:', edgeErr);
+      }
     }
 
-    // Try using the edge function first (for admin-controlled reset)
-    try {
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/password-reset`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.session.access_token}`
-      },
-      body: JSON.stringify({
-        email,
-        redirect_url: redirectUrl
-      })
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to send password reset email');
+    if (error) {
+      const msg = error.message || '';
+      if (
+        msg.toLowerCase().includes('rate limit') ||
+        msg.toLowerCase().includes('too many') ||
+        (error as { status?: number }).status === 429
+      ) {
+        throw new Error(
+          'Too many reset requests. Please wait before requesting another email.'
+        );
+      }
+      throw error;
     }
 
-    const data = await response.json();
-    return data;
-    } catch (edgeFunctionError: any) {
-      // Fallback to Supabase's built-in resetPasswordForEmail if edge function fails
-      console.warn('Edge function failed, falling back to resetPasswordForEmail:', edgeFunctionError);
-      
-      const redirectTo = redirectUrl || `${window.location.origin}/reset-password`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo,
-      });
-
-      if (error) throw error;
-      
-      return { success: true, message: 'Password reset email sent' };
-    }
-  } catch (error: any) {
+    return { success: true, message: 'Password reset email sent' };
+  } catch (error: unknown) {
     console.error('Password reset error:', error);
     throw error;
   }

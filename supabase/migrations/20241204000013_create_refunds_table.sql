@@ -39,7 +39,11 @@ CREATE INDEX IF NOT EXISTS idx_refunds_created_at ON public.refunds(created_at);
 -- Enable RLS
 ALTER TABLE public.refunds ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (allow admins to manage refunds)
+-- RLS Policies (allow admins to manage refunds) — drop first so re-run is safe on DBs that already had refunds
+DROP POLICY IF EXISTS "Admins can view all refunds" ON public.refunds;
+DROP POLICY IF EXISTS "Admins can create refunds" ON public.refunds;
+DROP POLICY IF EXISTS "Admins can update refunds" ON public.refunds;
+
 CREATE POLICY "Admins can view all refunds" ON public.refunds
   FOR SELECT
   USING (

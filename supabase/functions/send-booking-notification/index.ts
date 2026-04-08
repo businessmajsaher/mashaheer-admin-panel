@@ -174,14 +174,13 @@ serve(async (req: Request) => {
                   title: fcmTitle,
                   body: fcmBody
                 },
-                data: {
-                  type: notification_type,
-                  booking_id: booking_id,
-                  status_name: status_name,
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK'
-                },
                 android: {
-                  priority: 'high'
+                  priority: 'high',
+                  notification: {
+                    channel_id: 'high_importance_channel',
+                    priority: 'high',
+                    sound: 'default'
+                  }
                 },
                 apns: {
                   payload: {
@@ -189,6 +188,12 @@ serve(async (req: Request) => {
                       sound: 'default'
                     }
                   }
+                },
+                data: {
+                  type: notification_type,
+                  booking_id: booking_id,
+                  status_name: status_name,
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK'
                 }
               }
             })

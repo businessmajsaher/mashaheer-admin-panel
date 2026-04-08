@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Form, Input, Alert, Switch, Upload, Popconfirm } from 'antd';
+import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Form, Input, Alert, Switch, Upload, Popconfirm, Descriptions } from 'antd';
 import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { PasswordResetModal } from '@/components/PasswordResetModal';
@@ -15,6 +15,9 @@ interface Customer {
   is_suspended: boolean;
   created_at: string;
 }
+
+const isGuestCustomer = (c: Customer) =>
+  typeof c.email === 'string' && c.email.toLowerCase().endsWith('@temp.mashaheer.com');
 
 
 
@@ -43,6 +46,7 @@ export default function Users() {
   const [profileImageFile, setProfileImageFile] = useState<any>(null);
   const [editProfileImageFile, setEditProfileImageFile] = useState<any>(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null);
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -77,7 +81,6 @@ export default function Users() {
         name: editingCustomer.name,
         email: editingCustomer.email,
         bio: editingCustomer.bio || '',
-        is_verified: editingCustomer.is_verified,
         is_suspended: editingCustomer.is_suspended,
         profile_image_url: editingCustomer.profile_image_url,
       });
@@ -95,7 +98,7 @@ export default function Users() {
     try {
       setLoading(true);
       
-      // Fetch all customers for search functionality
+      // Fetch all customers (exclude guest placeholder users)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -106,7 +109,7 @@ export default function Users() {
         throw error;
       }
 
-      setAllCustomers(data || []);
+      setAllCustomers((data || []).filter((c: Customer) => !isGuestCustomer(c)));
     } catch (error) {
       console.error('Error fetching customers:', error);
       message.error('Failed to fetch customers');
@@ -126,6 +129,21 @@ export default function Users() {
       email,
       name
     });
+  };
+
+  const handleViewCustomer = async (customer: Customer) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', customer.id)
+        .single();
+      if (error) throw error;
+      setViewCustomer((data as Customer) || customer);
+    } catch (err: any) {
+      console.error('Error fetching customer for view:', err);
+      setViewCustomer(customer);
+    }
   };
 
   const closePasswordResetModal = () => {
@@ -214,7 +232,7 @@ export default function Users() {
           name: values.name,
           bio: values.bio || null,
           profile_image_url: profile_image_url || null,
-          is_verified: values.is_verified || false,
+          is_verified: false,
           is_suspended: values.is_suspended || false,
         })
       });
@@ -284,7 +302,6 @@ export default function Users() {
         name: values.name,
         email: values.email,
         bio: values.bio || null,
-        is_verified: values.is_verified || false,
         is_suspended: values.is_suspended || false,
       };
 
@@ -367,7 +384,15 @@ export default function Users() {
       key: 'actions',
       render: (record: Customer) => (
         <Space>
-          <Button type="link" icon={<EyeOutlined />} size="small">
+          <Button
+            type="link"
+            icon={<EyeOutlined />}
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewCustomer(record);
+            }}
+          >
             View
           </Button>
           <Button 
@@ -465,6 +490,30 @@ export default function Users() {
         userName={passwordResetModal.name}
       />
 
+      <Modal
+        title={viewCustomer ? `Customer details — ${viewCustomer.name}` : 'Customer details'}
+        open={!!viewCustomer}
+        onCancel={() => setViewCustomer(null)}
+        footer={null}
+        destroyOnHidden
+      >
+        {viewCustomer && (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="Name">{viewCustomer.name}</Descriptions.Item>
+            <Descriptions.Item label="Email">{viewCustomer.email}</Descriptions.Item>
+            <Descriptions.Item label="Status">
+              {viewCustomer.is_verified && <Tag color="green">Verified</Tag>}
+              {viewCustomer.is_suspended && <Tag color="red">Suspended</Tag>}
+              {!viewCustomer.is_verified && !viewCustomer.is_suspended && <Tag>Pending</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="Bio">{viewCustomer.bio || '—'}</Descriptions.Item>
+            <Descriptions.Item label="Joined">
+              {new Date(viewCustomer.created_at).toLocaleString()}
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+
       {/* Add Customer Modal */}
       <Modal
         title="Add Customer"
@@ -537,11 +586,8 @@ export default function Users() {
               )}
             </div>
           </Form.Item>
-          <Form.Item name="is_verified" valuePropName="checked" initialValue={false}>
-            <Switch checkedChildren="Verified" unCheckedChildren="Not Verified" />
-          </Form.Item>
           <Form.Item name="is_suspended" valuePropName="checked" initialValue={false}>
-            <Switch checkedChildren="Suspended" unCheckedChildren="Active" />
+            <Switch checkedChildren="Suspended" unCheckedChildren="Active account" />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" block loading={formLoading}>
@@ -630,12 +676,6 @@ export default function Users() {
                 </div>
               )}
             </div>
-          </Form.Item>
-          <Form.Item name="is_verified" valuePropName="checked">
-            <Switch checkedChildren="Verified" unCheckedChildren="Not Verified" />
-          </Form.Item>
-          <Form.Item name="is_suspended" valuePropName="checked">
-            <Switch checkedChildren="Suspended" unCheckedChildren="Active" />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" block loading={editFormLoading}>

@@ -18,7 +18,7 @@ import {
   Divider,
   Alert
 } from 'antd';
-import { EyeOutlined, ReloadOutlined, DollarOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, ReloadOutlined, DollarOutlined, ExclamationCircleOutlined, DownloadOutlined } from '@ant-design/icons';
 import { bookingService } from '../../services/bookingService';
 import { serviceService } from '../../services/serviceService';
 import { refundService, RefundRequest } from '../../services/refundService';
@@ -26,6 +26,11 @@ import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
 import { formatPrice } from '../../utils/currencyUtils';
 import dayjs from 'dayjs';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+
+dayjs.extend(advancedFormat);
+
+const BOOKING_DATE_DISPLAY = 'Do MMMM YYYY h:mm a';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -37,6 +42,191 @@ const LOCAL_REFUND_STATUS_COLOR: Record<string, string> = {
   failed: 'red',
   cancelled: 'default'
 };
+
+type ContractParty = 'customer' | 'influencer';
+
+function contractHasRenderableBlob(contract: Record<string, unknown>): boolean {
+  const pdf =
+    (typeof contract.pdf_url === 'string' && contract.pdf_url) ||
+    (typeof contract.signed_pdf_url === 'string' && contract.signed_pdf_url) ||
+    (typeof contract.document_url === 'string' && contract.document_url);
+  if (pdf) return true;
+  const html = contract.generated_content;
+  if (typeof html === 'string' && html.trim().length > 0) return true;
+  const sigs = contract.signatures;
+  return Array.isArray(sigs) && sigs.length > 0;
+}
+
+function normalizedSignerType(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const t = raw.trim().toLowerCase();
+  return t || null;
+}
+
+function isCustomerSignerType(t: string): boolean {
+  return t === 'customer' || t === 'brand' || t === 'client';
+}
+
+function isInfluencerSignerType(t: string): boolean {
+  return t === 'influencer' || t === 'creator';
+}
+
+function hasPartySignature(contract: Record<string, unknown>, party: ContractParty): boolean {
+  const sigs = contract.signatures;
+  if (!Array.isArray(sigs)) return false;
+  for (const s of sigs) {
+    const t = normalizedSignerType((s as { signer_type?: string }).signer_type);
+    if (!t) continue;
+    if (party === 'customer' && isCustomerSignerType(t)) return true;
+    if (party === 'influencer' && isInfluencerSignerType(t)) return true;
+  }
+  return false;
+}
+
+function getPartySignatureRows(
+  contract: Record<string, unknown>,
+  party: ContractParty
+): { signer_type?: string; signature_data?: string | null; signed_at?: string | null }[] {
+  const sigs = contract.signatures;
+  if (!Array.isArray(sigs)) return [];
+  return sigs.filter((s) => {
+    const t = normalizedSignerType((s as { signer_type?: string }).signer_type);
+    if (!t) return false;
+    if (party === 'customer') return isCustomerSignerType(t);
+    return isInfluencerSignerType(t);
+  }) as { signer_type?: string; signature_data?: string | null; signed_at?: string | null }[];
+}
+
+function partyPdfUrlFromVariables(contract: Record<string, unknown>, party: ContractParty): string {
+  const v = contract.variables;
+  if (!v || typeof v !== 'object') return '';
+  const o = v as Record<string, unknown>;
+  if (party === 'customer') {
+    return (
+      (typeof o.customer_pdf_url === 'string' && o.customer_pdf_url.trim()) ||
+      (typeof o.customer_signed_pdf_url === 'string' && o.customer_signed_pdf_url.trim()) ||
+      (typeof o.customer_contract_pdf_url === 'string' && o.customer_contract_pdf_url.trim()) ||
+      ''
+    );
+  }
+  return (
+    (typeof o.influencer_pdf_url === 'string' && o.influencer_pdf_url.trim()) ||
+    (typeof o.influencer_signed_pdf_url === 'string' && o.influencer_signed_pdf_url.trim()) ||
+    (typeof o.influencer_contract_pdf_url === 'string' && o.influencer_contract_pdf_url.trim()) ||
+    ''
+  );
+}
+
+/**
+ * Customer/influencer copy: party-specific PDF in variables, or HTML with that party's signature block.
+ * If signature rows exist, only parties with a matching signer_type can download. If none exist, both copies are allowed when there is any renderable contract content.
+ */
+function canDownloadPartyContract(contract: Record<string, unknown>, party: ContractParty): boolean {
+  if (partyPdfUrlFromVariables(contract, party)) return true;
+  if (!contractHasRenderableBlob(contract)) return false;
+  const sigs = contract.signatures;
+  const hasRows = Array.isArray(sigs) && sigs.length > 0;
+  if (hasRows) return hasPartySignature(contract, party);
+  return true;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildPartyContractHtml(contract: Record<string, unknown>, party: ContractParty): string {
+  const partyLabel = party === 'customer' ? 'Customer' : 'Influencer';
+  const raw = contract.generated_content;
+  const fragment =
+    typeof raw === 'string' && raw.trim()
+      ? raw.trim()
+      : '<p><em>No contract body was stored for this instance.</em></p>';
+
+  const rows = getPartySignatureRows(contract, party);
+  let sigHtml = '';
+  if (rows.length > 0) {
+    const row = rows[0];
+    const sigData = row.signature_data;
+    const signedAt = row.signed_at ? String(row.signed_at) : '';
+    sigHtml += `<section style="margin-top:2rem;border-top:1px solid #ccc;padding-top:1rem;"><h2>${partyLabel} signature</h2>`;
+    if (sigData && (sigData.startsWith('data:image') || /^https?:\/\//i.test(sigData))) {
+      const safeSrc = sigData.replace(/"/g, '&quot;');
+      sigHtml += `<p><img src="${safeSrc}" alt="Signature" style="max-width:320px;max-height:120px;" /></p>`;
+    } else if (sigData) {
+      sigHtml += `<p><pre style="white-space:pre-wrap;">${escapeHtml(sigData)}</pre></p>`;
+    }
+    if (signedAt) sigHtml += `<p><small>Signed at: ${escapeHtml(signedAt)}</small></p>`;
+    sigHtml += '</section>';
+  } else {
+    sigHtml += `<p style="margin-top:2rem;color:#666;"><small>${partyLabel} copy. No separate signature record was found for this party; the contract text below is unchanged.</small></p>`;
+  }
+
+  if (/^<!DOCTYPE/i.test(fragment) || /^<html/i.test(fragment)) {
+    if (/<\/body>/i.test(fragment)) return fragment.replace(/<\/body>/i, `${sigHtml}</body>`);
+    return `${fragment}${sigHtml}`;
+  }
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Contract — ${partyLabel} copy</title></head><body><h1>${partyLabel} copy</h1>${fragment}${sigHtml}</body></html>`;
+}
+
+function triggerBlobDownload(filename: string, mime: string, content: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadPartyContract(contract: Record<string, unknown>, party: ContractParty, bookingId: string) {
+  const shortId = bookingId.slice(0, 8);
+  const partyPdf = partyPdfUrlFromVariables(contract, party);
+  if (partyPdf) {
+    const a = document.createElement('a');
+    a.href = partyPdf;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.download = `contract-${shortId}-${party}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    message.success(`${party === 'customer' ? 'Customer' : 'Influencer'} contract PDF opened`);
+    return;
+  }
+  const gen = contract.generated_content;
+  if (typeof gen === 'string' && gen.trim()) {
+    const html = buildPartyContractHtml(contract, party);
+    triggerBlobDownload(`contract-${shortId}-${party}.html`, 'text/html;charset=utf-8', html);
+    message.success(`${party === 'customer' ? 'Customer' : 'Influencer'} copy downloaded`);
+    return;
+  }
+  const sharedPdf =
+    (typeof contract.pdf_url === 'string' && contract.pdf_url.trim()) ||
+    (typeof contract.signed_pdf_url === 'string' && contract.signed_pdf_url.trim()) ||
+    (typeof contract.document_url === 'string' && contract.document_url.trim()) ||
+    '';
+  if (sharedPdf) {
+    const a = document.createElement('a');
+    a.href = sharedPdf;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.download = `contract-${shortId}-${party}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    message.success('Opening contract PDF');
+    return;
+  }
+  const html = buildPartyContractHtml(contract, party);
+  triggerBlobDownload(`contract-${shortId}-${party}.html`, 'text/html;charset=utf-8', html);
+  message.success(`${party === 'customer' ? 'Customer' : 'Influencer'} copy downloaded`);
+}
 
 
 const Bookings: React.FC = () => {
@@ -109,8 +299,7 @@ const Bookings: React.FC = () => {
         status_id: fullBooking.status_id,
         scheduled_time: fullBooking.scheduled_time ? dayjs(fullBooking.scheduled_time) : null,
         notes: fullBooking.notes || '',
-        script: fullBooking.script || '',
-        feedback: fullBooking.feedback || ''
+        script: fullBooking.script || ''
       });
       setModalVisible(true);
     } catch (error) {
@@ -133,8 +322,9 @@ const Bookings: React.FC = () => {
     if (!selectedBooking) return;
 
     try {
+      const { feedback: _f, ...rest } = values;
       await bookingService.updateBooking(selectedBooking.id, {
-        ...values,
+        ...rest,
         scheduled_time: values.scheduled_time?.toISOString()
       });
       message.success('Booking updated successfully');
@@ -209,6 +399,7 @@ const Bookings: React.FC = () => {
       };
 
       const result = await refundService.initiateRefund(refundRequest);
+      const r = result as any;
 
       if (result.status === 'completed') {
         message.success('Refund processed successfully');
@@ -217,6 +408,31 @@ const Bookings: React.FC = () => {
       } else {
         message.warning('Refund request submitted but may need manual review');
       }
+
+      const bookingId = selectedBooking.id;
+      const mergedRefund = {
+        id: r.id,
+        booking_id: r.booking_id ?? bookingId,
+        amount: r.amount,
+        currency: r.currency ?? 'KWD',
+        status: r.status,
+        reason: r.reason ?? values.reason,
+        created_at: r.created_at ?? new Date().toISOString(),
+        hesabe_refund_id: r.hesabe_refund_id
+      };
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId
+            ? { ...(b as any), refunds: [...(((b as any).refunds as any[]) || []), mergedRefund] }
+            : b
+        )
+      );
+      setSelectedBooking((prev) =>
+        prev && prev.id === bookingId
+          ? { ...(prev as any), refunds: [...(((prev as any).refunds as any[]) || []), mergedRefund] }
+          : prev
+      );
 
       setRefundModalVisible(false);
       refundForm.resetFields();
@@ -285,7 +501,7 @@ const Bookings: React.FC = () => {
       title: 'Scheduled Time',
       dataIndex: 'scheduled_time',
       key: 'scheduled_time',
-      render: (date: string) => date ? dayjs(date).format('[until] D MMMM YYYY h:mma') : 'N/A'
+      render: (date: string) => date ? dayjs(date).format(BOOKING_DATE_DISPLAY) : 'N/A'
     },
     {
       title: 'Status',
@@ -340,10 +556,13 @@ const Bookings: React.FC = () => {
       render: (_: any, record: Booking) => {
         const completedPayment = (record as any).payments?.find((p: any) => p.status === 'completed');
         const refunds: any[] = (record as any).refunds || [];
-        // Hide refund if published OR if any refund already exists
-        const hasAnyRefund = refunds.length > 0;
         const isPublished = (record as any).is_published === true;
-        // Get latest refund by created_at
+        // Hide Refund when a non-terminal refund exists (failed/cancelled can retry)
+        const refundBlocksNew = refunds.some((r: any) => {
+          const s = String(r.status || '').toLowerCase();
+          return s === 'pending' || s === 'processing' || s === 'completed';
+        });
+        const hasAnyRefund = refunds.length > 0;
         const latestRefund = hasAnyRefund
           ? [...refunds].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
           : null;
@@ -357,7 +576,7 @@ const Bookings: React.FC = () => {
             >
               View Details
             </Button>
-            {completedPayment && !isPublished && !hasAnyRefund && (
+            {completedPayment && !isPublished && !refundBlocksNew && (
               <Button
                 type="link"
                 icon={<DollarOutlined />}
@@ -505,26 +724,72 @@ const Bookings: React.FC = () => {
                 )}
                 {selectedBooking.contract && (
                   <Descriptions.Item label="Contract Status" span={3}>
-                    <Tag color={
-                      selectedBooking.contract.status === 'signed' ? 'green' :
-                        selectedBooking.contract.status === 'completed' ? 'green' :
-                          selectedBooking.contract.status === 'pending' ? 'orange' : 'default'
-                    }>
-                      {selectedBooking.contract.status?.toUpperCase()}
-                    </Tag>
+                    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                      <Tag color={
+                        selectedBooking.contract.status === 'signed' ? 'green' :
+                          selectedBooking.contract.status === 'completed' ? 'green' :
+                            selectedBooking.contract.status === 'active' ? 'green' :
+                              selectedBooking.contract.status === 'pending' ? 'orange' : 'default'
+                      }>
+                        {selectedBooking.contract.status?.toUpperCase()}
+                      </Tag>
+                      <Space wrap size="small">
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<DownloadOutlined />}
+                          disabled={!canDownloadPartyContract(selectedBooking.contract as Record<string, unknown>, 'customer')}
+                          onClick={() =>
+                            downloadPartyContract(
+                              selectedBooking.contract as Record<string, unknown>,
+                              'customer',
+                              selectedBooking.id
+                            )
+                          }
+                        >
+                          Customer signed copy
+                        </Button>
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<DownloadOutlined />}
+                          disabled={!canDownloadPartyContract(selectedBooking.contract as Record<string, unknown>, 'influencer')}
+                          onClick={() =>
+                            downloadPartyContract(
+                              selectedBooking.contract as Record<string, unknown>,
+                              'influencer',
+                              selectedBooking.id
+                            )
+                          }
+                        >
+                          Influencer signed copy
+                        </Button>
+                      </Space>
+                      <span style={{ fontSize: 12, color: '#888' }}>
+                        Separate HTML/PDF copies per party. When signature records exist, a button is enabled only if that party has signed; otherwise both use the same stored contract text.
+                      </span>
+                    </Space>
                   </Descriptions.Item>
                 )}
                 <Descriptions.Item label="Customer" span={3}>
                   {selectedBooking.customer?.name || 'N/A'} ({selectedBooking.customer?.email || 'N/A'})
                 </Descriptions.Item>
-                <Descriptions.Item label="Influencer" span={3}>
+                <Descriptions.Item
+                  label={selectedBooking.service?.service_type === 'dual' ? 'Customer contact for this booking' : 'Influencer'}
+                  span={3}
+                >
                   {selectedBooking.influencer?.name || 'N/A'} ({selectedBooking.influencer?.email || 'N/A'})
+                  {selectedBooking.service?.service_type === 'dual' && (
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                      Primary or first invited influencer who received the customer&apos;s request; payouts follow the service split.
+                    </div>
+                  )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Scheduled Time" span={3}>
-                  {selectedBooking.scheduled_time ? dayjs(selectedBooking.scheduled_time).format('[until] D MMMM YYYY h:mma') : 'N/A'}
+                  {selectedBooking.scheduled_time ? dayjs(selectedBooking.scheduled_time).format(BOOKING_DATE_DISPLAY) : 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Completed Time" span={3}>
-                  {selectedBooking.completed_time ? dayjs(selectedBooking.completed_time).format('[until] D MMMM YYYY h:mma') : 'Not completed'}
+                  {selectedBooking.completed_time ? dayjs(selectedBooking.completed_time).format(BOOKING_DATE_DISPLAY) : 'Not completed'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Notes" span={3}>
                   {selectedBooking.notes || 'None'}
@@ -533,23 +798,20 @@ const Bookings: React.FC = () => {
                   {selectedBooking.script || 'No script provided'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Script Created At" span={3}>
-                  {selectedBooking.script_created_at ? dayjs(selectedBooking.script_created_at).format('[until] D MMMM YYYY h:mma') : 'N/A'}
+                  {selectedBooking.script_created_at ? dayjs(selectedBooking.script_created_at).format(BOOKING_DATE_DISPLAY) : 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Script Approved At" span={3}>
-                  {selectedBooking.script_approved_at ? dayjs(selectedBooking.script_approved_at).format('[until] D MMMM YYYY h:mma') : 'N/A'}
+                  {selectedBooking.script_approved_at ? dayjs(selectedBooking.script_approved_at).format(BOOKING_DATE_DISPLAY) : 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Script Rejected Count" span={3}>
                   {selectedBooking.script_rejected_count || 0}
-                </Descriptions.Item>
-                <Descriptions.Item label="Feedback" span={3}>
-                  {selectedBooking.feedback || 'No feedback'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Days Gap" span={3}>
                   {selectedBooking.days_gap ? `${selectedBooking.days_gap} days` : 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Is Published" span={3}>
                   {selectedBooking.is_published ? (
-                    <Tag color="green">Yes {selectedBooking.published_at ? `(${dayjs(selectedBooking.published_at).format('[until] D MMMM YYYY h:mma')})` : ''}</Tag>
+                    <Tag color="green">Yes {selectedBooking.published_at ? `(${dayjs(selectedBooking.published_at).format(BOOKING_DATE_DISPLAY)})` : ''}</Tag>
                   ) : (
                     <Tag color="red">No</Tag>
                   )}
@@ -558,14 +820,14 @@ const Bookings: React.FC = () => {
 
               {/* Revision Time Frames (Non-editable) */}
               <Divider>Revision Time Frames</Divider>
-              <Descriptions bordered size="small">
+              <Descriptions bordered size="small" column={2}>
                 <Descriptions.Item label="Influencer Approval Deadline" span={2}>
                   {selectedBooking.influencer_approval_deadline ? (
                     <span style={{
                       color: dayjs(selectedBooking.influencer_approval_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.influencer_approval_deadline).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.influencer_approval_deadline).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.influencer_approval_deadline).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   ) : 'Not set'}
@@ -576,7 +838,7 @@ const Bookings: React.FC = () => {
                       color: dayjs(selectedBooking.payment_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.payment_deadline).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.payment_deadline).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.payment_deadline).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   ) : 'Not set'}
@@ -587,7 +849,7 @@ const Bookings: React.FC = () => {
                       color: dayjs(selectedBooking.script_submission_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.script_submission_deadline).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.script_submission_deadline).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.script_submission_deadline).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   ) : 'Not set'}
@@ -598,7 +860,7 @@ const Bookings: React.FC = () => {
                       color: dayjs(selectedBooking.auto_approval_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.auto_approval_deadline).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.auto_approval_deadline).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.auto_approval_deadline).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   ) : 'Not set'}
@@ -609,7 +871,7 @@ const Bookings: React.FC = () => {
                       color: dayjs(selectedBooking.appointment_end_time).isBefore(dayjs()) ? '#ff4d4f' : '#52c41a',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.appointment_end_time).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.appointment_end_time).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.appointment_end_time).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   ) : 'Not set'}
@@ -620,19 +882,19 @@ const Bookings: React.FC = () => {
                       color: dayjs(selectedBooking.influencer_response_deadline).isBefore(dayjs()) ? '#ff4d4f' : '#ff9800',
                       fontWeight: 'bold'
                     }}>
-                      {dayjs(selectedBooking.influencer_response_deadline).format('[until] D MMMM YYYY h:mma')}
+                      {dayjs(selectedBooking.influencer_response_deadline).format(BOOKING_DATE_DISPLAY)}
                       {dayjs(selectedBooking.influencer_response_deadline).isBefore(dayjs()) && ' (Expired)'}
                     </span>
                   </Descriptions.Item>
                 )}
                 {selectedBooking.last_script_submitted_at && (
                   <Descriptions.Item label="Last Script Submitted" span={2}>
-                    {dayjs(selectedBooking.last_script_submitted_at).format('[until] D MMMM YYYY h:mma')}
+                    {dayjs(selectedBooking.last_script_submitted_at).format(BOOKING_DATE_DISPLAY)}
                   </Descriptions.Item>
                 )}
                 {selectedBooking.last_script_rejected_at && (
                   <Descriptions.Item label="Last Script Rejected" span={2}>
-                    {dayjs(selectedBooking.last_script_rejected_at).format('[until] D MMMM YYYY h:mma')}
+                    {dayjs(selectedBooking.last_script_rejected_at).format(BOOKING_DATE_DISPLAY)}
                     {selectedBooking.last_rejection_reason && (
                       <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '4px' }}>
                         Reason: {selectedBooking.last_rejection_reason}
@@ -670,7 +932,7 @@ const Bookings: React.FC = () => {
                         </Descriptions.Item>
                         {payment.paid_at && (
                           <Descriptions.Item label="Paid At" span={3}>
-                            {dayjs(payment.paid_at).format('[until] D MMMM YYYY h:mma')}
+                            {dayjs(payment.paid_at).format(BOOKING_DATE_DISPLAY)}
                           </Descriptions.Item>
                         )}
                       </React.Fragment>
@@ -699,7 +961,7 @@ const Bookings: React.FC = () => {
                           </Tag>
                         </Descriptions.Item>
                         <Descriptions.Item label="Created At" span={1}>
-                          {dayjs(refund.created_at).format('[until] D MMMM YYYY h:mma')}
+                          {dayjs(refund.created_at).format(BOOKING_DATE_DISPLAY)}
                         </Descriptions.Item>
                         {refund.reason && (
                           <Descriptions.Item label="Reason" span={3}>
@@ -764,13 +1026,6 @@ const Bookings: React.FC = () => {
                   <TextArea rows={4} placeholder="Enter script content" />
                 </Form.Item>
 
-                <Form.Item
-                  name="feedback"
-                  label="Feedback"
-                >
-                  <TextArea rows={3} placeholder="Enter feedback" />
-                </Form.Item>
-
                 <Form.Item>
                   <Space>
                     <Button type="primary" htmlType="submit">
@@ -803,7 +1058,7 @@ const Bookings: React.FC = () => {
               layout="vertical"
               onFinish={handleRefundSubmit}
             >
-              <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
+              <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
                 <Descriptions.Item label="Booking ID" span={2}>
                   {selectedBooking.id}
                 </Descriptions.Item>

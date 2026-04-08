@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, InputNumber, Button, message, Row, Col, Divider, Typography, Space, Select } from 'antd';
 
-import { SaveOutlined, ClockCircleOutlined, DollarOutlined, CalendarOutlined } from '@ant-design/icons';
+import { SaveOutlined, ClockCircleOutlined, DollarOutlined } from '@ant-design/icons';
 import { settingsService, PlatformSettings } from '../../services/settingsService';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 
 export default function Settings() {
@@ -31,19 +30,26 @@ export default function Settings() {
       setAppSettings(appSettingsData);
 
       if (data) {
+        const cooldownHrs = appSettingsData.booking_cooldown_hours
+          ? parseInt(appSettingsData.booking_cooldown_hours, 10)
+          : appSettingsData.booking_cooldown_days
+            ? Math.max(0, parseInt(appSettingsData.booking_cooldown_days, 10) * 8)
+            : 24;
+
         form.setFieldsValue({
           influencer_approval_hours: data.influencer_approval_hours || 12,
           payment_deadline_hours: data.payment_deadline_hours || 12,
-          script_submission_base_hours: data.script_submission_base_hours || 8,
-          auto_approval_hour: data.auto_approval_hour || 22,
-          auto_approval_minute: data.auto_approval_minute || 30,
           appointment_end_hour: data.appointment_end_hour || 23,
           appointment_end_minute: data.appointment_end_minute || 59,
 
-          booking_cooldown_days: appSettingsData.booking_cooldown_days ? parseInt(appSettingsData.booking_cooldown_days) : 2,
-          payment_recurrence: appSettingsData.payment_recurrence || 'monthly',
+          booking_cooldown_hours: Number.isFinite(cooldownHrs) ? cooldownHrs : 24,
+          refund_buffer_days: appSettingsData.refund_buffer_days
+            ? parseInt(appSettingsData.refund_buffer_days, 10)
+            : 7,
+          max_script_reject_count: appSettingsData.max_script_reject_count
+            ? parseInt(appSettingsData.max_script_reject_count, 10)
+            : 3,
           commission_percentage: data.commission_percentage || 5,
-          platform_commission_fixed: data.platform_commission_fixed || 0,
         });
       }
     } catch (error: any) {
@@ -57,20 +63,33 @@ export default function Settings() {
   const handleSave = async (values: any) => {
     setSaving(true);
     try {
-      // Save platform settings (excluding booking_cooldown_days, payment_recurrence)
-      const { booking_cooldown_days, payment_recurrence, ...platformSettings } = values;
+      const {
+        booking_cooldown_hours,
+        refund_buffer_days,
+        max_script_reject_count,
+        ...platformSettings
+      } = values;
+
       const updated = await settingsService.updateSettings(platformSettings);
       setSettings(updated);
 
-      // Save app settings
-      if (booking_cooldown_days !== undefined) {
-        await settingsService.updateAppSetting('booking_cooldown_days', booking_cooldown_days.toString());
-        setAppSettings(prev => ({ ...prev, booking_cooldown_days: booking_cooldown_days.toString() }));
+      if (booking_cooldown_hours !== undefined) {
+        await settingsService.updateAppSetting('booking_cooldown_hours', String(booking_cooldown_hours));
+        setAppSettings((prev) => ({
+          ...prev,
+          booking_cooldown_hours: String(booking_cooldown_hours)
+        }));
       }
-
-      if (payment_recurrence !== undefined) {
-        await settingsService.updateAppSetting('payment_recurrence', payment_recurrence);
-        setAppSettings(prev => ({ ...prev, payment_recurrence: payment_recurrence }));
+      if (refund_buffer_days !== undefined) {
+        await settingsService.updateAppSetting('refund_buffer_days', String(refund_buffer_days));
+        setAppSettings((prev) => ({ ...prev, refund_buffer_days: String(refund_buffer_days) }));
+      }
+      if (max_script_reject_count !== undefined) {
+        await settingsService.updateAppSetting('max_script_reject_count', String(max_script_reject_count));
+        setAppSettings((prev) => ({
+          ...prev,
+          max_script_reject_count: String(max_script_reject_count)
+        }));
       }
 
       message.success('Settings saved successfully');
@@ -94,54 +113,27 @@ export default function Settings() {
           initialValues={{
             influencer_approval_hours: 12,
             payment_deadline_hours: 12,
-            script_submission_base_hours: 8,
-            auto_approval_hour: 22,
-            auto_approval_minute: 30,
             appointment_end_hour: 23,
             appointment_end_minute: 59,
-            payment_recurrence: 'monthly',
-            booking_cooldown_days: 2,
+            booking_cooldown_hours: 24,
+            refund_buffer_days: 7,
+            max_script_reject_count: 3,
             commission_percentage: 5,
-            platform_commission_fixed: 0,
           }}
         >
-          {/* Platform Commission Settings */}
           <Divider orientation="left">
             <Space>
               <DollarOutlined />
-              <span>Platform Commission Settings</span>
+              <span>Platform commission</span>
             </Space>
           </Divider>
 
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="Payment Recurrence"
-                name="payment_recurrence"
-                tooltip="Frequency of payouts (Weekly or Monthly)"
-                rules={[{ required: true, message: 'Please select recurrence' }]}
-              >
-                <Select>
-                  <Option value="weekly">Weekly</Option>
-                  <Option value="monthly">Monthly</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">
-            <Space>
-              <DollarOutlined />
-              <span>Platform Commission Settings</span>
-            </Space>
-          </Divider>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="Platform Commission (%)"
+                label="Platform commission (%) — dual & shared services"
                 name="commission_percentage"
-                tooltip="Percentage taken by the platform from each transaction"
+                tooltip="Percentage taken by the platform from the net amount after payment gateway fees (dual services)."
                 rules={[
                   { required: true, message: 'Please enter percentage' },
                   { type: 'number', min: 0, max: 100, message: 'Must be between 0 and 100' }
@@ -154,25 +146,6 @@ export default function Settings() {
                   precision={2}
                   addonAfter="%"
                   placeholder="5"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="Fixed Platform Fee (KWD)"
-                name="platform_commission_fixed"
-                tooltip="Fixed amount taken by the platform from each transaction (in addition to percentage)"
-                rules={[
-                  { required: true, message: 'Please enter fixed amount' },
-                  { type: 'number', min: 0, message: 'Must be at least 0' }
-                ]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  precision={3}
-                  addonBefore="KWD"
-                  placeholder="0.000"
                 />
               </Form.Item>
             </Col>
@@ -228,75 +201,6 @@ export default function Settings() {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="Script Submission Base Hours"
-                name="script_submission_base_hours"
-                tooltip="Base hours for script submission (multiplied by days_gap - 1). Example: 8 hours × (2 days - 1) = 8 hours"
-                rules={[
-                  { required: true, message: 'Please enter hours' },
-                  { type: 'number', min: 1, message: 'Must be at least 1 hour' }
-                ]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={1}
-                  precision={1}
-                  addonAfter="hours"
-                  placeholder="8"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="Auto-Approval Time"
-                tooltip="Time of day when latest script is auto-approved if still pending"
-              >
-                <Space>
-                  <Form.Item
-                    name="auto_approval_hour"
-                    noStyle
-                    rules={[
-                      { required: true, message: 'Hour required' },
-                      { type: 'number', min: 0, max: 23, message: 'Must be 0-23' }
-                    ]}
-                  >
-                    <InputNumber
-                      min={0}
-                      max={23}
-                      precision={0}
-                      addonBefore="Hour"
-                      style={{ width: 120 }}
-                      placeholder="22"
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="auto_approval_minute"
-                    noStyle
-                    rules={[
-                      { required: true, message: 'Minute required' },
-                      { type: 'number', min: 0, max: 59, message: 'Must be 0-59' }
-                    ]}
-                  >
-                    <InputNumber
-                      min={0}
-                      max={59}
-                      precision={0}
-                      addonBefore="Min"
-                      style={{ width: 120 }}
-                      placeholder="30"
-                    />
-                  </Form.Item>
-                </Space>
-                <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-                  Default: 22:30 (10:30 PM)
-                </Text>
-              </Form.Item>
-            </Col>
-
             <Col span={12}>
               <Form.Item
                 label="Appointment End Time"
@@ -356,21 +260,44 @@ export default function Settings() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="Booking Cooldown Days"
-                name="booking_cooldown_days"
-                tooltip="Minimum number of days between bookings for the same influencer"
+                label="Booking cooldown"
+                name="booking_cooldown_hours"
+                tooltip="Minimum hours before the same customer can book the same influencer again."
                 rules={[
-                  { required: true, message: 'Please enter cooldown days' },
-                  { type: 'number', min: 2, message: 'Must be at least 2 days' }
+                  { required: true, message: 'Required' },
+                  { type: 'number', min: 0, message: 'Must be 0 or more' }
                 ]}
               >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={2}
-                  precision={0}
-                  addonAfter="days"
-                  placeholder="2"
-                />
+                <InputNumber style={{ width: '100%' }} min={0} precision={0} addonAfter="hours" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Refund buffer (days)"
+                name="refund_buffer_days"
+                tooltip="Days after publish before earnings are final; used with refund rules."
+                rules={[
+                  { required: true, message: 'Required' },
+                  { type: 'number', min: 0, message: 'Must be 0 or more' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} min={0} precision={0} addonAfter="days" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Max script reject count"
+                name="max_script_reject_count"
+                tooltip="Maximum script revision rounds allowed before escalation."
+                rules={[
+                  { required: true, message: 'Required' },
+                  { type: 'number', min: 1, message: 'Must be at least 1' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} precision={0} />
               </Form.Item>
             </Col>
           </Row>

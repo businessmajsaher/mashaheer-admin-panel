@@ -24,7 +24,6 @@ interface RefundRequest {
   booking_id: string;
   amount?: number;
   reason?: string;
-  initiated_by?: string;
 }
 
 // Encrypt data using AES-256-CBC (Hesabe requirement)
@@ -102,20 +101,28 @@ serve(async (req: Request) => {
       throw new Error('Unauthorized: Invalid token');
     }
 
-    // Check if user is admin
-    const { data: profile, error: profileError } = await supabase
+    // Admin check: align with public.is_admin() (profiles.role and auth metadata)
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (profileError || profile?.role !== 'admin') {
+    const roleFromProfile = profile?.role != null ? String(profile.role).toLowerCase() : '';
+    const meta = user.user_metadata as Record<string, unknown> | undefined;
+    const appMeta = user.app_metadata as Record<string, unknown> | undefined;
+    const roleFromMeta = [meta?.role, appMeta?.role].find((r) => typeof r === 'string') as string | undefined;
+    const isAdmin =
+      roleFromProfile === 'admin' ||
+      (typeof roleFromMeta === 'string' && roleFromMeta.toLowerCase() === 'admin');
+
+    if (!isAdmin) {
       throw new Error('Unauthorized: Admin access required');
     }
 
     // Parse request body
     const body: RefundRequest = await req.json();
-    const { booking_id, amount, reason, initiated_by } = body;
+    const { booking_id, amount, reason } = body;
 
     if (!booking_id) {
       throw new Error('Missing required field: booking_id');
@@ -161,6 +168,10 @@ serve(async (req: Request) => {
       throw new Error('Refund amount cannot exceed payment amount');
     }
 
+    // initiated_by FK -> profiles(id). Metadata-only admins may have no profile row; use null in that case.
+    // Only set when this user has a profiles row (required for FK).
+    const resolvedInitiatedBy = profile != null ? user.id : null;
+
     // Create refund record in database
     const { data: refundRecord, error: refundCreateError } = await supabase
       .from('refunds')
@@ -172,7 +183,7 @@ serve(async (req: Request) => {
         currency,
         reason: reason || 'Admin initiated refund',
         status: 'processing',
-        initiated_by: initiated_by || user.id
+        initiated_by: resolvedInitiatedBy
       })
       .select()
       .single();
@@ -240,15 +251,21 @@ serve(async (req: Request) => {
       console.error('Failed to update refund record:', updateError);
     }
 
-    // Return response
+    // Return response (include fields the admin UI uses for lists and nested booking.refunds)
     return new Response(
       JSON.stringify({
         success: refundStatus === 'completed',
         refund: {
           id: refundRecord.id,
-          status: refundStatus,
+          booking_id,
+          payment_id: refundRecord.payment_id,
+          transaction_reference: refundRecord.transaction_reference,
           amount: refundAmount,
           currency,
+          status: refundStatus,
+          reason: refundRecord.reason,
+          created_at: refundRecord.created_at,
+          updated_at: refundRecord.updated_at,
           hesabe_refund_id: hesabeRefundId,
           message: hesabeResponseData.response?.message || 'Refund processed'
         }

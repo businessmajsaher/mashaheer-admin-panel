@@ -40,7 +40,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
 
     try {
       // Use the password reset callback page as redirect URL
-      const redirectUrl = `${window.location.origin}/reset-password`;
+      const redirectUrl = `${window.location.origin}/password-reset-callback`;
       
       await resetPassword(email, redirectUrl);
       setSuccess(true);

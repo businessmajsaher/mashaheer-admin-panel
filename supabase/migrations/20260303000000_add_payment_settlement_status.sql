@@ -1,7 +1,7 @@
 -- Add is_settled to track individual payment settlements
 ALTER TABLE public.payments
-ADD COLUMN is_settled boolean NOT NULL DEFAULT false,
-ADD COLUMN settled_at timestamp with time zone;
+ADD COLUMN IF NOT EXISTS is_settled boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS settled_at timestamp with time zone;
 
 -- Update existing settled payments using the settlements table
 -- For any payment that falls within an existing settlement period for that payee, mark it as settled

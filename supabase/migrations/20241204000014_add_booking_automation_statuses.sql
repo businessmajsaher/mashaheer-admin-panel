@@ -1,17 +1,39 @@
 -- Add new booking statuses for automation
 -- First, check existing statuses and add new ones
 
--- Insert new statuses if they don't exist
+-- Insert new statuses if they don't exist.
+-- Note: booking_statuses has a UNIQUE constraint on "order" in some DBs, so we must avoid collisions.
+-- Strategy: insert by name only, and choose the desired order only if it's free; otherwise append after max(order).
+WITH desired(name, description, desired_order) AS (
+  VALUES
+    ('auto-reject', 'Automatically rejected due to influencer timeout', 10),
+    ('auto-cancel', 'Automatically cancelled due to customer payment timeout', 11),
+    ('Auto-Approved', 'Script automatically approved after 3 rejections or deadline', 12),
+    ('Script not sent by influencer–auto refund request', 'Script not submitted within time window - refund requested', 13),
+    ('To Be Publish', 'Script approved, waiting for influencer to publish', 14),
+    ('Published', 'Content has been published by influencer', 15),
+    ('Reject', 'Script rejected by customer', 16)
+),
+max_order AS (
+  SELECT COALESCE(MAX("order"), 0) AS max_order FROM public.booking_statuses
+),
+ranked AS (
+  SELECT
+    d.*,
+    ROW_NUMBER() OVER (ORDER BY d.desired_order) AS rn
+  FROM desired d
+)
 INSERT INTO public.booking_statuses (name, description, "order")
-VALUES 
-  ('auto-reject', 'Automatically rejected due to influencer timeout', 10),
-  ('auto-cancel', 'Automatically cancelled due to customer payment timeout', 11),
-  ('Auto-Approved', 'Script automatically approved after 3 rejections or deadline', 12),
-  ('Script not sent by influencer–auto refund request', 'Script not submitted within time window - refund requested', 13),
-  ('To Be Publish', 'Script approved, waiting for influencer to publish', 14),
-  ('Published', 'Content has been published by influencer', 15),
-  ('Reject', 'Script rejected by customer', 16)
-ON CONFLICT (name) DO NOTHING;
+SELECT
+  r.name,
+  r.description,
+  CASE
+    WHEN EXISTS (SELECT 1 FROM public.booking_statuses bs WHERE bs."order" = r.desired_order)
+      THEN (SELECT max_order FROM max_order) + r.rn
+    ELSE r.desired_order
+  END AS "order"
+FROM ranked r
+WHERE NOT EXISTS (SELECT 1 FROM public.booking_statuses bs WHERE bs.name = r.name);
 
 -- Add fields to bookings table for automation tracking
 ALTER TABLE public.bookings
@@ -76,6 +98,9 @@ CREATE INDEX IF NOT EXISTS idx_black_marks_created_at ON public.black_marks(crea
 ALTER TABLE public.black_marks ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for black marks
+DROP POLICY IF EXISTS "Admins can view all black marks" ON public.black_marks;
+DROP POLICY IF EXISTS "Admins can create black marks" ON public.black_marks;
+
 CREATE POLICY "Admins can view all black marks" ON public.black_marks
   FOR SELECT
   USING (

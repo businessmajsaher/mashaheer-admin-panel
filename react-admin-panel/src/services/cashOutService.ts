@@ -18,6 +18,8 @@ export interface InfluencerEarning {
 }
 
 export interface PaymentEarning {
+  /** Unique UI row id (payment_id + influencer_id) for dual splits */
+  row_id: string;
   payment_id: string;
   booking_id: string;
   service_title: string;
@@ -101,7 +103,6 @@ export const cashOutService = {
 
     // Get platform settings for commission
     const settings = await settingsService.getSettings();
-    const platformCommissionFixed = settings?.platform_commission_fixed || 0;
 
     // Get all completed payments to influencers
     // First, get all payments with payee_id (influencer receiving payment)
@@ -205,8 +206,6 @@ export const cashOutService = {
 
     // NEW LOGIC: Iterate through payments and apply Individual vs Dual logic
     // Fetch PG charges dynamically
-    const processedPayments: PaymentEarning[] = [];
-
     // Process payments in batches to avoid overwhelming the server
     const batchSize = 5;
     for (let i = 0; i < payments.length; i += batchSize) {
@@ -238,9 +237,6 @@ export const cashOutService = {
 
         const netAfterBank = paymentAmount - pgCharge;
 
-        // ... (rest of processing logic)
-
-
         const influencerId = payment.payee_id;
 
         if (!influencerId) {
@@ -248,125 +244,173 @@ export const cashOutService = {
           return;
         }
 
-        // Initialize earning map entry if needed (needs synchronization or done before)
-        // Since we are inside async map, we need to be careful with map access
-        // But since we are processing batches sequentially (the outer loop), and map operations are synchronous, 
-        // we can probably get away with it if we ensure map creation is safe?
-        // Actually, let's just create the entry if missing. Map operations are generally safe in single thread JS event loop.
-        if (!earningsMap.has(influencerId)) {
-          earningsMap.set(influencerId, {
-            influencer_id: influencerId,
-            influencer_name: payment.payee?.name || 'Unknown',
-            influencer_email: payment.payee?.email || '',
-            total_earnings: 0,
-            total_pg_charges: 0,
-            total_platform_commission: 0,
-            net_payout: 0,
-            currency: payment.currency || 'KWD',
-            payment_count: 0,
-            payments: []
-          });
-        }
+        const service = payment.booking?.service as {
+          title?: string;
+          service_type?: string;
+          price?: number;
+          primary_influencer_id?: string;
+          invited_influencer_id?: string;
+          primary_influencer_earnings_percentage?: number;
+          invited_influencer_earnings_percentage?: number;
+        } | undefined;
 
-        const earning = earningsMap.get(influencerId)!;
-
-        // 2. Determine Service Type & Calculate Platform Commission + Net Payout
-        const service = payment.booking?.service;
-        const serviceType = service?.service_type || 'individual'; // Default to individual if unknown
-
-        // Derive Original Price and Discount
-        // original_price comes from service.price
-        // discount = original_price - paymentAmount
+        const serviceType = (service?.service_type || 'normal').toLowerCase();
         const originalPrice = service?.price || paymentAmount;
         const discountAmount = Math.max(0, originalPrice - paymentAmount);
 
-        let platformCommission = 0;
-        let netPayout = 0;
-        let influencerSharePercentage = 0;
-
-        if (serviceType === 'dual') {
-          // === DUAL SERVICE LOGIC ===
-          // Platform Commission: 5% fixed on Net After Bank (configured in settings)
-          // Then remaining is split between primary and invited based on percentages
-
-          // Use setting or default to 5%
-          const commissionRate = settings?.commission_percentage || 5;
-
-          // Calculate Platform Commission on Net After Bank
-          platformCommission = netAfterBank * (commissionRate / 100);
-
-          const amountAfterCommission = netAfterBank - platformCommission;
-
-          // Determine if payee is Primary or Invited
-          const isPrimary = influencerId === service?.primary_influencer_id;
-          const isInvited = influencerId === service?.invited_influencer_id;
-
-          if (isPrimary || isInvited) {
-            // Get split percentage
-            if (isPrimary) {
-              influencerSharePercentage = service?.primary_influencer_earnings_percentage ?? 50;
-            } else {
-              influencerSharePercentage = service?.invited_influencer_earnings_percentage ?? 50;
-            }
-
-            // Calculate payout based on split
-            netPayout = amountAfterCommission * (influencerSharePercentage / 100);
-          } else {
-            // Fallback
-            console.warn(`Payment ${payment.id}: Payee ${influencerId} mismatch for dual service.`);
-            netPayout = amountAfterCommission; // Default to full amount?
-            influencerSharePercentage = 100;
+        const ensureEarning = (id: string) => {
+          if (!earningsMap.has(id)) {
+            earningsMap.set(id, {
+              influencer_id: id,
+              influencer_name:
+                id === payment.payee_id ? payment.payee?.name || 'Unknown' : 'Unknown',
+              influencer_email: id === payment.payee_id ? payment.payee?.email || '' : '',
+              total_earnings: 0,
+              total_pg_charges: 0,
+              total_platform_commission: 0,
+              net_payout: 0,
+              currency: payment.currency || 'KWD',
+              payment_count: 0,
+              payments: []
+            });
           }
+          return earningsMap.get(id)!;
+        };
 
+        const pushPaymentEarning = (
+          targetId: string,
+          opts: {
+            platformCommission: number;
+            netPayout: number;
+            influencerSharePercentage: number;
+            attributedGross: number;
+            pgPart: number;
+            netAfterBankPart: number;
+          }
+        ) => {
+          const earning = ensureEarning(targetId);
+          earning.total_earnings += opts.attributedGross;
+          earning.total_pg_charges += opts.pgPart;
+          earning.total_platform_commission += opts.platformCommission;
+          earning.net_payout += opts.netPayout;
+          earning.payment_count += 1;
+
+          earning.payments.push({
+            row_id: `${payment.id}_${targetId}`,
+            payment_id: payment.id,
+            booking_id: payment.booking_id,
+            service_title: service?.title || 'Unknown Service',
+            service_type: serviceType,
+            original_price: originalPrice,
+            discount_amount: discountAmount,
+            amount: opts.attributedGross,
+            pg_charge: opts.pgPart,
+            platform_commission: opts.platformCommission,
+            net_after_bank: opts.netAfterBankPart,
+            net_amount: opts.netPayout,
+            currency: payment.currency || 'KWD',
+            paid_at: payment.paid_at || '',
+            transaction_reference: payment.transaction_reference,
+            influencer_share_percentage: opts.influencerSharePercentage,
+            status: payment.status,
+            is_settled: payment.is_settled
+          });
+        };
+
+        const primaryId = service?.primary_influencer_id;
+        const invitedId = service?.invited_influencer_id;
+        const isDual =
+          serviceType === 'dual' && primaryId && invitedId;
+
+        if (isDual) {
+          const commissionRate = settings?.commission_percentage || 5;
+          const platformCommissionFull = netAfterBank * (commissionRate / 100);
+          const amountAfterCommission = netAfterBank - platformCommissionFull;
+
+          const primaryPct = service?.primary_influencer_earnings_percentage ?? 50;
+          const invitedPct = service?.invited_influencer_earnings_percentage ?? 50;
+
+          const splits: { id: string; pct: number }[] = [
+            { id: primaryId!, pct: primaryPct },
+            { id: invitedId!, pct: invitedPct }
+          ];
+
+          for (const { id, pct } of splits) {
+            const share = pct / 100;
+            const attributedGross = paymentAmount * share;
+            const pgPart = pgCharge * share;
+            const platPart = platformCommissionFull * share;
+            const netAfterPart = netAfterBank * share;
+            const netPayout = amountAfterCommission * share;
+
+            pushPaymentEarning(id, {
+              platformCommission: platPart,
+              netPayout,
+              influencerSharePercentage: pct,
+              attributedGross,
+              pgPart,
+              netAfterBankPart: netAfterPart
+            });
+          }
         } else {
-          // === INDIVIDUAL SERVICE LOGIC ===
-          // Platform Commission: Variable % from Profile (payee.commission_percentage) OR default local 2%
-          // Calculated on Net After Bank
+          const earning = ensureEarning(influencerId);
 
-          // Use profile's commission percentage (default to 2 if not set/zero? User said "vary based on influencers")
-          // User example said "2% commission". Let's assume profile has it, or we default to 2.
           const commissionRate = payment.payee?.commission_percentage || 2;
+          const influencerSharePercentage = 100;
+          const platformCommission = netAfterBank * (commissionRate / 100);
+          const netPayout = netAfterBank - platformCommission;
 
-          influencerSharePercentage = 100; // Individual gets 100% of the share after platform comm
+          earning.total_earnings += paymentAmount;
+          earning.total_pg_charges += pgCharge;
+          earning.total_platform_commission += platformCommission;
+          earning.net_payout += netPayout;
+          earning.payment_count += 1;
 
-          platformCommission = netAfterBank * (commissionRate / 100);
-
-          netPayout = netAfterBank - platformCommission;
+          earning.payments.push({
+            row_id: `${payment.id}_${influencerId}`,
+            payment_id: payment.id,
+            booking_id: payment.booking_id,
+            service_title: service?.title || 'Unknown Service',
+            service_type: serviceType,
+            original_price: originalPrice,
+            discount_amount: discountAmount,
+            amount: paymentAmount,
+            pg_charge: pgCharge,
+            platform_commission: platformCommission,
+            net_after_bank: netAfterBank,
+            net_amount: netPayout,
+            currency: payment.currency || 'KWD',
+            paid_at: payment.paid_at || '',
+            transaction_reference: payment.transaction_reference,
+            influencer_share_percentage: influencerSharePercentage,
+            status: payment.status,
+            is_settled: payment.is_settled
+          });
         }
-
-        // Accumulate totals
-        earning.total_earnings += paymentAmount;
-        earning.total_pg_charges += pgCharge;
-        earning.total_platform_commission += platformCommission;
-        earning.net_payout += netPayout;
-        earning.payment_count += 1;
-
-        earning.payments.push({
-          payment_id: payment.id,
-          booking_id: payment.booking_id,
-          service_title: payment.booking?.service?.title || 'Unknown Service',
-          service_type: serviceType,
-          original_price: originalPrice,
-          discount_amount: discountAmount,
-          amount: paymentAmount, // Transaction Amount (Final Charged Amount)
-          pg_charge: pgCharge,
-          platform_commission: platformCommission,
-          net_after_bank: netAfterBank,
-          net_amount: netPayout, // The calculated share for THIS payee
-          currency: payment.currency || 'KWD',
-          paid_at: payment.paid_at || '',
-          transaction_reference: payment.transaction_reference,
-          influencer_share_percentage: influencerSharePercentage,
-          status: payment.status,
-          is_settled: payment.is_settled,
-        });
       }));
     }
 
     const earningsList = Array.from(earningsMap.values());
 
-    earningsList.forEach(earning => {
-      earning.is_settled = earning.payments.length > 0 && earning.payments.every(p => p.is_settled);
+    const profileIds = [...new Set(earningsList.map((e) => e.influencer_id))];
+    if (profileIds.length > 0) {
+      const { data: profileRows } = await supabase
+        .from('profiles')
+        .select('id,name,email')
+        .in('id', profileIds);
+      const byId = new Map((profileRows || []).map((p: { id: string; name: string; email: string }) => [p.id, p]));
+      earningsList.forEach((e) => {
+        const p = byId.get(e.influencer_id);
+        if (p) {
+          e.influencer_name = p.name || e.influencer_name;
+          e.influencer_email = p.email || e.influencer_email;
+        }
+      });
+    }
+
+    earningsList.forEach((earning) => {
+      earning.is_settled =
+        earning.payments.length > 0 && earning.payments.every((p) => p.is_settled);
     });
 
     return earningsList;
@@ -575,6 +619,11 @@ export const cashOutService = {
         }
 
         if (updateError) throw updateError;
+        // Mark underlying payment rows as settled (UI relies on payments.is_settled)
+        const paymentIds = (earnings.payments || []).map((p) => p.payment_id).filter(Boolean);
+        if (paymentIds.length > 0) {
+          await this.markPaymentsAsSettled(paymentIds);
+        }
         return updated;
       }
 
@@ -601,12 +650,21 @@ export const cashOutService = {
           .single();
 
         if (error2) throw error2;
+        const paymentIds = (earnings.payments || []).map((p) => p.payment_id).filter(Boolean);
+        if (paymentIds.length > 0) {
+          await this.markPaymentsAsSettled(paymentIds);
+        }
         return dataNoSettler;
       }
 
       throw error;
     }
 
+    // Mark underlying payment rows as settled (UI relies on payments.is_settled)
+    const paymentIds = (earnings.payments || []).map((p) => p.payment_id).filter(Boolean);
+    if (paymentIds.length > 0) {
+      await this.markPaymentsAsSettled(paymentIds);
+    }
     return data;
   },
 

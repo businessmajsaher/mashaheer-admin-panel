@@ -71,15 +71,31 @@ export const bookingService = {
 
     if (error) throw error;
 
-    // Fetch contract if exists
-    const { data: contractData } = await supabase
+    // Fetch contract if exists (0 or 1 row per booking)
+    const { data: contractData, error: contractFetchError } = await supabase
       .from('contract_instances')
       .select('*')
       .eq('booking_id', id)
-      .single();
+      .maybeSingle();
+
+    if (contractFetchError) {
+      console.error('contract_instances fetch:', contractFetchError);
+    }
 
     if (contractData) {
-      (data as any).contract = contractData;
+      const { data: signatureRows, error: sigError } = await supabase
+        .from('contract_signatures')
+        .select('signer_type, signature_data, signed_at')
+        .eq('contract_instance_id', contractData.id);
+
+      if (sigError) {
+        console.error('contract_signatures fetch:', sigError);
+      }
+
+      (data as any).contract = {
+        ...contractData,
+        signatures: sigError ? [] : (signatureRows ?? []),
+      };
     }
 
     // Fetch invited partner if dual booking

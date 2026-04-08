@@ -19,22 +19,8 @@ interface Contract {
   updated_at: string;
 }
 
-interface ContractInstance {
-  id: string;
-  contract_id: string;
-  customer_id: string;
-  influencer_id: string;
-  booking_id?: string;
-  status: 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled';
-  signed_at?: string;
-  completed_at?: string;
-  created_at: string;
-  variables_data: Record<string, any>;
-}
-
 export default function Contracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [contractInstances, setContractInstances] = useState<ContractInstance[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch contracts on component mount
@@ -125,7 +111,6 @@ export default function Contracts() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [activeTab, setActiveTab] = useState<'templates' | 'instances'>('templates');
 
   // Default contract template as HTML
   const defaultTemplate = `<!DOCTYPE html>
@@ -295,6 +280,8 @@ export default function Contracts() {
                 <span class="detail-label">Agreed Price:</span>
                 <span class="detail-value">{{agreed_price}}</span>
             </div>
+            <p><strong>EN:</strong> Service Fee: {{agreed_price}}. The payable amount may be reduced by applicable discounts or promotional coupons once both parties approve the service agreement.</p>
+            <p dir="rtl"><strong>AR:</strong> رسوم الخدمة: {{agreed_price}}. قد يُخفض المبلغ المستحق بخصومات أو كوبونات ترويجية بعد موافقة الطرفين على الاتفاقية.</p>
             <div class="detail-item">
                 <span class="detail-label">Payment Method:</span>
                 <span class="detail-value">Via Mashahher secure payment gateway</span>
@@ -404,37 +391,9 @@ export default function Contracts() {
     }
   };
 
-  // Fetch contract instances from Supabase
-  const fetchContractInstances = async () => {
-    console.log('🔄 Fetching contract instances...');
-    try {
-      const { data, error } = await supabase
-        .from('contract_instances')
-        .select(`
-          *,
-          contract_templates(title, template_type),
-          customer:profiles!contract_instances_customer_id_fkey(name, email),
-          influencer:profiles!contract_instances_influencer_id_fkey(name, email)
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('❌ Contract instances fetch error:', error);
-        message.error(error.message);
-      } else {
-        console.log('✅ Contract instances fetched successfully:', data?.length || 0, 'instances');
-      }
-      
-      setContractInstances(data || []);
-    } catch (err) {
-      console.error('❌ Contract instances fetch exception:', err);
-    }
-  };
-
   useEffect(() => {
     console.log('🚀 Contracts component mounted, fetching data...');
     fetchContracts();
-    fetchContractInstances();
   }, []);
 
   // Extract variables from template content
@@ -610,70 +569,13 @@ export default function Contracts() {
     },
   ];
 
-  const instanceColumns = [
-    { title: 'Contract', dataIndex: ['contract_templates', 'title'], key: 'contract_title' },
-    { title: 'Customer', dataIndex: ['customer', 'name'], key: 'customer_name' },
-    { title: 'Influencer', dataIndex: ['influencer', 'name'], key: 'influencer_name' },
-    { 
-      title: 'Status', 
-      dataIndex: 'status', 
-      key: 'status',
-      render: (status: string) => {
-        const colors = {
-          draft: '#8c8c8c',
-          pending: '#faad14',
-          signed: '#52c41a',
-          completed: '#1890ff',
-          cancelled: '#ff4d4f'
-        };
-        return (
-          <span style={{ 
-            color: colors[status as keyof typeof colors] || '#8c8c8c',
-            fontWeight: 'bold'
-          }}>
-            {status?.toUpperCase() || '-'}
-          </span>
-        );
-      }
-    },
-    { title: 'Created At', dataIndex: 'created_at', key: 'created_at', render: (v: string) => new Date(v).toLocaleString() },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_: any, record: ContractInstance) => (
-        <Space>
-          <Button icon={<EyeOutlined />} size="small">View</Button>
-          <Button icon={<EditOutlined />} size="small">Edit</Button>
-        </Space>
-      ),
-    },
-  ];
-
   const filteredContracts = contracts.filter((c) => c.title?.toLowerCase().includes(search.toLowerCase()));
-  const filteredInstances = contractInstances.filter((i) => 
-    i.contract_templates?.title?.toLowerCase().includes(search.toLowerCase()) ||
-    i.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    i.influencer?.name?.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <Card style={{ margin: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Contracts</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button 
-            type={activeTab === 'templates' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('templates')}
-          >
-            Templates
-          </Button>
-          <Button 
-            type={activeTab === 'instances' ? 'primary' : 'default'}
-            onClick={() => setActiveTab('instances')}
-          >
-            Instances
-          </Button>
-          {activeTab === 'templates' && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => { 
               setModalOpen(true); 
               form.resetFields();
@@ -681,7 +583,6 @@ export default function Contracts() {
             }}>
               Add Template
             </Button>
-          )}
         </div>
       </div>
       
@@ -696,13 +597,13 @@ export default function Contracts() {
       
       {loading ? <Spin size="large" /> : (
         <Table
-          columns={activeTab === 'templates' ? templateColumns : instanceColumns}
-          dataSource={activeTab === 'templates' ? filteredContracts : filteredInstances}
+          columns={templateColumns}
+          dataSource={filteredContracts}
           rowKey="id"
           pagination={{
             current: currentPage,
             pageSize,
-            total: activeTab === 'templates' ? filteredContracts.length : filteredInstances.length,
+            total: filteredContracts.length,
             onChange: (page, size) => { setCurrentPage(page); setPageSize(size || 10); },
             showSizeChanger: true,
           }}
@@ -736,6 +637,8 @@ export default function Contracts() {
                 rules={[{ required: true, message: 'Please select template type' }]}
               >
                 <Select placeholder="Select template type">
+                  <Option value="normal_service">Normal service (standard booking)</Option>
+                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
                   <Option value="advertising">Advertising Agreement</Option>
                   <Option value="collaboration">Collaboration Agreement</Option>
                   <Option value="sponsorship">Sponsorship Agreement</Option>
@@ -801,6 +704,8 @@ export default function Contracts() {
             <Col span={12}>
               <Form.Item name="template_type" label="Template Type" rules={[{ required: true, message: 'Please select template type' }]}>
                 <Select placeholder="Select template type">
+                  <Option value="normal_service">Normal service (standard booking)</Option>
+                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
                   <Option value="advertising">Advertising Agreement</Option>
                   <Option value="collaboration">Collaboration Agreement</Option>
                   <Option value="sponsorship">Sponsorship Agreement</Option>

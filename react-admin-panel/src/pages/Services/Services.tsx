@@ -227,6 +227,11 @@ export default function Services() {
   useEffect(() => {
     if (editingService && editModalOpen) {
       editForm.resetFields();
+      const p = Number(editingService.price);
+      const o = Number(editingService.offer_price);
+      const discountPct =
+        p > 0 && o < p && o > 0 ? Number((((1 - o / p) * 100).toFixed(3))) : 0;
+
       editForm.setFieldsValue({
         title: editingService.title,
         description: editingService.description,
@@ -243,7 +248,7 @@ export default function Services() {
         category_id: editingService.category_id,
         platform_id: editingService.platform_ids || editingService.platform_id,
         price: editingService.price,
-        offer_price: editingService.offer_price,
+        discount_percentage: discountPct,
         currency: editingService.currency || 'KWD'
       });
       setEditIsFlashDeal(editingService.is_flash_deal);
@@ -281,6 +286,32 @@ export default function Services() {
     setFormLoading(true);
     setFormError(null);
     try {
+      if (values.service_type === 'dual') {
+        if (!values.about_us?.trim()) {
+          message.error('About Us is required for dual services');
+          return;
+        }
+        if (!values.invited_influencer_id) {
+          message.error('Invited Influencer is required for dual services');
+          return;
+        }
+        if (values.primary_influencer_id === values.invited_influencer_id) {
+          message.error('Primary and invited influencer must be different people');
+          return;
+        }
+      }
+
+      if (!thumbnailFile) {
+        message.error('Thumbnail is required');
+        return;
+      }
+
+      // Ensure form shows inline error under the upload field too
+      await form.validateFields().catch(() => {
+        // errors shown inline
+        throw new Error('Validation failed');
+      });
+
       let thumbnail = values.thumbnail;
       if (thumbnailFile) {
         console.log('📁 Uploading thumbnail file:', thumbnailFile.name);
@@ -295,10 +326,14 @@ export default function Services() {
         console.log('✅ Thumbnail uploaded successfully:', thumbnail);
       }
 
-      // Set offer_price based on service type and flash deal status
+      const disc = values.discount_percentage ?? 0;
       let offerPrice = values.price;
-      if (values.is_flash_deal && values.offer_price) {
-        offerPrice = values.offer_price;
+      if (disc > 0 && disc < 100) {
+        offerPrice = Number((values.price * (1 - disc / 100)).toFixed(3));
+      }
+      if (values.is_flash_deal && disc <= 0) {
+        message.error('Enter a discount % for flash deals');
+        return;
       }
 
       const serviceData = {
@@ -350,6 +385,32 @@ export default function Services() {
     setEditFormLoading(true);
     setEditFormError(null);
     try {
+      if (values.service_type === 'dual') {
+        if (!values.about_us?.trim()) {
+          message.error('About Us is required for dual services');
+          return;
+        }
+        if (!values.invited_influencer_id) {
+          message.error('Invited Influencer is required for dual services');
+          return;
+        }
+        if (values.primary_influencer_id === values.invited_influencer_id) {
+          message.error('Primary and invited influencer must be different people');
+          return;
+        }
+      }
+
+      if (!editThumbnailFile && !editForm.getFieldValue('thumbnail')) {
+        message.error('Thumbnail is required');
+        return;
+      }
+
+      // Ensure form shows inline error under the upload field too
+      await editForm.validateFields().catch(() => {
+        // errors shown inline
+        throw new Error('Validation failed');
+      });
+
       let thumbnail = values.thumbnail;
       if (editThumbnailFile) {
         const filePath = `thumbnails/${Date.now()}-${editThumbnailFile.name}`;
@@ -362,10 +423,17 @@ export default function Services() {
       // Handle flash deal to normal transition
       let flashFrom = null;
       let flashTo = null;
+      const disc = values.discount_percentage ?? 0;
       let offerPrice = values.price;
+      if (disc > 0 && disc < 100) {
+        offerPrice = Number((values.price * (1 - disc / 100)).toFixed(3));
+      }
 
       if (values.is_flash_deal) {
-        // If it's a flash deal, set the flash dates and offer price
+        if (disc <= 0) {
+          message.error('Enter a discount % for flash deals');
+          return;
+        }
         if (values.flash_from && typeof values.flash_from.toISOString === 'function') {
           flashFrom = values.flash_from.toISOString();
         } else if (values.flash_from) {
@@ -379,15 +447,12 @@ export default function Services() {
           console.warn('⚠️ Flash to date is not a valid dayjs object:', values.flash_to);
           flashTo = null;
         }
-
-        if (values.offer_price) {
-          offerPrice = values.offer_price;
-        }
       } else {
-        // If it's not a flash deal, clear flash dates and set offer price to regular price
         flashFrom = null;
         flashTo = null;
-        offerPrice = values.price;
+        if (disc <= 0) {
+          offerPrice = values.price;
+        }
       }
 
       console.log('🔍 Date Debug:');
@@ -925,47 +990,41 @@ export default function Services() {
                 rules={[{ required: true, message: 'Please enter price' }]}
               >
                 <InputNumber
-                  min={0}
-                  step={0.01}
+                  min={0.101}
+                  step={0.001}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
-                  onChange={(value) => {
-                    // Auto-update offer price for normal/duo services
-                    if (!isFlashDeal && value) {
-                      form.setFieldsValue({ offer_price: value });
-                    }
-                  }}
                 />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
-                name="offer_price"
-                label={`Offer Price (${getCurrencySymbol(selectedCurrency)})`}
+                name="discount_percentage"
+                label="Discount %"
+                tooltip="Applied to list price for offers and flash deals. Final charge = price × (1 − discount%). Leave 0 for no discount."
+                validateTrigger={['onChange', 'onBlur']}
                 rules={[
                   ({ getFieldValue }) => ({
                     validator(_, value) {
-                      if (getFieldValue('is_flash_deal') && !value) {
-                        return Promise.reject(new Error('Please enter offer price for flash deals'));
+                      const v = value ?? 0;
+                      if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
+                        return Promise.reject(new Error('Enter a discount % for flash deals'));
                       }
-                      const price = getFieldValue('price');
-                      if (value && price && value >= price) {
-                        return Promise.reject(new Error('Offer price must be less than regular price'));
+                      if (v > 99) {
+                        return Promise.reject(new Error('Max discount is 99%'));
                       }
                       return Promise.resolve();
-                    },
-                  }),
+                    }
+                  })
                 ]}
               >
                 <InputNumber
                   min={0}
-                  step={0.001}
-                  precision={getCurrencyDecimals(selectedCurrency)}
+                  step={1}
+                  precision={0}
                   style={{ width: '100%' }}
-                  disabled={false}
-                  formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
+                  addonAfter="%"
                 />
               </Form.Item>
             </Col>
@@ -981,6 +1040,7 @@ export default function Services() {
                 <Select
                   placeholder="Select primary influencer"
                   showSearch
+                  optionFilterProp="label"
                   filterOption={(input, option) => {
                     const searchText = input.toLowerCase();
                     const influencer = influencers.find(inf => inf.id === option?.value);
@@ -997,7 +1057,11 @@ export default function Services() {
                   onChange={(value) => handleInfluencerChange(value, false)}
                 >
                   {influencers.map(influencer => (
-                    <Option key={influencer.id} value={influencer.id}>
+                    <Option
+                      key={influencer.id}
+                      value={influencer.id}
+                      label={`${influencer.name || ''} ${influencer.email || ''} ${influencer.country || ''}`}
+                    >
                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
                     </Option>
                   ))}
@@ -1009,11 +1073,23 @@ export default function Services() {
                 <Form.Item
                   name="invited_influencer_id"
                   label="Invited Influencer"
+                  rules={[
+                    { required: true, message: 'Invited influencer is required for dual services' },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (value && value === getFieldValue('primary_influencer_id')) {
+                          return Promise.reject(new Error('Must differ from primary influencer'));
+                        }
+                        return Promise.resolve();
+                      }
+                    })
+                  ]}
                 >
                   <Select
                     placeholder="Select invited influencer"
                     allowClear
                     showSearch
+                    optionFilterProp="label"
                     filterOption={(input, option) => {
                       const searchText = input.toLowerCase();
                       const influencer = influencers.find(inf => inf.id === option?.value);
@@ -1029,7 +1105,11 @@ export default function Services() {
                     }}
                   >
                     {influencers.map(influencer => (
-                      <Option key={influencer.id} value={influencer.id}>
+                      <Option
+                        key={influencer.id}
+                        value={influencer.id}
+                        label={`${influencer.name || ''} ${influencer.email || ''} ${influencer.country || ''}`}
+                      >
                         {influencer.name} ({influencer.email})
                       </Option>
                     ))}
@@ -1160,18 +1240,13 @@ export default function Services() {
                   onChange={(checked) => {
                     setIsFlashDeal(checked);
                     if (checked) {
-                      // When enabling flash deal, change service type to flash
                       form.setFieldsValue({ service_type: 'flash' });
                       setSelectedServiceType('flash');
-
-                      // When enabling flash deal, copy price to offer price if offer price is empty
-                      const currentPrice = form.getFieldValue('price');
-                      const currentOfferPrice = form.getFieldValue('offer_price');
-                      if (currentPrice && !currentOfferPrice) {
-                        form.setFieldsValue({ offer_price: currentPrice });
+                      const d = form.getFieldValue('discount_percentage');
+                      if (d == null || d === 0) {
+                        form.setFieldsValue({ discount_percentage: 10 });
                       }
                     } else {
-                      // When disabling flash deal, change service type back to normal
                       form.setFieldsValue({ service_type: 'normal' });
                       setSelectedServiceType('normal');
                     }
@@ -1254,12 +1329,26 @@ export default function Services() {
             <Form.Item
               name="about_us"
               label="About Us"
+              rules={[{ required: true, message: 'About Us is required for dual services' }]}
             >
               <TextArea rows={3} />
             </Form.Item>
           )}
 
-          <Form.Item label="Thumbnail">
+          <Form.Item
+            label="Thumbnail"
+            required
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[
+              {
+                validator: async () => {
+                  if (!thumbnailFile) {
+                    throw new Error('Thumbnail is required');
+                  }
+                }
+              }
+            ]}
+          >
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}
@@ -1276,6 +1365,8 @@ export default function Services() {
                     return false;
                   }
                   setThumbnailFile(new File([blob], file.name.replace(/\.[^.]+$/, ext), { type }));
+                  // trigger inline validation immediately
+                  form.validateFields().catch(() => {});
                 } catch (err) {
                   message.error('Failed to process image.');
                   return false;
@@ -1314,7 +1405,12 @@ export default function Services() {
           form={editForm}
           layout="vertical"
           onFinish={handleEditService}
-          initialValues={editingService ? {
+          initialValues={editingService ? (() => {
+            const p = Number(editingService.price);
+            const o = Number(editingService.offer_price);
+            const discountPct =
+              p > 0 && o < p && o > 0 ? Number((((1 - o / p) * 100).toFixed(3))) : 0;
+            return {
             title: editingService.title,
             description: editingService.description,
             thumbnail: editingService.thumbnail,
@@ -1330,11 +1426,12 @@ export default function Services() {
             category_id: editingService.category_id,
             platform_id: editingService.platform_ids || editingService.platform_id,
             price: editingService.price,
-            offer_price: editingService.offer_price,
+            discount_percentage: discountPct,
             currency: editingService.currency || 'KWD',
             primary_influencer_earnings_percentage: editingService.primary_influencer_earnings_percentage || 50,
             invited_influencer_earnings_percentage: editingService.invited_influencer_earnings_percentage || 50
-          } : {}}
+          };
+          })() : {}}
         >
           <Row gutter={16}>
             <Col span={12}>
@@ -1429,47 +1526,41 @@ export default function Services() {
                 rules={[{ required: true, message: 'Please enter price' }]}
               >
                 <InputNumber
-                  min={0}
-                  step={0.01}
+                  min={0.101}
+                  step={0.001}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
-                  onChange={(value) => {
-                    // Auto-update offer price for normal/duo services
-                    if (!editIsFlashDeal && value) {
-                      editForm.setFieldsValue({ offer_price: value });
-                    }
-                  }}
                 />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
-                name="offer_price"
-                label={`Offer Price (${getCurrencySymbol(editSelectedCurrency)})`}
+                name="discount_percentage"
+                label="Discount %"
+                tooltip="Final charge = price × (1 − discount%). Use for flash deals and promotional pricing."
+                validateTrigger={['onChange', 'onBlur']}
                 rules={[
                   ({ getFieldValue }) => ({
                     validator(_, value) {
-                      if (getFieldValue('is_flash_deal') && !value) {
-                        return Promise.reject(new Error('Please enter offer price for flash deals'));
+                      const v = value ?? 0;
+                      if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
+                        return Promise.reject(new Error('Enter a discount % for flash deals'));
                       }
-                      const price = getFieldValue('price');
-                      if (value && price && value >= price) {
-                        return Promise.reject(new Error('Offer price must be less than regular price'));
+                      if (v > 99) {
+                        return Promise.reject(new Error('Max discount is 99%'));
                       }
                       return Promise.resolve();
-                    },
-                  }),
+                    }
+                  })
                 ]}
               >
                 <InputNumber
                   min={0}
-                  step={0.001}
-                  precision={getCurrencyDecimals(editSelectedCurrency)}
+                  step={1}
+                  precision={0}
                   style={{ width: '100%' }}
-                  disabled={false}
-                  formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
+                  addonAfter="%"
                 />
               </Form.Item>
             </Col>
@@ -1481,6 +1572,7 @@ export default function Services() {
                 <Select
                   placeholder="Select primary influencer"
                   showSearch
+                  optionFilterProp="label"
                   filterOption={(input, option) => {
                     const searchText = input.toLowerCase();
                     const influencer = influencers.find(inf => inf.id === option?.value);
@@ -1497,7 +1589,11 @@ export default function Services() {
                   onChange={(value) => handleInfluencerChange(value, true)}
                 >
                   {influencers.map(influencer => (
-                    <Option key={influencer.id} value={influencer.id}>
+                    <Option
+                      key={influencer.id}
+                      value={influencer.id}
+                      label={`${influencer.name || ''} ${influencer.email || ''} ${influencer.country || ''}`}
+                    >
                       {influencer.name} ({influencer.email}) {influencer.country ? `- ${influencer.country}` : ''}
                     </Option>
                   ))}
@@ -1506,11 +1602,26 @@ export default function Services() {
             </Col>
             <Col span={12}>
               {selectedServiceType === 'dual' && (
-                <Form.Item name="invited_influencer_id" label="Invited Influencer">
+                <Form.Item
+                  name="invited_influencer_id"
+                  label="Invited Influencer"
+                  rules={[
+                    { required: true, message: 'Invited influencer is required for dual services' },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (value && value === getFieldValue('primary_influencer_id')) {
+                          return Promise.reject(new Error('Must differ from primary influencer'));
+                        }
+                        return Promise.resolve();
+                      }
+                    })
+                  ]}
+                >
                   <Select
                     placeholder="Select invited influencer"
                     allowClear
                     showSearch
+                    optionFilterProp="label"
                     filterOption={(input, option) => {
                       const searchText = input.toLowerCase();
                       const influencer = influencers.find(inf => inf.id === option?.value);
@@ -1526,7 +1637,11 @@ export default function Services() {
                     }}
                   >
                     {influencers.map(influencer => (
-                      <Option key={influencer.id} value={influencer.id}>
+                      <Option
+                        key={influencer.id}
+                        value={influencer.id}
+                        label={`${influencer.name || ''} ${influencer.email || ''} ${influencer.country || ''}`}
+                      >
                         {influencer.name} ({influencer.email})
                       </Option>
                     ))}
@@ -1647,18 +1762,13 @@ export default function Services() {
                   onChange={(checked) => {
                     setEditIsFlashDeal(checked);
                     if (checked) {
-                      // When enabling flash deal, change service type to flash
                       editForm.setFieldsValue({ service_type: 'flash' });
                       setSelectedServiceType('flash');
-
-                      // When enabling flash deal, copy price to offer price if offer price is empty
-                      const currentPrice = editForm.getFieldValue('price');
-                      const currentOfferPrice = editForm.getFieldValue('offer_price');
-                      if (currentPrice && !currentOfferPrice) {
-                        editForm.setFieldsValue({ offer_price: currentPrice });
+                      const d = editForm.getFieldValue('discount_percentage');
+                      if (d == null || d === 0) {
+                        editForm.setFieldsValue({ discount_percentage: 10 });
                       }
                     } else {
-                      // When disabling flash deal, change service type back to normal
                       editForm.setFieldsValue({ service_type: 'normal' });
                       setSelectedServiceType('normal');
                     }
@@ -1738,12 +1848,29 @@ export default function Services() {
           )}
 
           {selectedServiceType === 'dual' && (
-            <Form.Item name="about_us" label="About Us">
+            <Form.Item
+              name="about_us"
+              label="About Us"
+              rules={[{ required: true, message: 'About Us is required for dual services' }]}
+            >
               <TextArea rows={3} />
             </Form.Item>
           )}
 
-          <Form.Item label="Thumbnail">
+          <Form.Item
+            label="Thumbnail"
+            required
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[
+              {
+                validator: async () => {
+                  if (!editThumbnailFile && !editForm.getFieldValue('thumbnail')) {
+                    throw new Error('Thumbnail is required');
+                  }
+                }
+              }
+            ]}
+          >
             <Upload
               accept="image/jpeg,image/png"
               showUploadList={false}
@@ -1760,6 +1887,8 @@ export default function Services() {
                     return false;
                   }
                   setEditThumbnailFile(new File([blob], file.name.replace(/\.[^.]+$/, ext), { type }));
+                  // trigger inline validation immediately
+                  editForm.validateFields().catch(() => {});
                 } catch (err) {
                   message.error('Failed to process image.');
                   return false;

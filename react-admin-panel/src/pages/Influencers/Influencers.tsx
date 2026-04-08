@@ -5,7 +5,6 @@ import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
 import { notificationService } from '@/services/notificationService';
-import Cropper from 'react-easy-crop';
 import { Modal as AntdModal, Slider } from 'antd';
 
 export default function Influencers() {
@@ -35,6 +34,9 @@ export default function Influencers() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mediaPreviewOpen, setMediaPreviewOpen] = useState(false);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [mediaPreviewType, setMediaPreviewType] = useState<'image' | 'video' | null>(null);
   const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
   const [commissionsLoading, setCommissionsLoading] = useState(false);
   const [commissionsData, setCommissionsData] = useState<any[]>([]);
@@ -331,6 +333,12 @@ export default function Influencers() {
       console.error('6. Form validation failed:', validationError);
       console.error('Validation error details:', validationError.errorFields);
       setFormError('Form validation failed. Please check all required fields.');
+      setFormLoading(false);
+      return;
+    }
+
+    if (!values.profile_image_url && !(editingInfluencer?.profile_image_url)) {
+      message.error('Profile picture is required');
       setFormLoading(false);
       return;
     }
@@ -1407,6 +1415,7 @@ export default function Influencers() {
             name="is_verified"
             label={<span style={{ fontWeight: '600', color: '#262626' }}>Verification Status</span>}
             valuePropName="checked"
+            tooltip="When ON, this influencer is marked as verified in the system (e.g. identity or account checks completed). Customer-facing apps may show a verified badge."
           >
             <Switch
               style={{
@@ -1915,7 +1924,7 @@ export default function Influencers() {
                     display: 'block',
                     marginTop: '12px'
                   }}>
-                    Supports: Images (JPG, PNG, GIF, WEBP - Max 10MB) | Videos (MP4, MOV, AVI, WEBM - Max 100MB, 5 min)
+                    Supports: Images (JPG, PNG, GIF, WEBP - Max 10MB) | Videos (MP4, MOV, AVI, WEBM - Max 2MB, 5 min)
                   </Typography.Text>
                 </div>
               ) : (
@@ -1960,6 +1969,17 @@ export default function Influencers() {
                         transition: 'all 0.3s ease',
                         cursor: 'pointer'
                       }}
+                        onClick={() => {
+                          const url = file.preview as string | null;
+                          if (!url) {
+                            message.warning('No preview available for this file yet.');
+                            return;
+                          }
+                          const t = String(file.type || '').startsWith('video/') ? 'video' : 'image';
+                          setMediaPreviewType(t);
+                          setMediaPreviewUrl(url);
+                          setMediaPreviewOpen(true);
+                        }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateY(-2px)';
                           e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
@@ -1969,7 +1989,7 @@ export default function Influencers() {
                           e.currentTarget.style.boxShadow = 'none';
                         }}
                       >
-                        {file.type.startsWith('image/') ? (
+                        {String(file.type || '').startsWith('image/') ? (
                           <img
                             src={file.preview}
                             alt={`Media ${index + 1}`}
@@ -2007,18 +2027,18 @@ export default function Influencers() {
                           </div>
                           <div style={{
                             fontSize: '10px',
-                            color: file.type.startsWith('image/') ? '#52c41a' : '#1890ff',
+                            color: String(file.type || '').startsWith('image/') ? '#52c41a' : '#1890ff',
                             fontWeight: '500',
                             marginBottom: '2px'
                           }}>
-                            {file.type.startsWith('image/') ? '📷 Image' : '🎥 Video'}
+                            {String(file.type || '').startsWith('image/') ? '📷 Image' : '🎥 Video'}
                           </div>
                           <div style={{
                             fontSize: '9px',
                             color: '#bfbfbf',
                             fontWeight: '400'
                           }}>
-                            {(file.size / (1024 * 1024)).toFixed(1)}MB
+                            {file.size ? `${(file.size / (1024 * 1024)).toFixed(1)}MB` : ''}
                           </div>
                         </div>
 
@@ -2088,7 +2108,7 @@ export default function Influencers() {
     try {
       if (currentStep === 0) {
         // Validate only required fields for step 1
-        await form.validateFields(['email', 'name']);
+        await form.validateFields(['email', 'name', 'profile_image_url']);
       } else if (currentStep === 1) {
         // Step 2 has no required fields, just proceed
       } else if (currentStep === 2) {
@@ -2218,16 +2238,36 @@ export default function Influencers() {
 
         console.log('Existing media data:', existingMedia);
 
+        const extractStoragePath = (url: string) => {
+          // Supports public URLs: /storage/v1/object/public/<bucket>/<path>
+          // and signed URLs: /storage/v1/object/sign/<bucket>/<path>?token=...
+          const m =
+            url.match(/\/storage\/v1\/object\/public\/influencer-media\/(.+)$/) ||
+            url.match(/\/storage\/v1\/object\/sign\/influencer-media\/(.+)$/);
+          if (!m?.[1]) return null;
+          return decodeURIComponent(m[1]).split('?')[0];
+        };
+
+        const toSignedUrlIfPossible = async (url: string) => {
+          const path = extractStoragePath(url);
+          if (!path) return url;
+          const { data, error } = await supabase.storage
+            .from('influencer-media')
+            .createSignedUrl(path, 60 * 60);
+          if (error || !data?.signedUrl) return url;
+          return data.signedUrl;
+        };
+
         if (existingMedia && existingMedia.length > 0) {
-          const mediaFilesData = existingMedia.map(media => ({
+          const mediaFilesData = await Promise.all(existingMedia.map(async (media: any) => ({
             file: null, // We don't have the actual file, just the URL
             name: media.file_name,
             type: media.file_type || 'image/jpeg',
             size: 0, // We don't have file size for existing files
-            preview: media.file_url,
+            preview: await toSignedUrlIfPossible(media.file_url),
             isExisting: true,
             mediaId: media.id
-          }));
+          })));
           console.log('Processed media files data:', mediaFilesData);
           setMediaFiles(mediaFilesData);
         }
@@ -2276,7 +2316,7 @@ export default function Influencers() {
   // Handler for media files upload
   const handleMediaFilesUpload = async (files: File[]) => {
     const maxImageSize = 10 * 1024 * 1024; // 10MB for images
-    const maxVideoSize = 100 * 1024 * 1024; // 100MB for videos
+    const maxVideoSize = 2 * 1024 * 1024; // 2MB for videos (admin requirement)
     const maxVideoDuration = 300; // 5 minutes in seconds
 
     const validFiles: File[] = [];
@@ -2359,7 +2399,7 @@ export default function Influencers() {
         name: file.name,
         type: file.type,
         size: file.size,
-        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+        preview: URL.createObjectURL(file)
       }));
       setMediaFiles(prev => [...prev, ...newFiles]);
 
@@ -2718,6 +2758,26 @@ export default function Influencers() {
           </AntCard>
         </div>
       </Drawer>
+
+      <Modal
+        open={mediaPreviewOpen}
+        onCancel={() => {
+          setMediaPreviewOpen(false);
+          setMediaPreviewUrl(null);
+          setMediaPreviewType(null);
+        }}
+        footer={null}
+        width={900}
+        destroyOnHidden
+        title={mediaPreviewType === 'video' ? 'Video Preview' : 'Image Preview'}
+      >
+        {mediaPreviewUrl && mediaPreviewType === 'image' && (
+          <Image src={mediaPreviewUrl} style={{ width: '100%' }} />
+        )}
+        {mediaPreviewUrl && mediaPreviewType === 'video' && (
+          <video src={mediaPreviewUrl} controls style={{ width: '100%' }} />
+        )}
+      </Modal>
       <Drawer
         title={detailData ? detailData.name : 'Influencer Details'}
         open={detailOpen}

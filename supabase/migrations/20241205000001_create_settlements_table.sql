@@ -40,39 +40,26 @@ CREATE INDEX IF NOT EXISTS idx_settlements_settled_at ON public.settlements(sett
 ALTER TABLE public.settlements ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Admins can view all settlements" ON public.settlements;
+DROP POLICY IF EXISTS "Admins can insert settlements" ON public.settlements;
+DROP POLICY IF EXISTS "Admins can update settlements" ON public.settlements;
+
 -- Admins can view all settlements
 CREATE POLICY "Admins can view all settlements"
   ON public.settlements
   FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+  USING (public.is_admin());
 
 -- Admins can insert settlements
 CREATE POLICY "Admins can insert settlements"
   ON public.settlements
   FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+  WITH CHECK (public.is_admin());
 
 -- Admins can update settlements
 CREATE POLICY "Admins can update settlements"
   ON public.settlements
   FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 

@@ -78,32 +78,6 @@ export default function Categories() {
     }
   }, [editModalOpen, editForm]);
 
-  // Test storage buckets
-  const testStorageBuckets = async () => {
-    try {
-      console.log('Testing storage buckets...');
-      
-      // Test thumbnails bucket
-      const { data: thumbnailsList, error: thumbnailsError } = await supabase.storage.from('thumbnails').list();
-      if (thumbnailsError) {
-        console.error('Thumbnails bucket error:', thumbnailsError);
-      } else {
-        console.log('Thumbnails bucket accessible:', thumbnailsList);
-      }
-      
-      // Test if category bucket exists (fallback)
-      const { data: categoryList, error: categoryError } = await supabase.storage.from('category').list();
-      if (categoryError) {
-        console.error('Category bucket error:', categoryError);
-      } else {
-        console.log('Category bucket accessible:', categoryList);
-      }
-      
-    } catch (err) {
-      console.error('Storage bucket test error:', err);
-    }
-  };
-
   // Helper function to get the correct storage bucket
   const getStorageBucket = () => {
     // Try thumbnails first, fallback to category
@@ -132,11 +106,6 @@ export default function Categories() {
       throw error;
     }
   };
-
-  // Test storage on component mount
-  useEffect(() => {
-    testStorageBuckets();
-  }, []);
 
   // Add Category handler
   const handleAddCategory = async (values: any) => {
@@ -343,12 +312,6 @@ export default function Categories() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Service Categories</Typography.Title>
         <div>
-          <Button 
-            style={{ marginRight: 8 }} 
-            onClick={testStorageBuckets}
-          >
-            Test Storage
-          </Button>
           <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
             Add Category
           </Button>

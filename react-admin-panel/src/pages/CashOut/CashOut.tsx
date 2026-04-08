@@ -34,11 +34,9 @@ import type { ColumnsType } from 'antd/es/table';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-const { Option } = Select;
 
 export default function CashOut() {
   const [loading, setLoading] = useState(false);
-  const [periodType, setPeriodType] = useState<'weekly' | 'monthly'>('monthly');
   const [startDate, setStartDate] = useState<string>();
   const [endDate, setEndDate] = useState<string>();
   const [earnings, setEarnings] = useState<InfluencerEarning[]>([]);
@@ -47,7 +45,6 @@ export default function CashOut() {
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState<PaymentEarning[]>([]);
   const [settling, setSettling] = useState<string | null>(null);
-  const [recurrenceLocked, setRecurrenceLocked] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [settlingBulk, setSettlingBulk] = useState(false);
 
@@ -62,29 +59,21 @@ export default function CashOut() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Re-fetch earnings when period inputs change (if not handled by fetchSettingsAndEarnings initial load)
+    // Re-fetch earnings when date range inputs change
     if (!loading && activeTab === 'earnings') {
       fetchEarnings();
     }
-  }, [periodType, startDate, endDate]);
+  }, [startDate, endDate]);
 
   const fetchSettingsAndEarnings = async () => {
     setLoading(true);
     try {
       // 1. Fetch App Settings to get Payment Recurrence
-      const appSettings = await settingsService.getAppSettings();
-      const recurrence = appSettings.payment_recurrence as 'weekly' | 'monthly' | undefined;
-
-      if (recurrence) {
-        setPeriodType(recurrence);
-        setRecurrenceLocked(true);
-      }
+      await settingsService.getAppSettings();
 
       // 2. Load data based on tab
       if (activeTab === 'earnings') {
-        // fetchEarnings will be triggered by useEffect dependency on periodType change or we call it here?
-        // Better to call it here to ensure sequentiality
-        await fetchEarnings(recurrence);
+        await fetchEarnings();
       } else if (activeTab === 'history') {
         await fetchSettlementHistory();
       }
@@ -109,13 +98,12 @@ export default function CashOut() {
     }
   };
 
-  const fetchEarnings = async (overridePeriodType?: 'weekly' | 'monthly') => {
+  const fetchEarnings = async () => {
     setLoading(true);
     try {
-      const currentPeriodType = overridePeriodType || periodType;
       const [earningsData, summaryData] = await Promise.all([
-        cashOutService.getInfluencerEarnings(currentPeriodType, startDate, endDate),
-        cashOutService.getCashOutSummary(currentPeriodType, startDate, endDate)
+        cashOutService.getInfluencerEarnings('monthly', startDate, endDate),
+        cashOutService.getCashOutSummary('monthly', startDate, endDate)
       ]);
 
       setEarnings(earningsData);
@@ -126,13 +114,6 @@ export default function CashOut() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePeriodChange = (value: 'weekly' | 'monthly') => {
-    setPeriodType(value);
-    // Reset dates when period type changes
-    setStartDate(undefined);
-    setEndDate(undefined);
   };
 
   const handleDateRangeChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
@@ -162,19 +143,12 @@ export default function CashOut() {
   };
 
   const handleMarkAsSettled = async (influencer: InfluencerEarning) => {
-    // Calculate date range if not provided
-    const periodStart = startDate || (() => {
-      const date = new Date();
-      if (periodType === 'weekly') {
-        date.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
-      } else {
-        date.setDate(1); // Start of month
-      }
-      date.setHours(0, 0, 0, 0);
-      return date.toISOString();
-    })();
-
-    const periodEnd = endDate || new Date().toISOString();
+    if (!startDate || !endDate) {
+      message.warning('Please select a date range before settling.');
+      return;
+    }
+    const periodStart = startDate;
+    const periodEnd = endDate;
 
     // VALIDATION: Check if period is completed before settling
     // "only will be unlocking after its period" logic
@@ -208,13 +182,14 @@ export default function CashOut() {
     try {
       await cashOutService.markAsSettled(
         influencer.influencer_id,
-        periodType,
+        'monthly',
         periodStart,
         periodEnd,
         influencer
       );
       message.success(`${influencer.influencer_name} marked as settled`);
       await fetchEarnings(); // Refresh data
+      await fetchSettlementHistory();
     } catch (error: any) {
       console.error('Error marking as settled:', error);
       message.error(error.message || 'Failed to mark as settled');
@@ -224,30 +199,24 @@ export default function CashOut() {
   };
 
   const handleUnmarkSettled = async (influencer: InfluencerEarning) => {
-    // Calculate date range if not provided
-    const periodStart = startDate || (() => {
-      const date = new Date();
-      if (periodType === 'weekly') {
-        date.setDate(date.getDate() - date.getDay());
-      } else {
-        date.setDate(1);
-      }
-      date.setHours(0, 0, 0, 0);
-      return date.toISOString();
-    })();
-
-    const periodEnd = endDate || new Date().toISOString();
+    if (!startDate || !endDate) {
+      message.warning('Please select a date range before un-settling.');
+      return;
+    }
+    const periodStart = startDate;
+    const periodEnd = endDate;
 
     setSettling(influencer.influencer_id);
     try {
       await cashOutService.unmarkSettled(
         influencer.influencer_id,
-        periodType,
+        'monthly',
         periodStart,
         periodEnd
       );
       message.success(`${influencer.influencer_name} settlement removed`);
       await fetchEarnings(); // Refresh data
+      await fetchSettlementHistory();
     } catch (error: any) {
       console.error('Error unmarking settled:', error);
       message.error(error.message || 'Failed to remove settlement');
@@ -268,11 +237,21 @@ export default function CashOut() {
       onOk: async () => {
         setSettlingBulk(true);
         try {
-          await cashOutService.markPaymentsAsSettled(selectedRowKeys as string[]);
+          const selectedIds = new Set(selectedRowKeys.map(String));
+          const paymentIds = Array.from(
+            new Set(
+              selectedPayments
+                .filter((p: any) => selectedIds.has(String(p.row_id)))
+                .map((p: any) => p.payment_id)
+                .filter(Boolean)
+            )
+          );
+          await cashOutService.markPaymentsAsSettled(paymentIds);
           message.success(`${selectedRowKeys.length} transactions marked as settled`);
           setSelectedRowKeys([]);
           setPaymentModalVisible(false); // Close modal to reflect fresh state
           await fetchEarnings(); // Refresh data
+          await fetchSettlementHistory();
         } catch (error: any) {
           console.error('Error in settlement:', error);
           message.error(error.message || 'Failed to settle transactions');
@@ -293,30 +272,24 @@ export default function CashOut() {
       onOk: async () => {
         setSettlingBulk(true);
         try {
-          // Calculate date range if not provided
-          const periodStart = startDate || (() => {
-            const date = new Date();
-            if (periodType === 'weekly') {
-              date.setDate(date.getDate() - date.getDay());
-            } else {
-              date.setDate(1);
-            }
-            date.setHours(0, 0, 0, 0);
-            return date.toISOString();
-          })();
-
-          const periodEnd = endDate || new Date().toISOString();
+          if (!startDate || !endDate) {
+            message.warning('Please select a date range before settling.');
+            return;
+          }
+          const periodStart = startDate;
+          const periodEnd = endDate;
 
           // Execute all selected sequentially or parallel
           const selectedInfluencers = earnings.filter(e => selectedRowKeys.includes(e.influencer_id));
 
           await Promise.all(selectedInfluencers.map(influencer =>
-            cashOutService.markAsSettled(influencer.influencer_id, periodType, periodStart, periodEnd, influencer)
+            cashOutService.markAsSettled(influencer.influencer_id, 'monthly', periodStart, periodEnd, influencer)
           ));
 
           message.success(`${selectedInfluencers.length} influencers marked as settled`);
           setSelectedRowKeys([]);
           await fetchEarnings(); // Refresh data
+          await fetchSettlementHistory();
         } catch (error: any) {
           console.error('Error in bulk settlement:', error);
           message.error(error.message || 'Failed to bulk settle');
@@ -351,7 +324,8 @@ export default function CashOut() {
       'Platform Commission',
       'Net Payout',
       'Payment Count',
-      'Status'
+      'Payout status',
+      'Payment status'
     ];
 
     const rows = earnings.map(e => [
@@ -362,7 +336,8 @@ export default function CashOut() {
       e.total_platform_commission.toFixed(3),
       e.net_payout.toFixed(3),
       e.payment_count,
-      e.is_settled ? 'Settled' : 'Unsettled'
+      e.is_settled ? 'Settled' : 'Unsettled',
+      'Completed'
     ]);
 
     const data = [headers, ...rows];
@@ -386,7 +361,8 @@ export default function CashOut() {
       'PG Charge',
       'Commission',
       'Net Payout',
-      'Status'
+      'Payout status',
+      'Payment status'
     ];
 
     const rows = influencer.payments.map(p => [
@@ -399,6 +375,7 @@ export default function CashOut() {
       p.pg_charge.toFixed(3),
       p.platform_commission.toFixed(3),
       p.net_amount.toFixed(3),
+      p.is_settled ? 'Settled' : 'Unsettled',
       p.status
     ]);
 
@@ -418,9 +395,7 @@ export default function CashOut() {
       'Settled Date',
       'Influencer Name',
       'Influencer Email',
-      'Period Start',
-      'Period End',
-      'Total Earnings',
+      'Settled net payout (on this date)',
       'Admin Name',
     ];
 
@@ -428,9 +403,7 @@ export default function CashOut() {
       dayjs(h.settled_at).format('YYYY-MM-DD HH:mm:ss'),
       h.influencer?.name || 'Unknown',
       h.influencer?.email || '',
-      h.period_start,
-      h.period_end,
-      h.total_earnings?.toFixed(3) || '0.000',
+      h.net_payout?.toFixed(3) || '0.000',
       h.admin?.name || 'System'
     ]);
 
@@ -593,7 +566,8 @@ export default function CashOut() {
       dataIndex: 'influencer_share_percentage',
       key: 'influencer_share_percentage',
       align: 'center',
-      render: (pct, record) => (record.service_type === 'DUAL' && pct) ? `${pct}%` : '-',
+      render: (pct, record) =>
+        String(record.service_type || '').toLowerCase() === 'dual' && pct != null ? `${pct}%` : '-',
     },
     {
       title: 'Influencer Earnings',
@@ -607,7 +581,7 @@ export default function CashOut() {
       ),
     },
     {
-      title: 'Status',
+      title: 'Payment Status',
       dataIndex: 'status',
       key: 'status',
       render: (status) => <Tag color="success">{(status || 'PAID').toUpperCase()}</Tag>,
@@ -686,26 +660,7 @@ export default function CashOut() {
       ),
     },
     {
-      title: 'Period',
-      key: 'period',
-      render: (_: any, record: any) => (
-        <Space direction="vertical" size={0}>
-          <Tag color="cyan">{(record.period_type || 'monthly').toUpperCase()}</Tag>
-          <Text style={{ fontSize: '12px', color: '#666' }}>
-            {record.period_start} to {record.period_end}
-          </Text>
-        </Space>
-      ),
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'total_earnings',
-      key: 'total_earnings',
-      align: 'right' as const,
-      render: (val: number) => formatCurrency(val, 'KWD'),
-    },
-    {
-      title: 'Net Payout',
+      title: 'Settled net payout (on this date)',
       dataIndex: 'net_payout',
       key: 'net_payout',
       align: 'right' as const,
@@ -747,28 +702,15 @@ export default function CashOut() {
             <Row gutter={16} align="middle" style={{ marginBottom: '16px' }}>
               <Col>
                 <Space>
-                  <Text strong>Period:</Text>
-                  <Select
-                    value={periodType}
-                    onChange={handlePeriodChange}
-                    style={{ width: 120 }}
-                    disabled={recurrenceLocked} // Lock if setting exists
-                  >
-
-                    <Option value="weekly">Weekly</Option>
-                    <Option value="monthly">Monthly</Option>
-                  </Select>
+                  <Text strong>Date Range:</Text>
                 </Space>
               </Col>
               <Col>
-                <Space>
-                  <Text strong>Date Range:</Text>
-                  <RangePicker
-                    onChange={handleDateRangeChange}
-                    format="YYYY-MM-DD"
-                    allowClear
-                  />
-                </Space>
+                <RangePicker
+                  onChange={handleDateRangeChange}
+                  format="YYYY-MM-DD"
+                  allowClear
+                />
               </Col>
               <Col>
                 <Space>
@@ -778,15 +720,6 @@ export default function CashOut() {
                     loading={loading}
                   >
                     Refresh
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setStartDate(undefined);
-                      setEndDate(undefined);
-                      fetchEarnings();
-                    }}
-                  >
-                    Show All Payments
                   </Button>
                   <Button
                     icon={<DownloadOutlined />}
@@ -1016,7 +949,7 @@ export default function CashOut() {
               }}
               columns={paymentColumns}
               dataSource={selectedPayments.filter(p => !p.is_settled)}
-              rowKey="payment_id"
+              rowKey="row_id"
               pagination={false}
               size="small"
               scroll={{ x: 1300 }}
@@ -1067,7 +1000,7 @@ export default function CashOut() {
                 <Table
                   columns={paymentColumns}
                   dataSource={selectedPayments.filter(p => p.is_settled)}
-                  rowKey="payment_id"
+                  rowKey="row_id"
                   pagination={false}
                   size="small"
                   scroll={{ x: 1300 }}

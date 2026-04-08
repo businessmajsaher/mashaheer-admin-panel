@@ -52,7 +52,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
     Please create a .env file with your Supabase credentials. 
     See env-template.txt for instructions.
   `;
-  document.body.appendChild(errorDiv);
+  const mountErrorBanner = () => {
+    // Avoid crashing the entire app if body isn't ready.
+    if (!document.body) return;
+    if (document.getElementById('supabase-config-error-banner')) return;
+    errorDiv.id = 'supabase-config-error-banner';
+    document.body.appendChild(errorDiv);
+  };
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', mountErrorBanner, { once: true });
+  } else {
+    mountErrorBanner();
+  }
   
   supabaseClient = mockClient as any;
 } else {

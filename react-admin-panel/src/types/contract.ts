@@ -20,8 +20,20 @@ export interface ContractInstance {
   signed_at?: string;
   completed_at?: string;
   created_at: string;
+  /** Final HTML after variable substitution */
+  generated_content?: string | null;
+  /** Optional stored PDF URL (if backend stores one) */
+  pdf_url?: string | null;
+  signed_pdf_url?: string | null;
+  document_url?: string | null;
   variables_data?: Record<string, any>;
   variables?: Record<string, any>;
+  /** Present when loaded with booking details */
+  signatures?: {
+    signer_type?: string | null;
+    signature_data?: string | null;
+    signed_at?: string | null;
+  }[];
   contract_templates?: {
     title: string;
     template_type: string;
