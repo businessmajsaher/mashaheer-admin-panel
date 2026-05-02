@@ -5,6 +5,7 @@ export interface Service {
   thumbnail?: string;
   min_duration_days: number;
   is_flash_deal: boolean;
+  offer_active?: boolean;
   flash_from?: string;
   flash_to?: string;
   location_required: boolean;
@@ -36,6 +37,7 @@ export interface CreateServiceData {
   thumbnail?: File;
   min_duration_days: number;
   is_flash_deal: boolean;
+  offer_active?: boolean;
   flash_from?: string;
   flash_to?: string;
   location_required: boolean;
@@ -61,6 +63,7 @@ export interface UpdateServiceData {
   thumbnail?: File;
   min_duration_days?: number;
   is_flash_deal?: boolean;
+  offer_active?: boolean;
   flash_from?: string;
   flash_to?: string;
   location_required?: boolean;

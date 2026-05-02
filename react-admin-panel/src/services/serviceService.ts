@@ -89,6 +89,7 @@ export const serviceService = {
         thumbnail: thumbnailUrl,
         min_duration_days: serviceData.min_duration_days,
         is_flash_deal: serviceData.is_flash_deal,
+        offer_active: serviceData.offer_active ?? false,
         flash_from: serviceData.flash_from,
         flash_to: serviceData.flash_to,
         location_required: serviceData.location_required,
@@ -132,6 +133,7 @@ export const serviceService = {
     if (serviceData.description !== undefined) updateData.description = serviceData.description;
     if (serviceData.min_duration_days !== undefined) updateData.min_duration_days = serviceData.min_duration_days;
     if (serviceData.is_flash_deal !== undefined) updateData.is_flash_deal = serviceData.is_flash_deal;
+    if (serviceData.offer_active !== undefined) updateData.offer_active = serviceData.offer_active;
     if (serviceData.flash_from !== undefined) updateData.flash_from = serviceData.flash_from;
     if (serviceData.flash_to !== undefined) updateData.flash_to = serviceData.flash_to;
     if (serviceData.location_required !== undefined) updateData.location_required = serviceData.location_required;

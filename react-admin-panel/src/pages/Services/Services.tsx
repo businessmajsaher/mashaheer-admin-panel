@@ -72,6 +72,11 @@ const currencyOptions = allCurrencyOptions.filter(option => option.value === 'KW
 const { TextArea } = Input;
 const { Option } = Select;
 
+const MSG_FLASH_BLOCKS_OFFER =
+  'Flash deal is on. Turn it off before enabling manual offer.';
+const MSG_OFFER_BLOCKS_FLASH =
+  'Manual offer is on. Turn it off before enabling flash deal.';
+
 export default function Services() {
   const [services, setServices] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -84,6 +89,12 @@ export default function Services() {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [filterForm] = Form.useForm();
+  const addFlashWatch = Form.useWatch('is_flash_deal', form);
+  const addOfferWatch = Form.useWatch('offer_active', form);
+  const editFlashWatch = Form.useWatch('is_flash_deal', editForm);
+  const editOfferWatch = Form.useWatch('offer_active', editForm);
+  const showAddDiscount = !!addFlashWatch || !!addOfferWatch;
+  const showEditDiscount = !!editFlashWatch || !!editOfferWatch;
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editFormLoading, setEditFormLoading] = useState(false);
@@ -238,6 +249,7 @@ export default function Services() {
         thumbnail: editingService.thumbnail,
         min_duration_days: editingService.min_duration_days,
         is_flash_deal: editingService.is_flash_deal,
+        offer_active: !!editingService.offer_active,
         flash_from: editingService.flash_from ? dayjs(editingService.flash_from) : null,
         flash_to: editingService.flash_to ? dayjs(editingService.flash_to) : null,
         location_required: editingService.location_required,
@@ -327,13 +339,24 @@ export default function Services() {
       }
 
       const disc = values.discount_percentage ?? 0;
-      let offerPrice = values.price;
-      if (disc > 0 && disc < 100) {
-        offerPrice = Number((values.price * (1 - disc / 100)).toFixed(3));
+      const flashOn = !!values.is_flash_deal;
+      const offerOn = !!values.offer_active;
+      if (flashOn && offerOn) {
+        message.error('Flash deal and manual offer cannot both be active.');
+        return;
       }
-      if (values.is_flash_deal && disc <= 0) {
+      if (flashOn && disc <= 0) {
         message.error('Enter a discount % for flash deals');
         return;
+      }
+      if (offerOn && disc <= 0) {
+        message.error('Enter a discount % when manual offer is active');
+        return;
+      }
+      let offerPrice = values.price;
+      const discountApplies = (flashOn || offerOn) && disc > 0 && disc < 100;
+      if (discountApplies) {
+        offerPrice = Number((values.price * (1 - disc / 100)).toFixed(3));
       }
 
       const serviceData = {
@@ -341,7 +364,8 @@ export default function Services() {
         description: values.description,
         thumbnail,
         min_duration_days: values.min_duration_days,
-        is_flash_deal: values.is_flash_deal || false,
+        is_flash_deal: flashOn,
+        offer_active: offerOn,
         flash_from: values.flash_from?.toISOString(),
         flash_to: values.flash_to?.toISOString(),
         location_required: values.location_required || false,
@@ -420,16 +444,27 @@ export default function Services() {
         thumbnail = publicUrlData?.publicUrl;
       }
 
-      // Handle flash deal to normal transition
       let flashFrom = null;
       let flashTo = null;
       const disc = values.discount_percentage ?? 0;
+      const flashOn = !!values.is_flash_deal;
+      const offerOn = !!values.offer_active;
+      if (flashOn && offerOn) {
+        message.error('Flash deal and manual offer cannot both be active.');
+        return;
+      }
+      if (offerOn && disc <= 0) {
+        message.error('Enter a discount % when manual offer is active');
+        return;
+      }
+
       let offerPrice = values.price;
-      if (disc > 0 && disc < 100) {
+      const discountApplies = (flashOn || offerOn) && disc > 0 && disc < 100;
+      if (discountApplies) {
         offerPrice = Number((values.price * (1 - disc / 100)).toFixed(3));
       }
 
-      if (values.is_flash_deal) {
+      if (flashOn) {
         if (disc <= 0) {
           message.error('Enter a discount % for flash deals');
           return;
@@ -450,7 +485,7 @@ export default function Services() {
       } else {
         flashFrom = null;
         flashTo = null;
-        if (disc <= 0) {
+        if (!discountApplies) {
           offerPrice = values.price;
         }
       }
@@ -466,7 +501,8 @@ export default function Services() {
         description: values.description,
         thumbnail,
         min_duration_days: values.min_duration_days,
-        is_flash_deal: values.is_flash_deal || false,
+        is_flash_deal: flashOn,
+        offer_active: offerOn,
         flash_from: flashFrom,
         flash_to: flashTo,
         location_required: values.location_required || false,
@@ -661,9 +697,10 @@ export default function Services() {
       dataIndex: 'offer_price',
       key: 'offer_price',
       render: (offerPrice: number, record: any) => {
-        if (record.is_flash_deal && offerPrice) {
+        const showOffer = record.is_flash_deal || record.offer_active;
+        if (showOffer && offerPrice != null && Number(offerPrice) !== Number(record.price)) {
           return (
-            <span style={{ fontWeight: 'bold', color: '#ff4d4f' }}>
+            <span style={{ fontWeight: 'bold', color: record.is_flash_deal ? '#ff4d4f' : '#1890ff' }}>
               {formatPrice(offerPrice, 'KWD')}
             </span>
           );
@@ -712,6 +749,19 @@ export default function Services() {
           fontWeight: 'bold'
         }}>
           {isFlash ? 'Yes' : 'No'}
+        </span>
+      )
+    },
+    {
+      title: 'Manual offer',
+      dataIndex: 'offer_active',
+      key: 'offer_active',
+      render: (active: boolean, record: any) => (
+        <span style={{
+          color: active && !record.is_flash_deal ? '#1890ff' : '#8c8c8c',
+          fontWeight: 'bold'
+        }}>
+          {active ? 'Yes' : 'No'}
         </span>
       )
     },
@@ -884,7 +934,12 @@ export default function Services() {
         width={800}
       >
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form form={form} layout="vertical" onFinish={handleAddService}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleAddService}
+          initialValues={{ offer_active: false, is_flash_deal: false }}
+        >
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -963,6 +1018,109 @@ export default function Services() {
             </Col>
           </Row>
 
+          <Divider>Offers &amp; flash deal</Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="offer_active"
+                label="Manual offer active"
+                valuePropName="checked"
+                tooltip={
+                  addFlashWatch
+                    ? MSG_FLASH_BLOCKS_OFFER
+                    : 'Uses discounted offer price. Cannot be on while flash deal is on.'
+                }
+              >
+                <Switch
+                  disabled={!!addFlashWatch}
+                  onChange={(checked) => {
+                    if (checked) {
+                      form.setFieldValue('is_flash_deal', false);
+                      setIsFlashDeal(false);
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="is_flash_deal"
+                label="Is Flash Deal"
+                valuePropName="checked"
+                tooltip={addOfferWatch ? MSG_OFFER_BLOCKS_FLASH : undefined}
+              >
+                <Switch
+                  disabled={!!addOfferWatch}
+                  onChange={(checked) => {
+                    setIsFlashDeal(checked);
+                    if (checked) {
+                      form.setFieldValue('offer_active', false);
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {addFlashWatch ? (
+            <>
+              <Divider>Flash deal dates</Divider>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_from"
+                    label="Flash Deal From"
+                    rules={[
+                      { required: true, message: 'Please select flash deal start date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal start date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select start date and time"
+                      showNow={false}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_to"
+                    label="Flash Deal To"
+                    rules={[
+                      { required: true, message: 'Please select flash deal end date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal end date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select end date and time"
+                      showNow={false}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          ) : null}
+
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
@@ -983,7 +1141,7 @@ export default function Services() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={showAddDiscount ? 8 : 16}>
               <Form.Item
                 name="price"
                 label={`Price (${getCurrencySymbol(selectedCurrency)})`}
@@ -994,40 +1152,50 @@ export default function Services() {
                   step={0.001}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(selectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
+                  parser={
+                    ((value: string | undefined) =>
+                      value
+                        ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(selectedCurrency)}\\s?|(,*)`, 'g'), ''))
+                        : 0) as NonNullable<React.ComponentProps<typeof InputNumber>['parser']>
+                  }
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
-              <Form.Item
-                name="discount_percentage"
-                label="Discount %"
-                tooltip="Applied to list price for offers and flash deals. Final charge = price × (1 − discount%). Leave 0 for no discount."
-                validateTrigger={['onChange', 'onBlur']}
-                rules={[
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      const v = value ?? 0;
-                      if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
-                        return Promise.reject(new Error('Enter a discount % for flash deals'));
+            {showAddDiscount && (
+              <Col span={8}>
+                <Form.Item
+                  name="discount_percentage"
+                  label="Discount %"
+                  tooltip="Shown when manual offer or flash deal is on. Final charge = price × (1 − discount%)."
+                  validateTrigger={['onChange', 'onBlur']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        const v = value ?? 0;
+                        if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
+                          return Promise.reject(new Error('Enter a discount % for flash deals'));
+                        }
+                        if (getFieldValue('offer_active') && (!v || v <= 0)) {
+                          return Promise.reject(new Error('Enter a discount % when manual offer is active'));
+                        }
+                        if (v > 99) {
+                          return Promise.reject(new Error('Max discount is 99%'));
+                        }
+                        return Promise.resolve();
                       }
-                      if (v > 99) {
-                        return Promise.reject(new Error('Max discount is 99%'));
-                      }
-                      return Promise.resolve();
-                    }
-                  })
-                ]}
-              >
-                <InputNumber
-                  min={0}
-                  step={1}
-                  precision={0}
-                  style={{ width: '100%' }}
-                  addonAfter="%"
-                />
-              </Form.Item>
-            </Col>
+                    })
+                  ]}
+                >
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    precision={0}
+                    style={{ width: '100%' }}
+                    addonAfter="%"
+                  />
+                </Form.Item>
+              </Col>
+            )}
           </Row>
 
           <Row gutter={16}>
@@ -1229,102 +1397,6 @@ export default function Services() {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="is_flash_deal"
-                label="Is Flash Deal"
-                valuePropName="checked"
-              >
-                <Switch
-                  onChange={(checked) => {
-                    setIsFlashDeal(checked);
-                    if (checked) {
-                      form.setFieldsValue({ service_type: 'flash' });
-                      setSelectedServiceType('flash');
-                      const d = form.getFieldValue('discount_percentage');
-                      if (d == null || d === 0) {
-                        form.setFieldsValue({ discount_percentage: 10 });
-                      }
-                    } else {
-                      form.setFieldsValue({ service_type: 'normal' });
-                      setSelectedServiceType('normal');
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {form.getFieldValue('is_flash_deal') && (
-            <>
-              <Divider>Flash Deal Settings</Divider>
-
-
-
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="flash_from"
-                    label="Flash Deal From"
-                    rules={[
-                      { required: true, message: 'Please select flash deal start date' },
-                      {
-                        validator: (_, value) => {
-                          if (!value) {
-                            return Promise.reject(new Error('Please select flash deal start date'));
-                          }
-                          return Promise.resolve();
-                        }
-                      }
-                    ]}
-                  >
-                    <DatePicker
-                      showTime={{ format: 'HH:mm' }}
-                      style={{ width: '100%' }}
-                      format="YYYY-MM-DD HH:mm"
-                      placeholder="Select start date and time"
-                      showNow={false}
-                      onChange={(date, dateString) => {
-                        console.log('DatePicker onChange - date:', date);
-                        console.log('DatePicker onChange - dateString:', dateString);
-                      }}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="flash_to"
-                    label="Flash Deal To"
-                    rules={[
-                      { required: true, message: 'Please select flash deal end date' },
-                      {
-                        validator: (_, value) => {
-                          if (!value) {
-                            return Promise.reject(new Error('Please select flash deal end date'));
-                          }
-                          return Promise.resolve();
-                        }
-                      }
-                    ]}
-                  >
-                    <DatePicker
-                      showTime={{ format: 'HH:mm' }}
-                      style={{ width: '100%' }}
-                      format="YYYY-MM-DD HH:mm"
-                      placeholder="Select end date and time"
-                      showNow={false}
-                      onChange={(date, dateString) => {
-                        console.log('DatePicker onChange - date:', date);
-                        console.log('DatePicker onChange - dateString:', dateString);
-                      }}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </>
-          )}
-
           {selectedServiceType === 'dual' && (
             <Form.Item
               name="about_us"
@@ -1416,6 +1488,7 @@ export default function Services() {
             thumbnail: editingService.thumbnail,
             min_duration_days: editingService.min_duration_days,
             is_flash_deal: editingService.is_flash_deal,
+            offer_active: !!editingService.offer_active,
             flash_from: editingService.flash_from ? dayjs(editingService.flash_from) : null,
             flash_to: editingService.flash_to ? dayjs(editingService.flash_to) : null,
             location_required: editingService.location_required,
@@ -1499,6 +1572,109 @@ export default function Services() {
             </Col>
           </Row>
 
+          <Divider>Offers &amp; flash deal</Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="offer_active"
+                label="Manual offer active"
+                valuePropName="checked"
+                tooltip={
+                  editFlashWatch
+                    ? MSG_FLASH_BLOCKS_OFFER
+                    : 'Uses discounted offer price. Cannot be on while flash deal is on.'
+                }
+              >
+                <Switch
+                  disabled={!!editFlashWatch}
+                  onChange={(checked) => {
+                    if (checked) {
+                      editForm.setFieldValue('is_flash_deal', false);
+                      setEditIsFlashDeal(false);
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="is_flash_deal"
+                label="Is Flash Deal"
+                valuePropName="checked"
+                tooltip={editOfferWatch ? MSG_OFFER_BLOCKS_FLASH : undefined}
+              >
+                <Switch
+                  disabled={!!editOfferWatch}
+                  onChange={(checked) => {
+                    setEditIsFlashDeal(checked);
+                    if (checked) {
+                      editForm.setFieldValue('offer_active', false);
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {editFlashWatch ? (
+            <>
+              <Divider>Flash deal dates</Divider>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_from"
+                    label="Flash Deal From"
+                    rules={[
+                      { required: true, message: 'Please select flash deal start date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal start date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select start date and time"
+                      showNow={false}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="flash_to"
+                    label="Flash Deal To"
+                    rules={[
+                      { required: true, message: 'Please select flash deal end date' },
+                      {
+                        validator: (_, value) => {
+                          if (!value) {
+                            return Promise.reject(new Error('Please select flash deal end date'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: 'HH:mm' }}
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="Select end date and time"
+                      showNow={false}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          ) : null}
+
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
@@ -1519,7 +1695,7 @@ export default function Services() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={showEditDiscount ? 8 : 16}>
               <Form.Item
                 name="price"
                 label={`Price (${getCurrencySymbol(editSelectedCurrency)})`}
@@ -1530,40 +1706,50 @@ export default function Services() {
                   step={0.001}
                   style={{ width: '100%' }}
                   formatter={value => `${getCurrencySymbol(editSelectedCurrency)} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), '')) : 0}
+                  parser={
+                    ((value: string | undefined) =>
+                      value
+                        ? parseFloat(value.replace(new RegExp(`\\${getCurrencySymbol(editSelectedCurrency)}\\s?|(,*)`, 'g'), ''))
+                        : 0) as NonNullable<React.ComponentProps<typeof InputNumber>['parser']>
+                  }
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
-              <Form.Item
-                name="discount_percentage"
-                label="Discount %"
-                tooltip="Final charge = price × (1 − discount%). Use for flash deals and promotional pricing."
-                validateTrigger={['onChange', 'onBlur']}
-                rules={[
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      const v = value ?? 0;
-                      if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
-                        return Promise.reject(new Error('Enter a discount % for flash deals'));
+            {showEditDiscount && (
+              <Col span={8}>
+                <Form.Item
+                  name="discount_percentage"
+                  label="Discount %"
+                  tooltip="Shown when manual offer or flash deal is on. Final charge = price × (1 − discount%)."
+                  validateTrigger={['onChange', 'onBlur']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        const v = value ?? 0;
+                        if (getFieldValue('is_flash_deal') && (!v || v <= 0)) {
+                          return Promise.reject(new Error('Enter a discount % for flash deals'));
+                        }
+                        if (getFieldValue('offer_active') && (!v || v <= 0)) {
+                          return Promise.reject(new Error('Enter a discount % when manual offer is active'));
+                        }
+                        if (v > 99) {
+                          return Promise.reject(new Error('Max discount is 99%'));
+                        }
+                        return Promise.resolve();
                       }
-                      if (v > 99) {
-                        return Promise.reject(new Error('Max discount is 99%'));
-                      }
-                      return Promise.resolve();
-                    }
-                  })
-                ]}
-              >
-                <InputNumber
-                  min={0}
-                  step={1}
-                  precision={0}
-                  style={{ width: '100%' }}
-                  addonAfter="%"
-                />
-              </Form.Item>
-            </Col>
+                    })
+                  ]}
+                >
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    precision={0}
+                    style={{ width: '100%' }}
+                    addonAfter="%"
+                  />
+                </Form.Item>
+              </Col>
+            )}
           </Row>
 
           <Row gutter={16}>
@@ -1753,100 +1939,6 @@ export default function Services() {
             </Col>
           </Row>
 
-          <Divider>Flash Deal Settings</Divider>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="is_flash_deal" label="Is Flash Deal" valuePropName="checked">
-                <Switch
-                  onChange={(checked) => {
-                    setEditIsFlashDeal(checked);
-                    if (checked) {
-                      editForm.setFieldsValue({ service_type: 'flash' });
-                      setSelectedServiceType('flash');
-                      const d = editForm.getFieldValue('discount_percentage');
-                      if (d == null || d === 0) {
-                        editForm.setFieldsValue({ discount_percentage: 10 });
-                      }
-                    } else {
-                      editForm.setFieldsValue({ service_type: 'normal' });
-                      setSelectedServiceType('normal');
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {editForm.getFieldValue('is_flash_deal') && (
-            <>
-              <Divider>Flash Deal Settings</Divider>
-
-
-
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="flash_from"
-                    label="Flash Deal From"
-                    rules={[
-                      { required: true, message: 'Please select flash deal start date' },
-                      {
-                        validator: (_, value) => {
-                          if (!value) {
-                            return Promise.reject(new Error('Please select flash deal start date'));
-                          }
-                          return Promise.resolve();
-                        }
-                      }
-                    ]}
-                  >
-                    <DatePicker
-                      showTime={{ format: 'HH:mm' }}
-                      style={{ width: '100%' }}
-                      format="YYYY-MM-DD HH:mm"
-                      placeholder="Select start date and time"
-                      showNow={false}
-                      onChange={(date, dateString) => {
-                        console.log('DatePicker onChange - date:', date);
-                        console.log('DatePicker onChange - dateString:', dateString);
-                      }}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="flash_to"
-                    label="Flash Deal To"
-                    rules={[
-                      { required: true, message: 'Please select flash deal end date' },
-                      {
-                        validator: (_, value) => {
-                          if (!value) {
-                            return Promise.reject(new Error('Please select flash deal end date'));
-                          }
-                          return Promise.resolve();
-                        }
-                      }
-                    ]}
-                  >
-                    <DatePicker
-                      showTime={{ format: 'HH:mm' }}
-                      style={{ width: '100%' }}
-                      format="YYYY-MM-DD HH:mm"
-                      placeholder="Select end date and time"
-                      showNow={false}
-                      onChange={(date, dateString) => {
-                        console.log('DatePicker onChange - date:', date);
-                        console.log('DatePicker onChange - dateString:', dateString);
-                      }}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </>
-          )}
-
           {selectedServiceType === 'dual' && (
             <Form.Item
               name="about_us"
@@ -1951,8 +2043,8 @@ export default function Services() {
               <Descriptions.Item label="Price">
                 {selectedServiceDetails.price ? `${getCurrencySymbol(selectedServiceDetails.currency || 'KWD')} ${selectedServiceDetails.price}` : '-'}
               </Descriptions.Item>
-              {selectedServiceDetails.is_flash_deal && (
-                <Descriptions.Item label="Flash Deal Offer Price">
+              {(selectedServiceDetails.is_flash_deal || selectedServiceDetails.offer_active) && (
+                <Descriptions.Item label={selectedServiceDetails.is_flash_deal ? 'Flash deal offer price' : 'Manual offer price'}>
                   {selectedServiceDetails.offer_price ? `${getCurrencySymbol(selectedServiceDetails.currency || 'KWD')} ${selectedServiceDetails.offer_price}` : '-'}
                 </Descriptions.Item>
               )}
@@ -1964,6 +2056,9 @@ export default function Services() {
               </Descriptions.Item>
               <Descriptions.Item label="Flash Deal">
                 {selectedServiceDetails.is_flash_deal ? 'Yes' : 'No'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Manual offer active">
+                {selectedServiceDetails.offer_active ? 'Yes' : 'No'}
               </Descriptions.Item>
               {selectedServiceDetails.flash_from && (
                 <Descriptions.Item label="Flash Deal From">
