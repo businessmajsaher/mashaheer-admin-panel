@@ -51,7 +51,7 @@ export interface ContractInstance {
 export interface ContractTemplate {
   id: string;
   title: string;
-  template_type: 'advertising' | 'collaboration' | 'sponsorship' | 'custom';
+  template_type: 'collaboration' | 'content_creation';
   content: string;
   variables: string[];
   is_active: boolean;

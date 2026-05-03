@@ -157,3 +157,4 @@ CREATE TRIGGER update_contract_templates_updated_at
 CREATE TRIGGER update_contract_instances_updated_at 
   BEFORE UPDATE ON contract_instances 
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+

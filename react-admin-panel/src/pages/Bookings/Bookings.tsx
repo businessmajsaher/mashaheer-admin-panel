@@ -717,9 +717,9 @@ const Bookings: React.FC = () => {
                     <Tag color="purple" style={{ marginLeft: 8 }}>Dual Booking</Tag>
                   )}
                 </Descriptions.Item>
-                {selectedBooking.service?.service_type === 'dual' && selectedBooking.service?.invited_influencer && (
+                {selectedBooking.service?.service_type === 'dual' && selectedBooking.invited_influencer && (
                   <Descriptions.Item label="Invited Partner" span={3}>
-                    {selectedBooking.service.invited_influencer.name} ({selectedBooking.service.invited_influencer.email})
+                    {selectedBooking.invited_influencer.name} ({selectedBooking.invited_influencer.email})
                   </Descriptions.Item>
                 )}
                 {selectedBooking.contract && (

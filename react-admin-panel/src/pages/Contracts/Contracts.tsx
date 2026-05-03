@@ -34,7 +34,7 @@ export default function Contracts() {
     try {
       // Extract variables from content
       const variables = contractService.extractVariables(values.content);
-      
+
       const newContract = {
         title: values.title,
         template_type: values.template_type,
@@ -42,7 +42,7 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       await contractService.createContractTemplate(newContract);
       message.success('Contract template created successfully');
       setModalOpen(false);
@@ -58,13 +58,13 @@ export default function Contracts() {
 
   const handleUpdateContract = async (values: any) => {
     if (!editingContract) return;
-    
+
     setEditFormLoading(true);
     setEditFormError(null);
     try {
       // Extract variables from content
       const variables = contractService.extractVariables(values.content);
-      
+
       const updates = {
         title: values.title,
         template_type: values.template_type,
@@ -72,7 +72,7 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       await contractService.updateContractTemplate(editingContract.id, updates);
       message.success('Contract template updated successfully');
       setEditModalOpen(false);
@@ -401,13 +401,13 @@ export default function Contracts() {
     const variableRegex = /\{\{([^}]+)\}\}/g;
     const variables: string[] = [];
     let match;
-    
+
     while ((match = variableRegex.exec(content)) !== null) {
       if (!variables.includes(match[1])) {
         variables.push(match[1]);
       }
     }
-    
+
     return variables;
   };
 
@@ -418,7 +418,7 @@ export default function Contracts() {
     setFormError(null);
     try {
       const variables = contractService.extractVariables(values.content);
-      
+
       const contractData = {
         title: values.title,
         template_type: values.template_type,
@@ -426,10 +426,10 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       console.log('📝 Creating contract with service:', contractData);
       await contractService.createContractTemplate(contractData);
-      
+
       console.log('✅ Contract added successfully!');
       message.success('Contract template added!');
       setModalOpen(false);
@@ -449,7 +449,7 @@ export default function Contracts() {
     setEditFormError(null);
     try {
       const variables = extractVariables(values.content);
-      
+
       const updateData = {
         title: values.title,
         template_type: values.template_type,
@@ -464,12 +464,12 @@ export default function Contracts() {
         .from('contract_templates')
         .update(updateData)
         .eq('id', editingContract?.id);
-      
+
       if (error) {
         console.error('❌ Contract update error:', error);
         throw error;
       }
-      
+
       console.log('✅ Contract update successful!');
       message.success('Contract template updated!');
       setEditModalOpen(false);
@@ -513,12 +513,12 @@ export default function Contracts() {
 
   const templateColumns = [
     { title: 'Title', dataIndex: 'title', key: 'title' },
-    { 
-      title: 'Type', 
-      dataIndex: 'template_type', 
+    {
+      title: 'Type',
+      dataIndex: 'template_type',
       key: 'template_type',
       render: (type: string) => (
-        <span style={{ 
+        <span style={{
           color: type === 'advertising' ? '#1890ff' : type === 'collaboration' ? '#52c41a' : '#722ed1',
           fontWeight: 'bold'
         }}>
@@ -526,20 +526,20 @@ export default function Contracts() {
         </span>
       )
     },
-    { 
-      title: 'Variables', 
-      dataIndex: 'variables', 
+    {
+      title: 'Variables',
+      dataIndex: 'variables',
       key: 'variables',
       render: (variables: string[]) => (
         <span>{variables?.length || 0} variables</span>
       )
     },
-    { 
-      title: 'Status', 
-      dataIndex: 'is_active', 
+    {
+      title: 'Status',
+      dataIndex: 'is_active',
       key: 'is_active',
       render: (active: boolean) => (
-        <span style={{ 
+        <span style={{
           color: active ? '#52c41a' : '#8c8c8c',
           fontWeight: 'bold'
         }}>
@@ -576,16 +576,16 @@ export default function Contracts() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Contracts</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { 
-              setModalOpen(true); 
-              form.resetFields();
-              form.setFieldsValue({ content: defaultTemplate });
-            }}>
-              Add Template
-            </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+            setModalOpen(true);
+            form.resetFields();
+            form.setFieldsValue({ content: defaultTemplate });
+          }}>
+            Add Template
+          </Button>
         </div>
       </div>
-      
+
       {/* Search */}
       <Input.Search
         placeholder="Search contracts..."
@@ -594,7 +594,7 @@ export default function Contracts() {
         value={search}
         onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
       />
-      
+
       {loading ? <Spin size="large" /> : (
         <Table
           columns={templateColumns}
@@ -609,7 +609,7 @@ export default function Contracts() {
           }}
         />
       )}
-      
+
       {/* Add Template Modal */}
       <Modal
         title="Add Contract Template"
@@ -637,12 +637,8 @@ export default function Contracts() {
                 rules={[{ required: true, message: 'Please select template type' }]}
               >
                 <Select placeholder="Select template type">
-                  <Option value="normal_service">Normal service (standard booking)</Option>
-                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
-                  <Option value="advertising">Advertising Agreement</Option>
-                  <Option value="collaboration">Collaboration Agreement</Option>
-                  <Option value="sponsorship">Sponsorship Agreement</Option>
-                  <Option value="custom">Custom Template</Option>
+                  <Option value="content_creation">Normal service (standard booking)</Option>
+                  <Option value="collaboration">Dual service (primary + invited influencer)</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -670,23 +666,23 @@ export default function Contracts() {
           </Form.Item>
         </Form>
       </Modal>
-      
+
       {/* Edit Template Modal */}
       <Modal
         title="Edit Contract Template"
         open={editModalOpen}
-        onCancel={() => { 
-          setEditModalOpen(false); 
-          setEditingContract(null); 
-          editForm.resetFields(); 
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingContract(null);
+          editForm.resetFields();
         }}
         footer={null}
         width={800}
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form 
-          form={editForm} 
-          layout="vertical" 
+        <Form
+          form={editForm}
+          layout="vertical"
           onFinish={handleUpdateContract}
           initialValues={editingContract ? {
             title: editingContract.title,
@@ -704,12 +700,8 @@ export default function Contracts() {
             <Col span={12}>
               <Form.Item name="template_type" label="Template Type" rules={[{ required: true, message: 'Please select template type' }]}>
                 <Select placeholder="Select template type">
-                  <Option value="normal_service">Normal service (standard booking)</Option>
-                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
-                  <Option value="advertising">Advertising Agreement</Option>
-                  <Option value="collaboration">Collaboration Agreement</Option>
-                  <Option value="sponsorship">Sponsorship Agreement</Option>
-                  <Option value="custom">Custom Template</Option>
+                  <Option value="content_creation">Normal service (standard booking)</Option>
+                  <Option value="collaboration">Dual service (primary + invited influencer)</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -742,10 +734,10 @@ export default function Contracts() {
             <Divider>Template Variables</Divider>
             <div style={{ marginBottom: 16 }}>
               {viewingContract.variables?.map((variable, index) => (
-                <span key={index} style={{ 
-                  background: '#f0f0f0', 
-                  padding: '4px 8px', 
-                  margin: '2px', 
+                <span key={index} style={{
+                  background: '#f0f0f0',
+                  padding: '4px 8px',
+                  margin: '2px',
                   borderRadius: '4px',
                   display: 'inline-block'
                 }}>
@@ -753,10 +745,10 @@ export default function Contracts() {
                 </span>
               ))}
             </div>
-            
+
             <Divider>Preview with Sample Data</Divider>
-            <div 
-              style={{ 
+            <div
+              style={{
                 maxHeight: '500px',
                 overflow: 'auto',
                 border: '1px solid #d9d9d9',

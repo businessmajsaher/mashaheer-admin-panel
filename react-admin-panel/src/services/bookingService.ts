@@ -59,9 +59,10 @@ export const bookingService = {
       .from('bookings')
       .select(`
         *,
-        service:services(title, thumbnail, description, service_type, invited_influencer_id),
+        service:services(title, thumbnail, description, service_type),
         influencer:profiles!influencer_id(name, email),
         customer:profiles!customer_id(name, email),
+        invited_influencer:profiles!invited_influencer_id(name, email),
         status:booking_statuses(id, name, description),
         payments:payments(id, amount, currency, status, payment_method, transaction_reference, paid_at),
         refunds:refunds(id, amount, currency, status, reason, created_at)
@@ -98,18 +99,7 @@ export const bookingService = {
       };
     }
 
-    // Fetch invited partner if dual booking
-    if (data.service?.service_type === 'dual' && data.service?.invited_influencer_id) {
-      const { data: invitedPartner } = await supabase
-        .from('profiles')
-        .select('name, email')
-        .eq('id', data.service.invited_influencer_id)
-        .single();
-
-      if (invitedPartner) {
-        data.service.invited_influencer = invitedPartner;
-      }
-    }
+    // Note: invited_influencer is now fetched via the initial query using the invited_influencer_id from bookings.
 
     return data as Booking;
   },
@@ -127,12 +117,25 @@ export const bookingService = {
 
   // Create new booking
   async createBooking(bookingData: CreateBookingData) {
+    // Validate dual service
+    const { data: service } = await supabase
+      .from('services')
+      .select('service_type')
+      .eq('id', bookingData.service_id)
+      .single();
+
+    if (service?.service_type === 'dual' && !bookingData.invited_influencer_id) {
+      throw new Error("Invited influencer is required for dual service bookings.");
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .insert({
         service_id: bookingData.service_id,
+        service_type: service?.service_type || 'normal',
         influencer_id: bookingData.influencer_id,
         customer_id: bookingData.customer_id,
+        invited_influencer_id: bookingData.invited_influencer_id || null,
         status_id: bookingData.status_id,
         scheduled_time: bookingData.scheduled_time,
         notes: bookingData.notes
