@@ -22,6 +22,8 @@ import { EyeOutlined, ReloadOutlined, DollarOutlined, ExclamationCircleOutlined,
 import { bookingService } from '../../services/bookingService';
 import { serviceService } from '../../services/serviceService';
 import { refundService, RefundRequest } from '../../services/refundService';
+import { contractService } from '../../services/contractService';
+import html2pdf from 'html2pdf.js';
 import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
 import { formatPrice } from '../../utils/currencyUtils';
@@ -305,6 +307,67 @@ const Bookings: React.FC = () => {
     } catch (error) {
       console.error('Error fetching booking details:', error);
       message.error('Failed to fetch booking details');
+    }
+  };
+
+  const handleDownloadContract = async (instanceId: string, party?: 'customer' | 'influencer') => {
+    try {
+      const html = await contractService.downloadContractHtml(instanceId, party);
+      const shortId = instanceId.slice(0, 8);
+      
+      if (!party) {
+        // Final Agreement as PDF
+        // Create an off-screen container to prevent UI shifting
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.top = '0';
+        container.style.width = '800px'; // Set a fixed width for consistent rendering
+        
+        const element = document.createElement('div');
+        element.innerHTML = html;
+        element.style.padding = '40px';
+        element.style.backgroundColor = 'white';
+        element.style.fontFamily = 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+        
+        container.appendChild(element);
+        document.body.appendChild(container);
+        
+        const opt = {
+          margin: 10,
+          filename: `final-signed-contract-${shortId}.pdf`,
+          image: { type: 'jpeg' as const, quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+        };
+        
+        try {
+          await html2pdf().from(element).set(opt).save();
+          message.success('Final signed contract PDF downloaded');
+        } finally {
+          document.body.removeChild(container);
+        }
+      } else {
+        // Separate party copies still as HTML (per requirement or common practice)
+        // or if they also want PDF, we could do it. 
+        // User said: "clicking on the either of theire sinature its sign in image i should able to download"
+        // I'll implement handleDownloadSignatureOnly for that.
+        const filename = `contract-${shortId}-${party}.html`;
+        triggerBlobDownload(filename, 'text/html;charset=utf-8', html);
+        message.success(`${party === 'customer' ? 'Customer' : 'Influencer'} contract copy downloaded`);
+      }
+    } catch (error: any) {
+      console.error('Download error:', error);
+      message.error(error.message || 'Failed to download contract');
+    }
+  };
+
+  const handleDownloadSignatureOnly = async (instanceId: string, party: 'customer' | 'influencer') => {
+    try {
+      await contractService.downloadSignatureOnly(instanceId, party);
+      message.success(`${party === 'customer' ? 'Customer' : 'Influencer'} signature downloaded`);
+    } catch (error: any) {
+      message.error(error.message || 'Failed to download signature');
     }
   };
 
@@ -739,34 +802,33 @@ const Bookings: React.FC = () => {
                           size="small"
                           icon={<DownloadOutlined />}
                           disabled={!canDownloadPartyContract(selectedBooking.contract as Record<string, unknown>, 'customer')}
-                          onClick={() =>
-                            downloadPartyContract(
-                              selectedBooking.contract as Record<string, unknown>,
-                              'customer',
-                              selectedBooking.id
-                            )
-                          }
+                          onClick={() => handleDownloadSignatureOnly(selectedBooking.contract!.id, 'customer')}
                         >
-                          Customer signed copy
+                          Customer signature
                         </Button>
                         <Button
                           type="primary"
                           size="small"
                           icon={<DownloadOutlined />}
                           disabled={!canDownloadPartyContract(selectedBooking.contract as Record<string, unknown>, 'influencer')}
-                          onClick={() =>
-                            downloadPartyContract(
-                              selectedBooking.contract as Record<string, unknown>,
-                              'influencer',
-                              selectedBooking.id
-                            )
-                          }
+                          onClick={() => handleDownloadSignatureOnly(selectedBooking.contract!.id, 'influencer')}
                         >
-                          Influencer signed copy
+                          Influencer signature
                         </Button>
+                        {(selectedBooking.contract.status === 'active' || selectedBooking.contract.status === 'completed') && (
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                            onClick={() => handleDownloadContract(selectedBooking.contract!.id)}
+                          >
+                            Final Signed Agreement (PDF)
+                          </Button>
+                        )}
                       </Space>
                       <span style={{ fontSize: 12, color: '#888' }}>
-                        Separate HTML/PDF copies per party. When signature records exist, a button is enabled only if that party has signed; otherwise both use the same stored contract text.
+                        Download separate party copies or the consolidated final agreement once both parties have signed. Signatures are automatically injected as images into the document.
                       </span>
                     </Space>
                   </Descriptions.Item>

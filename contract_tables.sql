@@ -24,7 +24,8 @@ CREATE TABLE contract_instances (
   signed_at TIMESTAMP WITH TIME ZONE,
   expires_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT check_variables_not_empty CHECK (variables != '{}'::jsonb)
 );
 
 -- Contract Signatures Table (Optional - for digital signatures)

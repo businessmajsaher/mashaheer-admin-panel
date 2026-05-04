@@ -58,3 +58,12 @@ export interface ContractTemplate {
   created_at: string;
   updated_at: string;
 }
+
+export interface ContractSignature {
+  id: string;
+  contract_instance_id: string;
+  signer_id: string;
+  signer_type: 'customer' | 'influencer' | 'admin';
+  signature_data: string;
+  signed_at: string;
+}
