@@ -34,7 +34,7 @@ export default function Contracts() {
     try {
       // Extract variables from content
       const variables = contractService.extractVariables(values.content);
-      
+
       const newContract = {
         title: values.title,
         template_type: values.template_type,
@@ -42,7 +42,7 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       await contractService.createContractTemplate(newContract);
       message.success('Contract template created successfully');
       setModalOpen(false);
@@ -58,13 +58,13 @@ export default function Contracts() {
 
   const handleUpdateContract = async (values: any) => {
     if (!editingContract) return;
-    
+
     setEditFormLoading(true);
     setEditFormError(null);
     try {
       // Extract variables from content
       const variables = contractService.extractVariables(values.content);
-      
+
       const updates = {
         title: values.title,
         template_type: values.template_type,
@@ -72,7 +72,7 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       await contractService.updateContractTemplate(editingContract.id, updates);
       message.success('Contract template updated successfully');
       setEditModalOpen(false);
@@ -112,7 +112,273 @@ export default function Contracts() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Default contract template as HTML
+  // Default contract templates as HTML
+  const collaborationDefaultTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Advertising Agreement</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background-color: #fff;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #1890ff;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #1890ff;
+            margin: 0;
+            font-size: 28px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section h2 {
+            color: #1890ff;
+            border-left: 4px solid #1890ff;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .parties {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #52c41a;
+        }
+        .parties div {
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+        .campaign-details {
+            background-color: #fff7e6;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #faad14;
+        }
+        .detail-item {
+            margin-bottom: 8px;
+            display: flex;
+        }
+        .detail-label {
+            font-weight: 600;
+            min-width: 150px;
+            color: #333;
+        }
+        .detail-value {
+            color: #1890ff;
+            font-weight: 500;
+        }
+        .highlight {
+            background-color: #fffbe6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .signature-section {
+            background-color: #f9f0ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #722ed1;
+            margin-top: 30px;
+        }
+        .signature-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #d9d9d9;
+        }
+        .signature-name {
+            font-weight: 600;
+            color: #333;
+        }
+        .signature-date {
+            color: #666;
+            font-size: 14px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+            color: #666;
+            font-size: 14px;
+        }
+        @media print {
+            body { margin: 0; padding: 15px; }
+            .header { page-break-after: avoid; }
+            .section { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 DIGITAL ADVERTISING AGREEMENT</h1>
+        <p><strong>Between Influencer & Customer via Mashahher Platform</strong></p>
+    </div>
+
+    <div class="section">
+        <h2>1. PARTIES TO THE AGREEMENT</h2>
+        <div class="parties">
+            <p>This Agreement is entered into electronically on the Mashahher Application between:</p>
+            <div>• <strong>Customer (Advertiser):</strong> <span class="highlight">{{customer_name}}</span> (ID: {{customer_id}})</div>
+            <div>• <strong>Influencer:</strong> <span class="highlight">{{influencer_name}}</span> (ID: {{influencer_id}})</div>
+            <div>• <strong>Invited Influencer:</strong> <span class="highlight">{{invited_influencer_name}}</span> (ID: {{invited_influencer_id}})</div>
+            <div>• <strong>Platform:</strong> Mashahher, acting as a digital intermediary.</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>2. PURPOSE OF THE AGREEMENT</h2>
+        <p>The Customer seeks to engage the Influencer to promote a product, service, brand, or campaign through social media channels. The Influencer agrees to deliver advertising content as specified in the booking details made through the Mashahher application.</p>
+    </div>
+
+    <div class="section">
+        <h2>3. CAMPAIGN DETAILS</h2>
+        <div class="campaign-details">
+            <div class="detail-item">
+                <span class="detail-label">Campaign Title:</span>
+                <span class="detail-value">{{campaign_title}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Ad Type:</span>
+                <span class="detail-value">{{ad_type}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Platform(s):</span>
+                <span class="detail-value">{{platforms}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Posting Date(s):</span>
+                <span class="detail-value">{{posting_dates}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Duration:</span>
+                <span class="detail-value">{{duration}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Content Brief:</span>
+                <span class="detail-value">{{content_brief}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Approval Required:</span>
+                <span class="detail-value">{{approval_required}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>4. COMPENSATION & PAYMENT TERMS</h2>
+        <div class="campaign-details">
+            <div class="detail-item">
+                <span class="detail-label">Maximum Agreed Price:</span>
+                <span class="detail-value">{{agreed_price}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">Via Mashahher secure payment gateway</span>
+            </div>
+            <h3>Payment Schedule:</h3>
+            <ul>
+                <li>100% upfront payment is held in escrow by Mashahher</li>
+                <li>Released to the Influencer after successful campaign completion</li>
+                 <li>The Payable Amount may be reduced by applicable discounts or promotional coupons once both parties approve the service agreement.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>5. RESPONSIBILITIES</h2>
+        <h3>A. Influencer Agrees to:</h3>
+        <ul>
+            <li>Create original content as per the campaign brief</li>
+            <li>Publish content on agreed platforms and time</li>
+            <li>Tag and mention the Customer/brand as instructed</li>
+            <li>Comply with applicable advertising laws and disclose paid partnership</li>
+        </ul>
+        
+        <h3>B. Customer Agrees to:</h3>
+        <ul>
+            <li>Provide clear brief and campaign material (if any)</li>
+            <li>Not request edits beyond what is agreed in the booking</li>
+            <li>Accept reasonable creative freedom by the Influencer</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>6. CANCELLATION & REFUND POLICY</h2>
+        <h3>By Customer:</h3>
+        <ul>
+            <li>Full refund if cancelled before Influencer accepts</li>
+            <li>50% refund if cancelled after acceptance but before content delivery</li>
+            <li>No refund after content is delivered or posted</li>
+        </ul>
+        <h3>By Influencer:</h3>
+        <ul>
+            <li>If unable to fulfill, full refund is issued to Customer</li>
+            <li>Repeated cancellations may result in account penalties</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>7. CONTENT OWNERSHIP & USAGE</h2>
+        <h3>Usage Rights:</h3>
+        <ul>
+            <li>Customer may use posted content for reposting only (not paid ads), unless extended rights are purchased</li>
+            <li>Influencer retains ownership of the content unless agreed otherwise</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>8. NON-CIRCUMVENTION</h2>
+        <p>All communication, bookings, and payments must be conducted through the Mashahher application. Any attempt to bypass the platform may result in account suspension and legal liability.</p>
+    </div>
+
+    <div class="section">
+        <h2>9. LIABILITY & DISCLAIMER</h2>
+        <p>Mashahher acts only as an intermediary and holds no responsibility for content quality, delivery disputes, or outcomes of advertising. Disputes will be handled via Mashahher support and dispute resolution process.</p>
+    </div>
+
+    <div class="section">
+        <h2>10. AGREEMENT ACCEPTANCE</h2>
+        <p>By clicking "Accept & Proceed", both parties confirm that they have read, understood, and agreed to be legally bound by this Agreement. This digital agreement holds the same legal effect as a signed physical contract.</p>
+    </div>
+
+    <div class="signature-section">
+        <h2>DIGITAL SIGNATURES</h2>
+        <p><strong>Signed Digitally via Mashahher App on {{signature_date}}</strong></p>
+        <div class="signature-line">
+            <span class="signature-name">Customer: {{customer_name}}</span>
+            <span class="signature-date">{{signature_date}}</span>
+        </div>
+        <div class="signature-line">
+            <span class="signature-name">Influencer: {{influencer_name}}</span>
+            <span class="signature-date">{{signature_date}}</span>
+        </div>
+        <div class="signature-line">
+            <span class="signature-name">Mashahher Representative (System Generated)</span>
+            <span class="signature-date">{{signature_date}}</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>This document was generated electronically and is legally binding.</p>
+        <p>© 2024 Mashahher Platform. All rights reserved.</p>
+    </div>
+</body>
+</html>`;
+
   const defaultTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -277,10 +543,10 @@ export default function Contracts() {
         <h2>4. COMPENSATION & PAYMENT TERMS</h2>
         <div class="campaign-details">
             <div class="detail-item">
-                <span class="detail-label">Agreed Price:</span>
+                <span class="detail-label">Maximum Agreed Price:</span>
                 <span class="detail-value">{{agreed_price}}</span>
             </div>
-            <p><strong>EN:</strong> Service Fee: {{agreed_price}}. The payable amount may be reduced by applicable discounts or promotional coupons once both parties approve the service agreement.</p>
+            <p><strong>EN:</strong> Fee: {{agreed_price}}. The payable amount may be reduced by applicable discounts or promotional coupons once both parties approve the service agreement.</p>
             <p dir="rtl"><strong>AR:</strong> رسوم الخدمة: {{agreed_price}}. قد يُخفض المبلغ المستحق بخصومات أو كوبونات ترويجية بعد موافقة الطرفين على الاتفاقية.</p>
             <div class="detail-item">
                 <span class="detail-label">Payment Method:</span>
@@ -401,13 +667,13 @@ export default function Contracts() {
     const variableRegex = /\{\{([^}]+)\}\}/g;
     const variables: string[] = [];
     let match;
-    
+
     while ((match = variableRegex.exec(content)) !== null) {
       if (!variables.includes(match[1])) {
         variables.push(match[1]);
       }
     }
-    
+
     return variables;
   };
 
@@ -418,7 +684,7 @@ export default function Contracts() {
     setFormError(null);
     try {
       const variables = contractService.extractVariables(values.content);
-      
+
       const contractData = {
         title: values.title,
         template_type: values.template_type,
@@ -426,10 +692,10 @@ export default function Contracts() {
         variables: variables,
         is_active: values.is_active || true
       };
-      
+
       console.log('📝 Creating contract with service:', contractData);
       await contractService.createContractTemplate(contractData);
-      
+
       console.log('✅ Contract added successfully!');
       message.success('Contract template added!');
       setModalOpen(false);
@@ -449,7 +715,7 @@ export default function Contracts() {
     setEditFormError(null);
     try {
       const variables = extractVariables(values.content);
-      
+
       const updateData = {
         title: values.title,
         template_type: values.template_type,
@@ -464,12 +730,12 @@ export default function Contracts() {
         .from('contract_templates')
         .update(updateData)
         .eq('id', editingContract?.id);
-      
+
       if (error) {
         console.error('❌ Contract update error:', error);
         throw error;
       }
-      
+
       console.log('✅ Contract update successful!');
       message.success('Contract template updated!');
       setEditModalOpen(false);
@@ -513,12 +779,12 @@ export default function Contracts() {
 
   const templateColumns = [
     { title: 'Title', dataIndex: 'title', key: 'title' },
-    { 
-      title: 'Type', 
-      dataIndex: 'template_type', 
+    {
+      title: 'Type',
+      dataIndex: 'template_type',
       key: 'template_type',
       render: (type: string) => (
-        <span style={{ 
+        <span style={{
           color: type === 'advertising' ? '#1890ff' : type === 'collaboration' ? '#52c41a' : '#722ed1',
           fontWeight: 'bold'
         }}>
@@ -526,20 +792,20 @@ export default function Contracts() {
         </span>
       )
     },
-    { 
-      title: 'Variables', 
-      dataIndex: 'variables', 
+    {
+      title: 'Variables',
+      dataIndex: 'variables',
       key: 'variables',
       render: (variables: string[]) => (
         <span>{variables?.length || 0} variables</span>
       )
     },
-    { 
-      title: 'Status', 
-      dataIndex: 'is_active', 
+    {
+      title: 'Status',
+      dataIndex: 'is_active',
       key: 'is_active',
       render: (active: boolean) => (
-        <span style={{ 
+        <span style={{
           color: active ? '#52c41a' : '#8c8c8c',
           fontWeight: 'bold'
         }}>
@@ -576,16 +842,16 @@ export default function Contracts() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Contracts</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { 
-              setModalOpen(true); 
-              form.resetFields();
-              form.setFieldsValue({ content: defaultTemplate });
-            }}>
-              Add Template
-            </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+            setModalOpen(true);
+            form.resetFields();
+            form.setFieldsValue({ content: defaultTemplate });
+          }}>
+            Add Template
+          </Button>
         </div>
       </div>
-      
+
       {/* Search */}
       <Input.Search
         placeholder="Search contracts..."
@@ -594,7 +860,7 @@ export default function Contracts() {
         value={search}
         onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
       />
-      
+
       {loading ? <Spin size="large" /> : (
         <Table
           columns={templateColumns}
@@ -609,7 +875,7 @@ export default function Contracts() {
           }}
         />
       )}
-      
+
       {/* Add Template Modal */}
       <Modal
         title="Add Contract Template"
@@ -636,13 +902,20 @@ export default function Contracts() {
                 label="Template Type"
                 rules={[{ required: true, message: 'Please select template type' }]}
               >
-                <Select placeholder="Select template type">
-                  <Option value="normal_service">Normal service (standard booking)</Option>
-                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
-                  <Option value="advertising">Advertising Agreement</Option>
-                  <Option value="collaboration">Collaboration Agreement</Option>
-                  <Option value="sponsorship">Sponsorship Agreement</Option>
-                  <Option value="custom">Custom Template</Option>
+                <Select 
+                  placeholder="Select template type"
+                  onChange={(value) => {
+                    const currentContent = form.getFieldValue('content');
+                    // Only overwrite if it was a default template or empty
+                    if (!currentContent || currentContent === defaultTemplate || currentContent === collaborationDefaultTemplate) {
+                      form.setFieldsValue({ 
+                        content: value === 'collaboration' ? collaborationDefaultTemplate : defaultTemplate 
+                      });
+                    }
+                  }}
+                >
+                  <Option value="content_creation">Normal service (standard booking)</Option>
+                  <Option value="collaboration">Dual service (primary + invited influencer)</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -670,23 +943,23 @@ export default function Contracts() {
           </Form.Item>
         </Form>
       </Modal>
-      
+
       {/* Edit Template Modal */}
       <Modal
         title="Edit Contract Template"
         open={editModalOpen}
-        onCancel={() => { 
-          setEditModalOpen(false); 
-          setEditingContract(null); 
-          editForm.resetFields(); 
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingContract(null);
+          editForm.resetFields();
         }}
         footer={null}
         width={800}
       >
         {editFormError && <Alert message={editFormError} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form 
-          form={editForm} 
-          layout="vertical" 
+        <Form
+          form={editForm}
+          layout="vertical"
           onFinish={handleUpdateContract}
           initialValues={editingContract ? {
             title: editingContract.title,
@@ -704,12 +977,8 @@ export default function Contracts() {
             <Col span={12}>
               <Form.Item name="template_type" label="Template Type" rules={[{ required: true, message: 'Please select template type' }]}>
                 <Select placeholder="Select template type">
-                  <Option value="normal_service">Normal service (standard booking)</Option>
-                  <Option value="dual_service">Dual service (primary + invited influencer)</Option>
-                  <Option value="advertising">Advertising Agreement</Option>
-                  <Option value="collaboration">Collaboration Agreement</Option>
-                  <Option value="sponsorship">Sponsorship Agreement</Option>
-                  <Option value="custom">Custom Template</Option>
+                  <Option value="content_creation">Normal service (standard booking)</Option>
+                  <Option value="collaboration">Dual service (primary + invited influencer)</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -742,10 +1011,10 @@ export default function Contracts() {
             <Divider>Template Variables</Divider>
             <div style={{ marginBottom: 16 }}>
               {viewingContract.variables?.map((variable, index) => (
-                <span key={index} style={{ 
-                  background: '#f0f0f0', 
-                  padding: '4px 8px', 
-                  margin: '2px', 
+                <span key={index} style={{
+                  background: '#f0f0f0',
+                  padding: '4px 8px',
+                  margin: '2px',
                   borderRadius: '4px',
                   display: 'inline-block'
                 }}>
@@ -753,10 +1022,10 @@ export default function Contracts() {
                 </span>
               ))}
             </div>
-            
+
             <Divider>Preview with Sample Data</Divider>
-            <div 
-              style={{ 
+            <div
+              style={{
                 maxHeight: '500px',
                 overflow: 'auto',
                 border: '1px solid #d9d9d9',

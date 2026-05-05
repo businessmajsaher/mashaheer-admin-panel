@@ -1,8 +1,10 @@
 export interface Booking {
   id: string;
   service_id: string;
+  service_type?: string;
   influencer_id: string;
   customer_id: string;
+  invited_influencer_id?: string;
   status_id: string;
   scheduled_time: string;
   completed_time?: string;
@@ -35,8 +37,13 @@ export interface Booking {
     thumbnail?: string;
     description?: string;
     min_duration_days?: number;
+    service_type?: string;
   };
   influencer?: {
+    name: string;
+    email: string;
+  };
+  invited_influencer?: {
     name: string;
     email: string;
   };
@@ -56,6 +63,7 @@ export interface CreateBookingData {
   service_id: string;
   influencer_id: string;
   customer_id: string;
+  invited_influencer_id?: string;
   status_id: string;
   scheduled_time: string;
   notes?: string;

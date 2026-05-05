@@ -1,6 +1,7 @@
+html {
+  scrollbar-gutter: stable;
+}
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Custom global styles can go here */
