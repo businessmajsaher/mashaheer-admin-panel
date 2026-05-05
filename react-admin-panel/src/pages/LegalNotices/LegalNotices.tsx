@@ -51,8 +51,8 @@ export default function LegalNotices() {
       setEditingId(null);
       setEditContent('');
       message.success('Legal notice updated successfully!');
-    } catch (error) {
-      message.error('Failed to save changes');
+    } catch (error: any) {
+      message.error(`Failed to save changes: ${error.message || 'Unknown error'}`);
       console.error('Error updating legal notice:', error);
     } finally {
       setSaving(false);

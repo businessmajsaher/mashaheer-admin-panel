@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Typography, Space, Alert, Spin, message, Form, Input, Select, Row, Col, Divider } from 'antd';
+import { Card, Button, Typography, Space, Alert, Spin, message, Form, Input, Select, Row, Col, Divider, Modal, Table, Tag } from 'antd';
 import { EditOutlined, SaveOutlined, UndoOutlined, PhoneOutlined, MailOutlined, MessageOutlined, ClockCircleOutlined, UserOutlined } from '@ant-design/icons';
-import { contactSupportService, supportTicketsService, ContactSupportInfo } from '@/services/legalSupportService';
+import { contactSupportService, ContactSupportInfo, supportCategoriesService, SupportCategory } from '@/services/legalSupportService';
+import { ticketService, SupportTicket } from '@/services/ticketService';
 import { useAuth } from '@/context/AuthContext';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
 
-interface ContactForm {
+interface TicketFormValues {
+  user_id: string;
   name: string;
   email: string;
   subject: string;
   category: string;
   message: string;
-  priority: string;
+  priority: SupportTicket['priority'];
 }
 
 export default function ContactSupport() {
@@ -26,22 +28,55 @@ export default function ContactSupport() {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
-  // Load contact support info from mock service
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
+  const [categories, setCategories] = useState<SupportCategory[]>([]);
+  const [users, setUsers] = useState<{id: string, name: string, email: string}[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    status: undefined,
+    category: undefined,
+    priority: undefined
+  });
+
+  // Load contact support info, tickets and users
   useEffect(() => {
-    const fetchContactInfo = async () => {
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        const data = await contactSupportService.getAllContactInfo();
-        setContactInfo(data);
+        const infoData = await contactSupportService.getAllContactInfo();
+        setContactInfo(infoData);
+        
+        const ticketsData = await ticketService.getTickets();
+        setTickets(ticketsData);
+
+        const categoriesData = await supportCategoriesService.getActiveCategories();
+        setCategories(categoriesData);
+
+        setUsersLoading(true);
+        const usersData = await ticketService.getAllUsers();
+        setUsers(usersData);
       } catch (error) {
-        message.error('Failed to load contact support information');
-        console.error('Error fetching contact info:', error);
+        message.error('Failed to load support information');
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
+        setTicketsLoading(false);
+        setUsersLoading(false);
       }
     };
 
-    fetchContactInfo();
+    fetchData();
   }, []);
+
+  const fetchTickets = async () => {
+    try {
+      const ticketsData = await ticketService.getTickets();
+      setTickets(ticketsData);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+    }
+  };
 
   const handleEdit = (info: ContactSupportInfo) => {
     setEditingId(info.id);
@@ -78,30 +113,71 @@ export default function ContactSupport() {
     setEditContent('');
   };
 
-  const handleFormSubmit = async (values: ContactForm) => {
-    if (!user) {
-      message.error('You must be logged in to send a message');
+  const handleUserSelect = (userId: string) => {
+    const foundUser = users.find(u => u.id === userId);
+    if (foundUser) {
+      form.setFieldsValue({ 
+        name: foundUser.name,
+        user_id: foundUser.id,
+        email: foundUser.email
+      });
+      message.success(`User selected: ${foundUser.name}`);
+    }
+  };
+
+  const handleTicketSubmit = async (values: TicketFormValues) => {
+    if (!values.user_id) {
+      message.error('Invalid user identification. Please select a valid user.');
       return;
     }
 
     try {
-      // Create support ticket using real user ID
-      await supportTicketsService.createTicket({
-        user_id: user.id,
+      await ticketService.createTicket({
+        user_id: values.user_id,
         subject: values.subject,
         message: values.message,
         category: values.category,
-        priority: values.priority as any,
-        status: 'open'
+        priority: values.priority
       });
 
-      message.success('Your message has been sent! We\'ll respond within 24 hours.');
+      message.success('Ticket created successfully!');
       form.resetFields();
+      fetchTickets();
     } catch (error) {
-      message.error('Failed to send message. Please try again.');
+      message.error('Failed to create ticket. Please try again.');
       console.error('Error creating support ticket:', error);
     }
   };
+
+  const handleStatusChange = async (ticketId: string, newStatus: SupportTicket['status']) => {
+    const update = async () => {
+      try {
+        await ticketService.updateTicketStatus(ticketId, newStatus);
+        message.success('Ticket status updated');
+        fetchTickets();
+      } catch (error) {
+        message.error('Failed to update status');
+      }
+    };
+
+    if (newStatus === 'Closed') {
+      Modal.confirm({
+        title: 'Are you sure you want to close this ticket?',
+        content: 'Once a ticket is closed, it cannot be reopened.',
+        okText: 'Confirm Close',
+        okType: 'danger',
+        onOk: update
+      });
+    } else {
+      update();
+    }
+  };
+
+  const filteredTickets = tickets.filter(t => {
+    return (!filters.status || t.status === filters.status) &&
+           (!filters.category || t.category === filters.category) &&
+           (!filters.priority || t.priority === filters.priority);
+  });
 
   if (loading) {
     return (
@@ -129,6 +205,107 @@ export default function ContactSupport() {
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={16}>
           <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            {/* Tickets Table / List */}
+            <Card 
+              title="Support Tickets" 
+              extra={
+                <Space>
+                  <Select 
+                    placeholder="Status" 
+                    allowClear 
+                    style={{ width: 120 }}
+                    value={filters.status}
+                    onChange={v => setFilters({...filters, status: v})}
+                  >
+                    <Option value="Open">Open</Option>
+                    <Option value="In Progress">In Progress</Option>
+                    <Option value="Pending from Customer">Pending Customer</Option>
+                    <Option value="Resolved">Resolved</Option>
+                    <Option value="Closed">Closed</Option>
+                  </Select>
+                  <Select 
+                    placeholder="Category" 
+                    allowClear 
+                    style={{ width: 150 }}
+                    value={filters.category}
+                    onChange={v => setFilters({...filters, category: v})}
+                  >
+                    {categories.map(cat => (
+                      <Option key={cat.id} value={cat.name}>{cat.name}</Option>
+                    ))}
+                  </Select>
+                  <Button onClick={() => setFilters({status: undefined, category: undefined, priority: undefined})}>Reset</Button>
+                </Space>
+              }
+            >
+              <Table 
+                dataSource={filteredTickets}
+                loading={ticketsLoading}
+                rowKey="id"
+                pagination={{ pageSize: 5 }}
+                columns={[
+                  {
+                    title: 'User',
+                    key: 'user',
+                    render: (_, record) => (
+                      <div>
+                        <div>{record.user?.name}</div>
+                        <small style={{ color: '#888' }}>{record.user?.email}</small>
+                      </div>
+                    )
+                  },
+                  {
+                    title: 'Subject',
+                    dataIndex: 'subject',
+                    key: 'subject',
+                  },
+                  {
+                    title: 'Category',
+                    dataIndex: 'category',
+                    key: 'category',
+                  },
+                  {
+                    title: 'Priority',
+                    dataIndex: 'priority',
+                    key: 'priority',
+                    render: (priority) => (
+                      <Tag color={priority === 'Critical' ? 'red' : priority === 'High' ? 'orange' : 'blue'}>
+                        {priority}
+                      </Tag>
+                    )
+                  },
+                  {
+                    title: 'Status',
+                    dataIndex: 'status',
+                    key: 'status',
+                    render: (status, record) => (
+                      <Select 
+                        value={status} 
+                        size="small" 
+                        disabled={status === 'Closed'}
+                        onChange={(v) => handleStatusChange(record.id, v)}
+                        style={{ width: 140 }}
+                      >
+                        <Option value="Open">Open</Option>
+                        <Option value="In Progress">In Progress</Option>
+                        <Option value="Pending from Customer">Pending Customer</Option>
+                        <Option value="Resolved">Resolved</Option>
+                        <Option value="Closed">Closed</Option>
+                      </Select>
+                    )
+                  },
+                  {
+                    title: 'Action',
+                    key: 'action',
+                    render: (_, record) => (
+                      <Button size="small" icon={<MailOutlined />} onClick={() => message.info(`Contacting: ${record.user?.email}`)} />
+                    )
+                  }
+                ]}
+              />
+            </Card>
+
+            {/* Existing Support Info Cards */}
             {contactInfo.map((info) => (
               <Card
                 key={info.id}
@@ -211,29 +388,39 @@ export default function ContactSupport() {
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="Contact Form Preview" style={{ position: 'sticky', top: 24 }}>
+          <Card title="Create Support Ticket" style={{ position: 'sticky', top: 24 }}>
             <Form
               form={form}
               layout="vertical"
-              onFinish={handleFormSubmit}
+              onFinish={handleTicketSubmit}
             >
               <Form.Item
-                name="name"
-                label="Full Name"
-                rules={[{ required: true, message: 'Please enter your name' }]}
+                name="user_id"
+                label="User Email"
+                rules={[{ required: true, message: 'Please select a user' }]}
               >
-                <Input prefix={<UserOutlined />} placeholder="Your full name" />
+                <Select
+                  showSearch
+                  placeholder="Search user by email"
+                  loading={usersLoading}
+                  onChange={handleUserSelect}
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={users.map(u => ({
+                    value: u.id,
+                    label: u.email,
+                  }))}
+                  prefix={<MailOutlined />}
+                />
               </Form.Item>
 
               <Form.Item
-                name="email"
-                label="Email Address"
-                rules={[
-                  { required: true, message: 'Please enter your email' },
-                  { type: 'email', message: 'Please enter a valid email' }
-                ]}
+                name="name"
+                label="Full Name (Auto-filled)"
               >
-                <Input prefix={<MailOutlined />} placeholder="your.email@example.com" />
+                <Input prefix={<UserOutlined />} readOnly placeholder="Select user above" />
               </Form.Item>
 
               <Form.Item
@@ -241,7 +428,7 @@ export default function ContactSupport() {
                 label="Subject"
                 rules={[{ required: true, message: 'Please enter a subject' }]}
               >
-                <Input placeholder="Brief summary of your inquiry" />
+                <Input placeholder="Brief summary of inquiry" />
               </Form.Item>
 
               <Form.Item
@@ -250,12 +437,9 @@ export default function ContactSupport() {
                 rules={[{ required: true, message: 'Please select a category' }]}
               >
                 <Select placeholder="Select category">
-                  <Option value="technical">Technical Issues</Option>
-                  <Option value="account">Account Management</Option>
-                  <Option value="payment">Payment & Billing</Option>
-                  <Option value="campaign">Campaign Support</Option>
-                  <Option value="feature">Feature Requests</Option>
-                  <Option value="general">General Inquiry</Option>
+                  {categories.map(cat => (
+                    <Option key={cat.id} value={cat.name}>{cat.name}</Option>
+                  ))}
                 </Select>
               </Form.Item>
 
@@ -265,27 +449,27 @@ export default function ContactSupport() {
                 rules={[{ required: true, message: 'Please select priority' }]}
               >
                 <Select placeholder="Select priority level">
-                  <Option value="low">Low - General Questions</Option>
-                  <Option value="medium">Medium - Account Issues</Option>
-                  <Option value="high">High - Urgent Issues</Option>
-                  <Option value="critical">Critical - Platform Problems</Option>
+                  <Option value="Low">Low – General Questions</Option>
+                  <Option value="Medium">Medium – Account Issues</Option>
+                  <Option value="High">High – Urgent Issues</Option>
+                  <Option value="Critical">Critical – Platform Problems</Option>
                 </Select>
               </Form.Item>
 
               <Form.Item
                 name="message"
                 label="Message"
-                rules={[{ required: true, message: 'Please enter your message' }]}
+                rules={[{ required: true, message: 'Please enter details' }]}
               >
                 <TextArea
                   rows={4}
-                  placeholder="Please describe your problem or question in detail..."
+                  placeholder="Describe the issue in detail..."
                 />
               </Form.Item>
 
               <Form.Item>
                 <Button type="primary" htmlType="submit" block icon={<MessageOutlined />} style={{ backgroundColor: '#000', borderColor: '#000' }}>
-                  Send Message
+                  Create Ticket
                 </Button>
               </Form.Item>
             </Form>
@@ -294,7 +478,7 @@ export default function ContactSupport() {
 
             <div style={{ textAlign: 'center' }}>
               <Text type="secondary">
-                <ClockCircleOutlined /> Response within 24 hours
+                <ClockCircleOutlined /> Direct ticket creation for identified users
               </Text>
             </div>
           </Card>

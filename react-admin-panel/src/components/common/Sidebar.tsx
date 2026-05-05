@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Menu, Typography } from 'antd';
+import { Layout, Menu, Typography, MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
@@ -32,7 +32,7 @@ export const Sidebar: React.FC = () => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
 
-  const menuItems = [
+  const menuItems: MenuProps['items'] = [
     {
       key: '/dashboard',
       icon: <DashboardOutlined />,
@@ -115,11 +115,6 @@ export const Sidebar: React.FC = () => {
       key: '/privacy-policy',
       icon: <BookOutlined />,
       label: 'Privacy Policy',
-    },
-    {
-      key: '/terms-of-service',
-      icon: <FileTextOutlined />,
-      label: 'Terms of Service',
     },
     {
       key: '/contact-support',

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Typography, Space, Alert, Spin, message, Collapse, Input, Row, Col, Tag, Divider } from 'antd';
-import { EditOutlined, SaveOutlined, UndoOutlined, SearchOutlined, QuestionCircleOutlined, BookOutlined, VideoCameraOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, Button, Typography, Space, Alert, Spin, message, Collapse, Input, Row, Col, Tag, Divider, Select, Modal, Form, Popconfirm } from 'antd';
+import { EditOutlined, SaveOutlined, UndoOutlined, SearchOutlined, QuestionCircleOutlined, BookOutlined, VideoCameraOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { helpSupportService, faqService, HelpSection, FAQItem } from '@/services/legalSupportService';
 
 const { Title, Paragraph, Text } = Typography;
 const { Panel } = Collapse;
 const { Search } = Input;
+const { Option } = Select;
 
 export default function HelpSupport() {
   const [helpSections, setHelpSections] = useState<HelpSection[]>([]);
@@ -16,6 +17,9 @@ export default function HelpSupport() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [faqModalOpen, setFaqModalOpen] = useState(false);
+  const [editingFaq, setEditingFaq] = useState<FAQItem | null>(null);
+  const [faqForm] = Form.useForm();
 
   const categories = [
     { key: 'all', label: 'All Topics', color: 'blue' },
@@ -71,8 +75,8 @@ export default function HelpSupport() {
       setEditingId(null);
       setEditContent('');
       message.success('Help section updated successfully!');
-    } catch (error) {
-      message.error('Failed to save changes');
+    } catch (error: any) {
+      message.error(`Failed to save changes: ${error.message || 'Unknown error'}`);
       console.error('Error updating help section:', error);
     } finally {
       setSaving(false);
@@ -113,19 +117,75 @@ export default function HelpSupport() {
     try {
       await faqService.incrementFAQHelpful(faqId);
       message.success('Thank you for your feedback!');
-    } catch (error) {
-      message.error('Failed to record feedback');
+      // Refresh
+      const faqs = await faqService.getActiveFAQs();
+      setFaqItems(faqs);
+    } catch (error: any) {
+      message.error(`Failed to record feedback: ${error.message || 'Unknown error'}`);
       console.error('Error incrementing FAQ helpful:', error);
     }
   };
 
-  const filteredFAQItems = faqItems.filter(item => 
-    activeCategory === 'all' || item.category === activeCategory
-  );
+  const handleFAQEdit = (faq: FAQItem) => {
+    setEditingFaq(faq);
+    faqForm.setFieldsValue(faq);
+    setFaqModalOpen(true);
+  };
 
-  const filteredHelpSections = helpSections.filter(section => 
-    activeCategory === 'all' || section.category === activeCategory
-  );
+  const handleFAQDelete = async (faqId: string) => {
+    try {
+      await faqService.deleteFAQ(faqId);
+      message.success('FAQ deleted');
+      const faqs = await faqService.getActiveFAQs();
+      setFaqItems(faqs);
+    } catch (error: any) {
+      message.error(`Failed to delete FAQ: ${error.message || 'Unknown error'}`);
+      console.error('Error deleting FAQ:', error);
+    }
+  };
+
+  const handleFAQSubmit = async (values: any) => {
+    setSaving(true);
+    try {
+      if (editingFaq) {
+        await faqService.updateFAQ(editingFaq.id, values);
+        message.success('FAQ updated');
+      } else {
+        await faqService.createFAQ({
+          ...values,
+          is_active: true,
+          order_index: faqItems.length + 1
+        });
+        message.success('FAQ created');
+      }
+      setFaqModalOpen(false);
+      faqForm.resetFields();
+      setEditingFaq(null);
+      const faqs = await faqService.getActiveFAQs();
+      setFaqItems(faqs);
+    } catch (error: any) {
+      message.error(`Failed to save FAQ: ${error.message || 'Unknown error'}`);
+      console.error('Error saving FAQ:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filteredFAQItems = faqItems.filter(item => {
+    const matchesCategory = activeCategory === 'all' || item.category === activeCategory;
+    const matchesSearch = !searchTerm || 
+      item.question.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      item.answer.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  const filteredHelpSections = helpSections.filter(section => {
+    const matchesCategory = activeCategory === 'all' || section.category === activeCategory;
+    const matchesSearch = !searchTerm || 
+      section.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      section.content.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   if (loading) {
     return (
@@ -158,7 +218,7 @@ export default function HelpSupport() {
               placeholder="Search help articles and FAQs..."
               allowClear
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
               onSearch={handleSearch}
               enterButton
               style={{ width: '100%' }}
@@ -166,7 +226,7 @@ export default function HelpSupport() {
           </Col>
           <Col xs={24} md={12}>
             <Space wrap>
-              {categories.map(category => (
+              {categories.map((category: { key: string, label: string, color: string }) => (
                 <Tag
                   key={category.key}
                   color={activeCategory === category.key ? category.color : 'default'}
@@ -186,7 +246,7 @@ export default function HelpSupport() {
           {/* Help Sections */}
           <Card title="Help Articles" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              {filteredHelpSections.map((section) => (
+              {filteredHelpSections.map((section: HelpSection) => (
                 <Card
                   key={section.id}
                   size="small"
@@ -268,16 +328,24 @@ export default function HelpSupport() {
           </Card>
 
           {/* FAQ Section */}
-          <Card title="Frequently Asked Questions">
+          <Card title="Frequently Asked Questions" extra={
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+              setEditingFaq(null);
+              faqForm.resetFields();
+              setFaqModalOpen(true);
+            }}>
+              Add FAQ
+            </Button>
+          }>
             <Collapse accordion>
-              {filteredFAQItems.map((item) => (
+              {filteredFAQItems.map((item: FAQItem) => (
                 <Panel
                   header={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>{item.question}</span>
                       <Space size="small">
-                        {item.tags.map(tag => (
-                          <Tag key={tag} size="small">{tag}</Tag>
+                        {item.tags.map((tag: string) => (
+                          <Tag key={tag}>{tag}</Tag>
                         ))}
                       </Space>
                     </div>
@@ -293,14 +361,32 @@ export default function HelpSupport() {
                       }}
                     />
                     <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Button 
-                        size="small" 
-                        onClick={() => handleFAQHelpful(item.id)}
-                        icon="👍"
-                        style={{ color: '#000', borderColor: '#000' }}
-                      >
-                        Helpful ({item.helpful_count})
-                      </Button>
+                      <Space>
+                        <Button 
+                          size="small" 
+                          onClick={() => handleFAQHelpful(item.id)}
+                          icon="👍"
+                          style={{ color: '#000', borderColor: '#000' }}
+                        >
+                          Helpful ({item.helpful_count})
+                        </Button>
+                        <Button 
+                          size="small" 
+                          onClick={() => handleFAQEdit(item)}
+                          icon={<EditOutlined />}
+                        >
+                          Edit
+                        </Button>
+                        <Popconfirm title="Delete this FAQ?" onConfirm={() => handleFAQDelete(item.id)}>
+                          <Button 
+                            size="small" 
+                            danger 
+                            icon={<DeleteOutlined />}
+                          >
+                            Delete
+                          </Button>
+                        </Popconfirm>
+                      </Space>
                       <span style={{ fontSize: '12px', color: '#666' }}>
                         👁️ {item.view_count} views
                       </span>
@@ -354,6 +440,32 @@ export default function HelpSupport() {
           </Card>
         </Col>
       </Row>
+      <Modal
+        title={editingFaq ? "Edit FAQ" : "Add New FAQ"}
+        open={faqModalOpen}
+        onCancel={() => setFaqModalOpen(false)}
+        onOk={() => faqForm.submit()}
+        confirmLoading={saving}
+      >
+        <Form form={faqForm} layout="vertical" onFinish={handleFAQSubmit}>
+          <Form.Item name="question" label="Question" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="answer" label="Answer (HTML)" rules={[{ required: true }]}>
+            <Input.TextArea rows={6} />
+          </Form.Item>
+          <Form.Item name="category" label="Category" rules={[{ required: true }]}>
+            <Select>
+              {categories.filter(c => c.key !== 'all').map(c => (
+                <Option key={c.key} value={c.key}>{c.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="tags" label="Tags" initialValue={[]}>
+            <Select mode="tags" placeholder="Add tags..." />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

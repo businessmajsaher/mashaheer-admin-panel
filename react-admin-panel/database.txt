@@ -90,12 +90,15 @@ CREATE TABLE public.bookings (
   published_at timestamp with time zone,
   days_gap integer,
   cart_item_id uuid,
+  invited_influencer_id uuid,
+  service_type USER-DEFINED NOT NULL,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.profiles(id),
   CONSTRAINT bookings_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.profiles(id),
   CONSTRAINT bookings_status_id_fkey FOREIGN KEY (status_id) REFERENCES public.booking_statuses(id),
   CONSTRAINT bookings_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id),
-  CONSTRAINT bookings_cart_item_id_fkey FOREIGN KEY (cart_item_id) REFERENCES public.cart_items(id)
+  CONSTRAINT bookings_cart_item_id_fkey FOREIGN KEY (cart_item_id) REFERENCES public.cart_items(id),
+  CONSTRAINT bookings_invited_influencer_id_fkey FOREIGN KEY (invited_influencer_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.cart_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -165,6 +168,7 @@ CREATE TABLE public.contact_support_info (
   last_updated timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now(),
   updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT contact_support_info_pkey PRIMARY KEY (id),
   CONSTRAINT contact_support_info_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
@@ -197,7 +201,7 @@ CREATE TABLE public.contract_instances (
   customer_id uuid,
   influencer_id uuid,
   status character varying DEFAULT 'draft'::character varying CHECK (status::text = ANY (ARRAY['draft'::character varying, 'pending'::character varying, 'active'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'expired'::character varying]::text[])),
-  variables jsonb DEFAULT '{}'::jsonb,
+  variables jsonb DEFAULT '{}'::jsonb CHECK (variables IS NOT NULL AND variables <> '{}'::jsonb),
   generated_content text,
   signed_at timestamp with time zone,
   expires_at timestamp with time zone,
@@ -303,6 +307,7 @@ CREATE TABLE public.faq_items (
   last_updated timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now(),
   updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT faq_items_pkey PRIMARY KEY (id),
   CONSTRAINT faq_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
@@ -362,6 +367,7 @@ CREATE TABLE public.help_sections (
   last_updated timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now(),
   updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT help_sections_pkey PRIMARY KEY (id),
   CONSTRAINT help_sections_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
@@ -396,6 +402,7 @@ CREATE TABLE public.legal_notices (
   last_updated timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now(),
   updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT legal_notices_pkey PRIMARY KEY (id),
   CONSTRAINT legal_notices_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
@@ -690,7 +697,6 @@ CREATE TABLE public.services (
   min_duration_days integer NOT NULL,
   location_required boolean DEFAULT false,
   is_flash_deal boolean DEFAULT false,
-  offer_active boolean DEFAULT false,
   flash_from timestamp with time zone,
   flash_to timestamp with time zone,
   category_id uuid,
@@ -708,6 +714,7 @@ CREATE TABLE public.services (
   invited_influencer_earnings_percentage numeric DEFAULT 50 CHECK (invited_influencer_earnings_percentage >= 0::numeric AND invited_influencer_earnings_percentage <= 100::numeric),
   payment_gateway_charge_card_percentage numeric DEFAULT 0 CHECK (payment_gateway_charge_card_percentage >= 0::numeric AND payment_gateway_charge_card_percentage <= 100::numeric),
   payment_gateway_charge_knet_percentage numeric DEFAULT 0 CHECK (payment_gateway_charge_knet_percentage >= 0::numeric AND payment_gateway_charge_knet_percentage <= 100::numeric),
+  offer_active boolean NOT NULL DEFAULT false,
   CONSTRAINT services_pkey PRIMARY KEY (id),
   CONSTRAINT services_primary_influencer_id_fkey FOREIGN KEY (primary_influencer_id) REFERENCES public.profiles(id),
   CONSTRAINT services_invited_influencer_id_fkey FOREIGN KEY (invited_influencer_id) REFERENCES public.profiles(id),
@@ -796,8 +803,8 @@ CREATE TABLE public.support_tickets (
   subject character varying NOT NULL,
   message text NOT NULL,
   category character varying NOT NULL,
-  priority character varying NOT NULL DEFAULT 'medium'::character varying,
-  status character varying NOT NULL DEFAULT 'open'::character varying,
+  priority character varying NOT NULL DEFAULT 'medium'::character varying CHECK (priority::text = ANY (ARRAY['Low'::character varying, 'Medium'::character varying, 'High'::character varying, 'Critical'::character varying]::text[])),
+  status character varying NOT NULL DEFAULT 'Open'::character varying CHECK (status::text = ANY (ARRAY['Open'::character varying, 'In Progress'::character varying, 'Pending from Customer'::character varying, 'Resolved'::character varying, 'Closed'::character varying]::text[])),
   assigned_to uuid,
   response_count integer DEFAULT 0,
   last_response_at timestamp with time zone,
