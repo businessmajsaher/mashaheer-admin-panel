@@ -317,6 +317,41 @@ export default function Users() {
 
       if (error) throw error;
 
+      const trimmedNewEmail = (values.email ?? '').trim();
+      const trimmedOldEmail = (editingCustomer.email ?? '').trim();
+      if (trimmedNewEmail !== trimmedOldEmail) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (token) {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const syncRes = await fetch(
+            `${supabaseUrl}/functions/v1/admin-update-customer-auth-email`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                user_id: editingCustomer.id,
+                email: trimmedNewEmail
+              })
+            }
+          );
+          if (!syncRes.ok) {
+            const errBody = (await syncRes.json().catch(() => ({}))) as {
+              error?: string;
+              details?: string;
+            };
+            message.warning(
+              `Profile saved, but the login email in authentication could not be updated: ${
+                errBody.details || errBody.error || syncRes.status
+              }. Password reset emails will show the correct address to use for sign-in.`
+            );
+          }
+        }
+      }
+
       message.success('Customer updated successfully!');
       setEditModalOpen(false);
       setEditingCustomer(null);

@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -36,7 +37,7 @@ async function sendNotification(
       const error = await response.json();
       console.error(`Failed to send notification to ${userId}:`, error);
     } else {
-      console.log(`✅ Notification sent to ${userId}`);
+      console.log(`âœ… Notification sent to ${userId}`);
     }
   } catch (error: any) {
     console.error(`Error sending notification to ${userId}:`, error.message);
@@ -390,8 +391,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Auto-refund: Script not sent within deadline (8 hrs × (days_gap - 1))
-    if (statusMap['Script not sent by influencer–auto refund request']) {
+    // 3. Auto-refund: Script not sent within deadline (8 hrs Ã— (days_gap - 1))
+    if (statusMap['Script not sent by influencerâ€“auto refund request']) {
       const { data: bookingsToRefund, error } = await supabase
         .from('bookings')
         .select('*')
@@ -432,7 +433,7 @@ serve(async (req: Request) => {
             const { error: updateError } = await supabase
               .from('bookings')
               .update({ 
-                status_id: statusMap['Script not sent by influencer–auto refund request'],
+                status_id: statusMap['Script not sent by influencerâ€“auto refund request'],
                 updated_at: now
               })
               .eq('id', booking.id);

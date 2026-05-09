@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resend } from 'https://esm.sh/resend@2.0.0';
@@ -83,7 +84,7 @@ serve(async (req: Request) => {
       html: receiptHtml
     });
 
-    console.log(`✅ Payment receipt sent to ${profile.email}`);
+    console.log(`âœ… Payment receipt sent to ${profile.email}`);
 
     return new Response(
       JSON.stringify({
@@ -156,7 +157,7 @@ function generateReceiptEmail(
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
       <div style="background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">✓ Payment Receipt</h1>
+        <h1 style="color: white; margin: 0; font-size: 24px;">âœ“ Payment Receipt</h1>
       </div>
       
       <div style="background: #ffffff; padding: 30px; border: 1px solid #f0f0f0; border-top: none; border-radius: 0 0 8px 8px;">
@@ -187,7 +188,7 @@ function generateReceiptEmail(
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #595959; font-size: 14px;"><strong>Status:</strong></td>
-              <td style="padding: 8px 0; color: #52c41a; font-size: 14px; font-weight: 600; text-align: right;">✓ Completed</td>
+              <td style="padding: 8px 0; color: #52c41a; font-size: 14px; font-weight: 600; text-align: right;">âœ“ Completed</td>
             </tr>
           </table>
         </div>

@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resend } from 'https://esm.sh/resend@2.0.0';
@@ -139,7 +140,7 @@ serve(async (req: Request) => {
         });
 
         results.emailSent = true;
-        console.log(`✅ Email sent to ${profile.email}`);
+        console.log(`âœ… Email sent to ${profile.email}`);
       } catch (error: any) {
         results.errors.push(`Email error: ${error.message}`);
         console.error('Email error:', error);
@@ -201,13 +202,13 @@ serve(async (req: Request) => {
 
           if (fcmResponse.ok) {
             results.fcmSent = true;
-            console.log(`✅ FCM notification sent to user ${user_id}`);
+            console.log(`âœ… FCM notification sent to user ${user_id}`);
           } else {
             const fcmError = await fcmResponse.text();
             throw new Error(`FCM V1 API error: ${fcmError}`);
           }
         } else {
-          console.log(`⚠️ FIREBASE_SERVICE_ACCOUNT_JSON not set. Skipping FCM.`);
+          console.log(`âš ï¸ FIREBASE_SERVICE_ACCOUNT_JSON not set. Skipping FCM.`);
           results.errors.push('FCM configuration missing');
         }
       } catch (error: any) {
@@ -230,7 +231,7 @@ serve(async (req: Request) => {
 
       if (!notifError) {
         results.notificationCreated = true;
-        console.log(`✅ Notification created for user ${user_id}`);
+        console.log(`âœ… Notification created for user ${user_id}`);
       } else {
         results.errors.push(`Notification DB error: ${notifError.message}`);
       }
@@ -289,7 +290,7 @@ function getFCMTitle(type: string, statusName: string): string {
     'auto_approve': 'Script Approved',
     'script_rejected': 'Script Rejected',
     'payment_required': 'Payment Required',
-    'payment_success': 'Payment Confirmed ✓',
+    'payment_success': 'Payment Confirmed âœ“',
     'script_approved': 'Script Approved'
   };
   return titles[type] || 'Booking Update';

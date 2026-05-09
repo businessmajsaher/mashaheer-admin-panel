@@ -143,7 +143,7 @@ export const validateCoupon = async (
     // IMPORTANT: Do NOT round during calculation, only round the final result
     // Example: 21.000 × (1 - 0.21356) = 16.51524 (no rounding yet)
     let payableAmount = orderTotal * (1 - coupon.discount_value / 100);
-    
+
     // Apply maximum discount limit if set
     if (coupon.maximum_discount_amount) {
       const discountAmount = orderTotal - payableAmount;
@@ -154,12 +154,12 @@ export const validateCoupon = async (
 
     // Ensure payable amount doesn't go below 0
     payableAmount = Math.max(0, payableAmount);
-    
+
     // Round ONLY the final payable amount based on currency decimal places
     // KWD: 3 decimals (16.51524 → 16.515)
     // USD: 2 decimals (16.51524 → 16.52)
     const finalPayableAmount = roundByCurrency(payableAmount, currencyCode);
-    
+
     // Calculate final discount amount from rounded payable
     const roundedDiscountAmount = orderTotal - finalPayableAmount;
 
@@ -341,7 +341,7 @@ export const getCouponAnalytics = async (couponId: string): Promise<any> => {
     if (error) throw error;
 
     const totalUsage = data?.length || 0;
-    const totalDiscount = data?.reduce((sum, usage) => sum + usage.discount_amount, 0) || 0;
+    const totalDiscount = data?.reduce((sum: number, usage: any) => sum + usage.discount_amount, 0) || 0;
     const averageDiscount = totalUsage > 0 ? totalDiscount / totalUsage : 0;
 
     return {
