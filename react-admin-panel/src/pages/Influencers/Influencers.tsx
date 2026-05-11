@@ -6,6 +6,8 @@ import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
 import { notificationService } from '@/services/notificationService';
 import { Slider } from 'antd';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 interface InfluencerProfile {
   id: string;
@@ -1217,28 +1219,31 @@ export default function Influencers() {
       key: 'actions',
       render: (_: unknown, record: InfluencerProfile) => (
         <Space>
-          <Button
+          <ProtectedButton
+            permission="influencers.edit"
             type="primary"
             size="small"
             onClick={() => handleEditInfluencer(record)}
           >
             Edit
-          </Button>
-          <Popconfirm
-            title="Delete Influencer"
-            description="Are you sure you want to delete this influencer? This action cannot be undone."
-            onConfirm={() => handleDeleteInfluencer(record)}
-            okText="Yes"
-            cancelText="No"
-            okType="danger"
-          >
-            <Button
-              danger
-              size="small"
+          </ProtectedButton>
+          <PermissionGuard permission="influencers.delete">
+            <Popconfirm
+              title="Delete Influencer"
+              description="Are you sure you want to delete this influencer? This action cannot be undone."
+              onConfirm={() => handleDeleteInfluencer(record)}
+              okText="Yes"
+              cancelText="No"
+              okType="danger"
             >
-              Delete
-            </Button>
-          </Popconfirm>
+              <Button
+                danger
+                size="small"
+              >
+                Delete
+              </Button>
+            </Popconfirm>
+          </PermissionGuard>
         </Space>
       ),
     },
@@ -2598,19 +2603,23 @@ export default function Influencers() {
           >
             View Commissions
           </Button>
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => {
-            // Reset all state for new influencer creation
-            setEditingInfluencer(null);
-            setInfluencerCreated(false);
-            setMediaFiles([]);
-            setProfileImagePreview(null);
-            setCurrentStep(0);
-            setFormError(null);
-            form.resetFields();
-            setDrawerOpen(true);
-          }}>
+          <ProtectedButton
+            permission="influencers.create"
+            type="primary"
+            icon={<UserAddOutlined />}
+            onClick={() => {
+              setEditingInfluencer(null);
+              setInfluencerCreated(false);
+              setMediaFiles([]);
+              setProfileImagePreview(null);
+              setCurrentStep(0);
+              setFormError(null);
+              form.resetFields();
+              setDrawerOpen(true);
+            }}
+          >
             Add Influencer
-          </Button>
+          </ProtectedButton>
         </Space>
       </div>
 
@@ -2862,16 +2871,20 @@ export default function Influencers() {
                   <div key={m.id} style={{ position: 'relative', display: 'inline-block' }}>
                     <Image src={m.file_url} width={80} height={80} style={{ objectFit: 'cover' }} />
                     <div style={{ position: 'absolute', top: 2, right: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Upload
-                        showUploadList={false}
-                        accept="image/*"
-                        beforeUpload={(file) => { handleReplaceImage(m, file); return false; }}
-                      >
-                        <Button size="small" type="link">Edit</Button>
-                      </Upload>
-                      <Popconfirm title="Delete this image?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
-                        <Button size="small" danger type="link">Delete</Button>
-                      </Popconfirm>
+                      <PermissionGuard permission="influencers.edit">
+                        <Upload
+                          showUploadList={false}
+                          accept="image/*"
+                          beforeUpload={(file) => { handleReplaceImage(m, file); return false; }}
+                        >
+                          <Button size="small" type="link">Edit</Button>
+                        </Upload>
+                      </PermissionGuard>
+                      <PermissionGuard permission="influencers.delete">
+                        <Popconfirm title="Delete this image?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
+                          <Button size="small" danger type="link">Delete</Button>
+                        </Popconfirm>
+                      </PermissionGuard>
                     </div>
                   </div>
                 ) : m.file_type === 'video' || m.mime_type?.startsWith('video') ? (
@@ -2896,9 +2909,11 @@ export default function Influencers() {
                       <VideoCameraOutlined style={{ fontSize: 32, color: '#fff' }} />
                     </div>
                     <div style={{ position: 'absolute', top: 2, right: 2 }}>
-                      <Popconfirm title="Delete this video?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
-                        <Button size="small" danger type="link">Delete</Button>
-                      </Popconfirm>
+                      <PermissionGuard permission="influencers.delete">
+                        <Popconfirm title="Delete this video?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
+                          <Button size="small" danger type="link">Delete</Button>
+                        </Popconfirm>
+                      </PermissionGuard>
                     </div>
                   </div>
                 ) : null

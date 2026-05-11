@@ -4,6 +4,7 @@ import { EditOutlined, SaveOutlined, UndoOutlined, PhoneOutlined, MailOutlined, 
 import { contactSupportService, ContactSupportInfo, supportCategoriesService, SupportCategory } from '@/services/legalSupportService';
 import { ticketService, SupportTicket } from '@/services/ticketService';
 import { useAuth } from '@/context/AuthContext';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -317,7 +318,8 @@ export default function ContactSupport() {
                         Last updated: {new Date(info.last_updated).toLocaleDateString()}
                       </small>
                       {editingId !== info.id && (
-                        <Button
+                        <ProtectedButton
+                          permission="contact_support.edit"
                           type="primary"
                           icon={<EditOutlined />}
                           size="small"
@@ -325,7 +327,7 @@ export default function ContactSupport() {
                           style={{ backgroundColor: '#000', borderColor: '#000' }}
                         >
                           Edit
-                        </Button>
+                        </ProtectedButton>
                       )}
                     </Space>
                   </div>

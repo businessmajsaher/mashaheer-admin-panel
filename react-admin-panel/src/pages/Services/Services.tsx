@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col, Drawer, Descriptions, Tag } from 'antd';
 import { AppstoreAddOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, UploadOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { ProtectedButton } from '@/components/ProtectedButton';
 import { supabase } from '@/services/supabaseClient';
 import { settingsService } from '@/services/settingsService';
 import dayjs from 'dayjs';
@@ -788,10 +789,18 @@ export default function Services() {
           <Button icon={<EyeOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => handleViewDetails(record)}>
             View Details
           </Button>
-          <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
-            setEditingService(record);
-            setEditModalOpen(true);
-          }}>Edit</Button>
+          <ProtectedButton
+            permission="services.edit"
+            icon={<EditOutlined />}
+            size="small"
+            style={{ marginRight: 8 }}
+            onClick={() => {
+              setEditingService(record);
+              setEditModalOpen(true);
+            }}
+          >
+            Edit
+          </ProtectedButton>
           <Popconfirm
             title={record.is_suspended ? 'Activate this service?' : 'Suspend this service?'}
             description={
@@ -803,14 +812,15 @@ export default function Services() {
             okText="Yes"
             cancelText="No"
           >
-            <Button
+            <ProtectedButton
+              permission="services.edit"
               icon={record.is_suspended ? <CheckCircleOutlined /> : <StopOutlined />}
               size="small"
               type={record.is_suspended ? 'primary' : 'default'}
               danger={!record.is_suspended}
             >
               {record.is_suspended ? 'Activate' : 'Suspend'}
-            </Button>
+            </ProtectedButton>
           </Popconfirm>
         </span>
       ),
@@ -876,15 +886,20 @@ export default function Services() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Services</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => {
-            setModalOpen(true);
-            form.resetFields();
-            form.setFieldsValue({ currency: 'KWD' });
-            setSelectedCurrency('KWD');
-            setIsFlashDeal(false);
-          }}>
+          <ProtectedButton
+            permission="services.create"
+            type="primary"
+            icon={<AppstoreAddOutlined />}
+            onClick={() => {
+              setModalOpen(true);
+              form.resetFields();
+              form.setFieldsValue({ currency: 'KWD' });
+              setSelectedCurrency('KWD');
+              setIsFlashDeal(false);
+            }}
+          >
             Add Service
-          </Button>
+          </ProtectedButton>
         </div>
       </div>
 

@@ -1,68 +1,52 @@
 import React, { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/context/PermissionContext';
 import { Spin, Alert, Button } from 'antd';
 
-export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+interface Props {
+  children: React.ReactNode;
+  /** A specific permission required for this route. */
+  requirePermission?: string;
+  /** Any of these permissions grants access. */
+  anyOf?: string[];
+}
+
+export const ProtectedRoute: React.FC<Props> = ({ children, requirePermission, anyOf }) => {
   const { user, loading, signOut } = useAuth();
+  const { has, hasAny, loading: permsLoading, isSuperAdmin } = usePermissions();
   const navigate = useNavigate();
-  
-  console.log('🔒 ProtectedRoute: loading=', loading, 'user=', user);
-  
-  // Add a timeout to prevent infinite loading
+
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        console.warn('⚠️ ProtectedRoute: Loading timeout - forcing redirect to login');
-      }
-    }, 15000); // 15 seconds timeout
-    
-    return () => clearTimeout(timeoutId);
+    const t = setTimeout(() => {
+      if (loading) console.warn('ProtectedRoute: still loading after 15s');
+    }, 15000);
+    return () => clearTimeout(t);
   }, [loading]);
-  
-  if (loading) {
+
+  if (loading || permsLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        gap: '16px'
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        alignItems: 'center', height: '100vh', gap: '16px' }}>
         <Spin size="large" />
         <div>Loading authentication...</div>
-        <div style={{ fontSize: '12px', color: '#666' }}>
-          Debug: loading={loading.toString()}, user={user ? 'present' : 'null'}
-        </div>
-        <Alert
-          message="If this takes too long, please refresh the page"
-          type="info"
-          showIcon
-          style={{ maxWidth: '400px' }}
-        />
-        <button 
-          onClick={() => window.location.reload()} 
-          style={{ padding: '8px 16px', cursor: 'pointer' }}
-        >
-          Force Refresh
-        </button>
       </div>
     );
   }
-  
+
   if (!user) {
-    console.log('🔒 ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
-  if (user.super_admin !== true) {
+  // Admin panel = super admin OR active staff user.
+  const hasAdminAccess = user.super_admin === true || user.is_staff === true;
+  if (!hasAdminAccess) {
     return (
       <div style={{ maxWidth: 520, margin: '64px auto', padding: 24 }}>
         <Alert
           type="warning"
-          message="Super administrator required"
-          description="Only accounts with super administrator access can use this dashboard. Ask your owner to set super_admin to true on your user in Supabase Auth (User Metadata)."
+          message="Admin access required"
+          description="This dashboard is restricted to super administrators and active staff users. Ask your owner to create a staff account for you in Mashaheer Admin."
           showIcon
           style={{ marginBottom: 16 }}
         />
@@ -79,6 +63,31 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  console.log('🔒 ProtectedRoute: User authenticated, showing content');
+  // Per-route permission gate. Super admins always pass via usePermissions().
+  if (!isSuperAdmin) {
+    if (requirePermission && !has(requirePermission)) {
+      return <AccessDenied missing={requirePermission} />;
+    }
+    if (anyOf?.length && !hasAny(...anyOf)) {
+      return <AccessDenied missing={anyOf.join(' or ')} />;
+    }
+  }
+
   return <>{children}</>;
 };
+
+const AccessDenied: React.FC<{ missing: string }> = ({ missing }) => (
+  <div style={{ maxWidth: 520, margin: '64px auto', padding: 24 }}>
+    <Alert
+      type="error"
+      message="Access denied"
+      description={
+        <span>
+          You do not have permission to view this page. Required permission:{' '}
+          <code>{missing}</code>. Contact your administrator to request access.
+        </span>
+      }
+      showIcon
+    />
+  </div>
+);

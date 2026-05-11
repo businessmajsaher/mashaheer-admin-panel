@@ -3,8 +3,6 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/services/supabaseClient';
-import { isSuperAdmin } from '@/utils/superAdmin';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,35 +12,48 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const infoMessage = (location.state as { message?: string } | null)?.message;
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: { email: string; password: string }) => {
     setLoading(true);
     setError(null);
+
+    // Hard safety: if anything wedges, never leave the user stuck on
+    // the spinner. 15s is comfortably longer than a normal sign-in.
+    const safety = setTimeout(() => {
+      console.warn('Login: safety timeout reached, releasing spinner.');
+      setLoading(false);
+      setError(
+        'Sign in is taking longer than expected. Please check your network and try again.'
+      );
+    }, 15000);
+
     try {
       console.log('Attempting signIn with:', values.email);
-      await signIn(values.email, values.password);
-      const { data: userData } = await supabase.auth.getUser();
-      const u = userData.user;
-      console.log('Login: super_admin diagnostics', {
-        email: u?.email,
-        user_metadata: u?.user_metadata,
-        app_metadata: u?.app_metadata,
+      const { user } = await signIn(values.email, values.password);
+
+      console.log('Login: access diagnostics', {
+        email: user?.email,
+        super_admin: user?.super_admin,
+        is_staff: user?.is_staff,
+        role: user?.role,
       });
-      if (!isSuperAdmin(u)) {
-        await supabase.auth.signOut();
+
+      const allowed = !!user && (user.super_admin === true || user.is_staff === true);
+      if (!allowed) {
         await signOut();
         setError(
-          'Only super administrators can access this dashboard. ' +
-            'Set user_metadata.super_admin = true (boolean) for this user in Supabase.'
+          'This account is not authorized for the admin panel. Ask your super administrator to create a staff account for you.'
         );
         return;
       }
+
       console.log('SignIn successful, navigating to /dashboard');
       navigate('/dashboard');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('SignIn error:', err);
-      let msg = err?.message || 'Login failed';
+      const msg = err instanceof Error ? err.message : 'Login failed';
       setError(msg);
     } finally {
+      clearTimeout(safety);
       setLoading(false);
     }
   };
@@ -93,4 +104,4 @@ export default function Login() {
       </Card>
     </div>
   );
-} 
+}

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Typography, Space, Alert, Spin, message, Collapse, Input, Row, Col, Tag, Divider, Select, Modal, Form, Popconfirm } from 'antd';
 import { EditOutlined, SaveOutlined, UndoOutlined, SearchOutlined, QuestionCircleOutlined, BookOutlined, VideoCameraOutlined, FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { helpSupportService, faqService, HelpSection, FAQItem } from '@/services/legalSupportService';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 const { Title, Paragraph, Text } = Typography;
 const { Panel } = Collapse;
@@ -258,7 +260,8 @@ export default function HelpSupport() {
                           {new Date(section.last_updated).toLocaleDateString()}
                         </small>
                         {editingId !== section.id && (
-                          <Button
+                          <ProtectedButton
+                            permission="help_support.edit"
                             type="primary"
                             icon={<EditOutlined />}
                             size="small"
@@ -266,7 +269,7 @@ export default function HelpSupport() {
                             style={{ backgroundColor: '#000', borderColor: '#000' }}
                           >
                             Edit
-                          </Button>
+                          </ProtectedButton>
                         )}
                       </Space>
                     </div>
@@ -329,13 +332,13 @@ export default function HelpSupport() {
 
           {/* FAQ Section */}
           <Card title="Frequently Asked Questions" extra={
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+            <ProtectedButton permission="help_support.create" type="primary" icon={<PlusOutlined />} onClick={() => {
               setEditingFaq(null);
               faqForm.resetFields();
               setFaqModalOpen(true);
             }}>
               Add FAQ
-            </Button>
+            </ProtectedButton>
           }>
             <Collapse accordion>
               {filteredFAQItems.map((item: FAQItem) => (
@@ -370,22 +373,25 @@ export default function HelpSupport() {
                         >
                           Helpful ({item.helpful_count})
                         </Button>
-                        <Button 
-                          size="small" 
+                        <ProtectedButton
+                          permission="help_support.edit"
+                          size="small"
                           onClick={() => handleFAQEdit(item)}
                           icon={<EditOutlined />}
                         >
                           Edit
-                        </Button>
-                        <Popconfirm title="Delete this FAQ?" onConfirm={() => handleFAQDelete(item.id)}>
-                          <Button 
-                            size="small" 
-                            danger 
-                            icon={<DeleteOutlined />}
-                          >
-                            Delete
-                          </Button>
-                        </Popconfirm>
+                        </ProtectedButton>
+                        <PermissionGuard permission="help_support.delete">
+                          <Popconfirm title="Delete this FAQ?" onConfirm={() => handleFAQDelete(item.id)}>
+                            <Button
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                            >
+                              Delete
+                            </Button>
+                          </Popconfirm>
+                        </PermissionGuard>
                       </Space>
                       <span style={{ fontSize: '12px', color: '#666' }}>
                         👁️ {item.view_count} views

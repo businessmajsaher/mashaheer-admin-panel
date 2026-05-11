@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Layout, Menu, Typography, MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -17,128 +17,91 @@ import {
   PhoneOutlined,
   BookOutlined,
   GiftOutlined,
-  BarChartOutlined,
   WalletOutlined,
   RollbackOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '@/context/ThemeContext';
+import { usePermissions } from '@/context/PermissionContext';
 
 const { Sider } = Layout;
 const { Title } = Typography;
+
+interface MenuEntry {
+  key: string;
+  label: string;
+  icon?: React.ReactNode;
+  /** Module key matching seeded permissions (e.g. "users"). */
+  module?: string;
+  /** Hide entry unless user has at least this permission. */
+  requirePermission?: string;
+  children?: MenuEntry[];
+}
+
+const entries: Array<MenuEntry | { divider: true }> = [
+  { key: '/dashboard', label: 'Dashboard', icon: <DashboardOutlined />, module: 'dashboard' },
+  { key: '/users',     label: 'Users',     icon: <UserOutlined />,      module: 'users' },
+  { key: '/influencers', label: 'Influencers', icon: <TeamOutlined />,  module: 'influencers' },
+  { key: '/categories',  label: 'Categories',  icon: <AppstoreOutlined />, module: 'categories' },
+  { key: '/services',    label: 'Services',    icon: <ShoppingOutlined />, module: 'services' },
+  { key: '/contracts',   label: 'Contracts',   icon: <FileTextOutlined />, module: 'contracts' },
+  { key: '/reviews',     label: 'Reviews',     icon: <StarOutlined />,    module: 'reviews' },
+  { key: '/bookings',    label: 'Bookings',    icon: <CalendarOutlined />, module: 'bookings' },
+  { key: '/cash-out',    label: 'Cash Out',    icon: <WalletOutlined />,   module: 'cash_out' },
+  { key: '/refunds',     label: 'Refunds',     icon: <RollbackOutlined />, module: 'refunds' },
+  { key: '/platforms',   label: 'Platforms',   icon: <GlobalOutlined />,   module: 'platforms' },
+  {
+    key: 'discounts', label: 'Discounts', icon: <GiftOutlined />, module: 'discounts',
+    children: [
+      { key: '/discounts',           label: 'Manage Coupons', module: 'discounts' },
+      { key: '/discounts/analytics', label: 'Analytics',      module: 'discounts' },
+    ],
+  },
+  { divider: true },
+  { key: '/legal-notices',   label: 'Legal Notices',   icon: <SafetyOutlined />,         module: 'legal_notices' },
+  { key: '/privacy-policy',  label: 'Privacy Policy',  icon: <BookOutlined />,           module: 'privacy_policy' },
+  { key: '/contact-support', label: 'Contact Support', icon: <PhoneOutlined />,          module: 'contact_support' },
+  { key: '/help-support',    label: 'Help & Support',  icon: <QuestionCircleOutlined />, module: 'help_support' },
+  { divider: true },
+  { key: '/staff',    label: 'Staff Management', icon: <IdcardOutlined />,  module: 'staff' },
+  { key: '/settings', label: 'Settings',         icon: <SettingOutlined />, module: 'settings' },
+];
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
+  const { canAccessModule, isSuperAdmin } = usePermissions();
 
-  const menuItems: MenuProps['items'] = [
-    {
-      key: '/dashboard',
-      icon: <DashboardOutlined />,
-      label: 'Dashboard',
-    },
-    {
-      key: '/users',
-      icon: <UserOutlined />,
-      label: 'Users',
-    },
-    {
-      key: '/influencers',
-      icon: <TeamOutlined />,
-      label: 'Influencers',
-    },
-    {
-      key: '/categories',
-      icon: <AppstoreOutlined />,
-      label: 'Categories',
-    },
-    {
-      key: '/services',
-      icon: <ShoppingOutlined />,
-      label: 'Services',
-    },
-    {
-      key: '/contracts',
-      icon: <FileTextOutlined />,
-      label: 'Contracts',
-    },
-    {
-      key: '/reviews',
-      icon: <StarOutlined />,
-      label: 'Reviews',
-    },
-    {
-      key: '/bookings',
-      icon: <CalendarOutlined />,
-      label: 'Bookings',
-    },
-    {
-      key: '/cash-out',
-      icon: <WalletOutlined />,
-      label: 'Cash Out',
-    },
-    {
-      key: '/refunds',
-      icon: <RollbackOutlined />,
-      label: 'Refunds',
-    },
-    {
-      key: '/platforms',
-      icon: <GlobalOutlined />,
-      label: 'Platforms',
-    },
-    {
-      key: 'discounts',
-      icon: <GiftOutlined />,
-      label: 'Discounts',
-      children: [
-        {
-          key: '/discounts',
-          label: 'Manage Coupons',
-        },
-        {
-          key: '/discounts/analytics',
-          label: 'Analytics',
-        },
-      ],
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: '/legal-notices',
-      icon: <SafetyOutlined />,
-      label: 'Legal Notices',
-    },
-    {
-      key: '/privacy-policy',
-      icon: <BookOutlined />,
-      label: 'Privacy Policy',
-    },
-    {
-      key: '/contact-support',
-      icon: <PhoneOutlined />,
-      label: 'Contact Support',
-    },
-    {
-      key: '/help-support',
-      icon: <QuestionCircleOutlined />,
-      label: 'Help & Support',
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: 'Settings',
-    },
-  ];
+  const menuItems = useMemo<MenuProps['items']>(() => {
+    const items: NonNullable<MenuProps['items']> = [];
+    for (const e of entries) {
+      if ('divider' in e) {
+        items.push({ type: 'divider' });
+        continue;
+      }
+      // Hide modules the user cannot access at all. Super admins see everything.
+      if (e.module && !isSuperAdmin && !canAccessModule(e.module)) continue;
+      if (e.children?.length) {
+        const visibleChildren = e.children.filter(
+          (c) => !c.module || isSuperAdmin || canAccessModule(c.module),
+        );
+        if (visibleChildren.length === 0) continue;
+        items.push({
+          key: e.key,
+          label: e.label,
+          icon: e.icon,
+          children: visibleChildren.map((c) => ({ key: c.key, label: c.label })),
+        });
+      } else {
+        items.push({ key: e.key, label: e.label, icon: e.icon });
+      }
+    }
+    return items;
+  }, [canAccessModule, isSuperAdmin]);
 
-  const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key);
-  };
+  const handleMenuClick = ({ key }: { key: string }) => navigate(key);
 
   return (
     <Sider
@@ -150,14 +113,7 @@ export const Sidebar: React.FC = () => {
       theme={isDarkMode ? 'dark' : 'light'}
     >
       <div style={{ padding: '16px', textAlign: 'center' }}>
-        <Title
-          level={4}
-          style={{
-            margin: 0,
-            color: isDarkMode ? '#fff' : '#1890ff',
-            fontWeight: 'bold',
-          }}
-        >
+        <Title level={4} style={{ margin: 0, color: isDarkMode ? '#fff' : '#1890ff', fontWeight: 'bold' }}>
           Mashaheer Admin
         </Title>
       </div>
@@ -168,10 +124,7 @@ export const Sidebar: React.FC = () => {
         defaultOpenKeys={location.pathname.startsWith('/discounts') ? ['discounts'] : []}
         items={menuItems}
         onClick={handleMenuClick}
-        style={{
-          background: 'transparent',
-          border: 'none',
-        }}
+        style={{ background: 'transparent', border: 'none' }}
         theme={isDarkMode ? 'dark' : 'light'}
       />
     </Sider>

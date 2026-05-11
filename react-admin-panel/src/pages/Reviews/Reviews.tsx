@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Tag, Space, message, Popconfirm, Avatar } from 'antd';
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 interface Review {
   id: string;
@@ -241,7 +242,7 @@ export default function Reviews() {
       render: (record: Review) => (
         <Space>
           {(!record.is_approved && !record.is_rejected) && (
-            <>
+            <PermissionGuard permission="reviews.edit">
               <Popconfirm
                 title="Approve this review?"
                 description="This review will be visible to the public."
@@ -270,11 +271,12 @@ export default function Reviews() {
                   danger 
                   icon={<CloseOutlined />} 
                   size="small"
+                  style={{ marginLeft: 8 }}
                 >
                   Reject
                 </Button>
               </Popconfirm>
-            </>
+            </PermissionGuard>
           )}
           {record.is_approved && (
             <Tag color="green">Approved</Tag>

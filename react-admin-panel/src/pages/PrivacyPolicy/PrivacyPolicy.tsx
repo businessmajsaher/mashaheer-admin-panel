@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Typography, Space, Alert, Spin, message } from 'antd';
 import { EditOutlined, SaveOutlined, UndoOutlined, EyeOutlined } from '@ant-design/icons';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 const { Title, Paragraph } = Typography;
 
@@ -407,14 +408,15 @@ export default function PrivacyPolicy() {
                     Last updated: {new Date(section.lastUpdated).toLocaleDateString()}
                   </small>
                   {editingId !== section.id && (
-                    <Button
+                    <ProtectedButton
+                      permission="privacy_policy.edit"
                       type="primary"
                       icon={<EditOutlined />}
                       size="small"
                       onClick={() => handleEdit(section)}
                     >
                       Edit
-                    </Button>
+                    </ProtectedButton>
                   )}
                 </Space>
               </div>

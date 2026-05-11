@@ -4,6 +4,8 @@ import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } fro
 import { supabase } from '@/services/supabaseClient';
 import { uploadPlatformIcon } from '@/services/storageService';
 import { mapDeleteErrorToFriendlyMessage } from '@/utils/errorMessages';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 export default function Platforms() {
   const [platforms, setPlatforms] = useState<any[]>([]);
@@ -137,14 +139,16 @@ export default function Platforms() {
       key: 'actions',
       render: (_: any, record: any) => (
         <span>
-          <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
+          <ProtectedButton permission="platforms.edit" icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
             setEditingPlatform(record);
             setEditModalOpen(true);
             setEditIconFile(null);
-          }}>Edit</Button>
-          <Popconfirm title="Delete this platform?" onConfirm={() => handleDeletePlatform(record.id)} okText="Yes" cancelText="No">
-            <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
-          </Popconfirm>
+          }}>Edit</ProtectedButton>
+          <PermissionGuard permission="platforms.delete">
+            <Popconfirm title="Delete this platform?" onConfirm={() => handleDeletePlatform(record.id)} okText="Yes" cancelText="No">
+              <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
+            </Popconfirm>
+          </PermissionGuard>
         </span>
       ),
     },
@@ -197,9 +201,9 @@ export default function Platforms() {
     <Card style={{ margin: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Platforms</Typography.Title>
-        <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
+        <ProtectedButton permission="platforms.create" type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
           Add Platform
-        </Button>
+        </ProtectedButton>
       </div>
       <Input.Search
         placeholder="Search platforms"

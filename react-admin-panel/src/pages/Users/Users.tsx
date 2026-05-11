@@ -3,6 +3,7 @@ import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Fo
 import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { PasswordResetModal } from '@/components/PasswordResetModal';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 interface Customer {
   id: string;
@@ -430,9 +431,10 @@ export default function Users() {
           >
             View
           </Button>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<EditOutlined />}
             size="small"
             onClick={() => {
               setEditingCustomer(record);
@@ -440,15 +442,16 @@ export default function Users() {
             }}
           >
             Edit
-          </Button>
-          <Button 
-            type="link" 
-            icon={<KeyOutlined />} 
+          </ProtectedButton>
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<KeyOutlined />}
             size="small"
             onClick={() => handlePasswordReset(record.email, record.name)}
           >
             Reset Password
-          </Button>
+          </ProtectedButton>
           <Popconfirm
             title={record.is_suspended ? "Unsuspend this customer?" : "Suspend this customer?"}
             description={record.is_suspended 
@@ -458,14 +461,15 @@ export default function Users() {
             okText="Yes"
             cancelText="No"
           >
-          <Button 
-            type="link" 
-            icon={<DeleteOutlined />} 
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<DeleteOutlined />}
             size="small"
-              danger={!record.is_suspended}
+            danger={!record.is_suspended}
           >
               {record.is_suspended ? 'Unsuspend' : 'Suspend'}
-          </Button>
+          </ProtectedButton>
           </Popconfirm>
         </Space>
       ),
@@ -477,8 +481,9 @@ export default function Users() {
       <Card style={{ margin: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Typography.Title level={4} style={{ margin: 0 }}>Customers</Typography.Title>
-          <Button 
-            type="primary" 
+          <ProtectedButton
+            permission="users.create"
+            type="primary"
             icon={<UserAddOutlined />}
             onClick={() => {
               setAddModalOpen(true);
@@ -487,7 +492,7 @@ export default function Users() {
             }}
           >
             Add Customer
-          </Button>
+          </ProtectedButton>
         </div>
         
         <Input.Search

@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import { cashOutService, InfluencerEarning, CashOutSummary, PaymentEarning } from '../../services/cashOutService';
 import { settingsService } from '../../services/settingsService';
+import { ProtectedButton } from '@/components/ProtectedButton';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -485,14 +486,15 @@ export default function CashOut() {
           >
             Details
           </Button>
-          <Button
+          <ProtectedButton
+            permission="cash_out.view"
             type="link"
             icon={<DownloadOutlined />}
             onClick={() => handleExportInfluencer(record)}
             size="small"
           >
             Export
-          </Button>
+          </ProtectedButton>
         </Space>
       ),
     },
@@ -721,13 +723,14 @@ export default function CashOut() {
                   >
                     Refresh
                   </Button>
-                  <Button
+                  <ProtectedButton
+                    permission="cash_out.view"
                     icon={<DownloadOutlined />}
                     onClick={handleExportAll}
                     disabled={earnings.length === 0}
                   >
                     Export All
-                  </Button>
+                  </ProtectedButton>
                 </Space>
               </Col>
             </Row>
@@ -889,13 +892,14 @@ export default function CashOut() {
           <Card>
             <Row justify="end" style={{ marginBottom: 16 }}>
               <Col>
-                <Button
+                <ProtectedButton
+                  permission="cash_out.view"
                   icon={<DownloadOutlined />}
                   onClick={handleExportHistory}
                   disabled={!settlementHistory.length}
                 >
                   Export History
-                </Button>
+                </ProtectedButton>
               </Col>
             </Row>
             <Table
@@ -931,7 +935,8 @@ export default function CashOut() {
                 </Title>
               </Col>
               <Col>
-                <Button
+                <ProtectedButton
+                  permission="cash_out.approve"
                   type="primary"
                   icon={<CheckCircleOutlined />}
                   onClick={handleSettleSelectedPayments}
@@ -939,7 +944,7 @@ export default function CashOut() {
                   loading={settlingBulk}
                 >
                   Mark Selected as Settled
-                </Button>
+                </ProtectedButton>
               </Col>
             </Row>
             <Table
