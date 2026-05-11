@@ -16,11 +16,21 @@ export default function Signup() {
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { data: { role: 'admin' } }
+        options: {
+          data: {
+            role: 'admin',
+            super_admin: false,
+          },
+        },
       });
       if (error) throw error;
-      // Optionally, you can auto-login or ask user to verify email
-      navigate('/dashboard');
+      navigate('/login', {
+        replace: true,
+        state: {
+          message:
+            'Account created. Sign in only works after a super administrator enables access for your user in Supabase (User Metadata: super_admin = true).',
+        },
+      });
     } catch (err: any) {
       setError(err.message || 'Sign up failed');
     } finally {

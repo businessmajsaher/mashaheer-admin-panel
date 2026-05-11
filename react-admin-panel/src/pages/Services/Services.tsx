@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Popconfirm, Upload, Select, Switch, DatePicker, InputNumber, Divider, Row, Col, Drawer, Descriptions, Tag } from 'antd';
-import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { AppstoreAddOutlined, EditOutlined, StopOutlined, CheckCircleOutlined, UploadOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { settingsService } from '@/services/settingsService';
 import dayjs from 'dayjs';
@@ -381,6 +381,7 @@ export default function Services() {
         primary_influencer_earnings_percentage: values.service_type === 'dual' ? (values.primary_influencer_earnings_percentage || 50) : null,
         invited_influencer_earnings_percentage: values.service_type === 'dual' ? (values.invited_influencer_earnings_percentage || 50) : null,
         created_at: new Date().toISOString(),
+        is_suspended: false,
       };
 
       console.log('📝 Inserting service data:', serviceData);
@@ -577,15 +578,18 @@ export default function Services() {
     }
   };
 
-  // Delete Service handler
-  const handleDeleteService = async (id: string) => {
+  const handleToggleServiceSuspended = async (record: any) => {
     try {
-      const { error } = await supabase.from('services').delete().eq('id', id);
+      const nextSuspended = !record.is_suspended;
+      const { error } = await supabase
+        .from('services')
+        .update({ is_suspended: nextSuspended })
+        .eq('id', record.id);
       if (error) throw error;
-      message.success('Service deleted!');
+      message.success(nextSuspended ? 'Service suspended' : 'Service activated');
       fetchServices();
     } catch (err: any) {
-      message.error(err.message || 'Failed to delete service');
+      message.error(err.message || 'Failed to update service status');
     }
   };
 
@@ -765,6 +769,16 @@ export default function Services() {
         </span>
       )
     },
+    {
+      title: 'Listing status',
+      key: 'is_suspended',
+      render: (_: unknown, record: any) =>
+        record.is_suspended ? (
+          <Tag color="red">Suspended</Tag>
+        ) : (
+          <Tag color="green">Active</Tag>
+        ),
+    },
     { title: 'Created At', dataIndex: 'created_at', key: 'created_at', render: (v: string) => new Date(v).toLocaleString() },
     {
       title: 'Actions',
@@ -778,8 +792,25 @@ export default function Services() {
             setEditingService(record);
             setEditModalOpen(true);
           }}>Edit</Button>
-          <Popconfirm title="Delete this service?" onConfirm={() => handleDeleteService(record.id)} okText="Yes" cancelText="No">
-            <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
+          <Popconfirm
+            title={record.is_suspended ? 'Activate this service?' : 'Suspend this service?'}
+            description={
+              record.is_suspended
+                ? 'The service will show as active again in admin lists.'
+                : 'The row is kept so bookings and related records stay valid. Use your customer app to hide suspended services from new bookings if needed.'
+            }
+            onConfirm={() => handleToggleServiceSuspended(record)}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button
+              icon={record.is_suspended ? <CheckCircleOutlined /> : <StopOutlined />}
+              size="small"
+              type={record.is_suspended ? 'primary' : 'default'}
+              danger={!record.is_suspended}
+            >
+              {record.is_suspended ? 'Activate' : 'Suspend'}
+            </Button>
           </Popconfirm>
         </span>
       ),
@@ -2036,6 +2067,13 @@ export default function Services() {
                 }}>
                   {selectedServiceDetails.service_type?.toUpperCase() || '-'}
                 </span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Listing status">
+                {selectedServiceDetails.is_suspended ? (
+                  <Tag color="red">Suspended</Tag>
+                ) : (
+                  <Tag color="green">Active</Tag>
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="Category">
                 {selectedServiceDetails.service_categories?.name || '-'}

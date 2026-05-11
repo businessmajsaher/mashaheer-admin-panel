@@ -42,6 +42,14 @@ export default function SupabaseAuth({ mode, onSuccess }: SupabaseAuthProps) {
 
       if (error) throw error;
 
+      const { data: userData } = await supabase.auth.getUser();
+      const { isSuperAdmin } = await import('@/utils/superAdmin');
+      if (!isSuperAdmin(userData.user)) {
+        await supabase.auth.signOut();
+        setMessage('Only super administrators can access this dashboard.');
+        return;
+      }
+
       setMessage('Sign in successful!');
       onSuccess?.();
     } catch (error: any) {
@@ -67,6 +75,12 @@ export default function SupabaseAuth({ mode, onSuccess }: SupabaseAuthProps) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            role: 'admin',
+            super_admin: false,
+          },
+        },
       });
 
       if (error) throw error;

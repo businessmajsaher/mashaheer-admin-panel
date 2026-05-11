@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { AuthSession } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabaseClient';
+import { isSuperAdmin } from '@/utils/superAdmin';
 
 interface User {
   id: string;
   email: string;
   role?: string;
+  /** Only explicit true grants dashboard access (see ProtectedRoute). */
+  super_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -69,25 +73,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (data.session?.user) {
           console.log('✅ AuthContext: User found in session');
+          const u = data.session.user;
+          const sa = isSuperAdmin(u);
+          console.log('🔍 AuthContext: super_admin check', {
+            email: u.email,
+            user_metadata: u.user_metadata,
+            app_metadata: u.app_metadata,
+            result: sa,
+          });
           setUser({
-            id: data.session.user.id,
-            email: data.session.user.email ?? '',
-            role: data.session.user.user_metadata?.role || 'user',
+            id: u.id,
+            email: u.email ?? '',
+            role: u.user_metadata?.role || 'user',
+            super_admin: sa,
           });
         } else if (data.session?.access_token) {
           console.log('🔍 AuthContext: Access token found, fetching user...');
-          // Fetch user info if not present in session
           const { data: userData, error: userError } = await supabase.auth.getUser();
           if (!isMounted) return;
-          
+
           if (userError) {
             console.error('❌ AuthContext getUser error:', userError);
           } else if (userData.user) {
             console.log('✅ AuthContext: User fetched successfully');
+            const u = userData.user;
+            const sa = isSuperAdmin(u);
+            console.log('🔍 AuthContext: super_admin check (getUser)', {
+              email: u.email,
+              user_metadata: u.user_metadata,
+              app_metadata: u.app_metadata,
+              result: sa,
+            });
             setUser({
-              id: userData.user.id,
-              email: userData.user.email ?? '',
-              role: userData.user.user_metadata?.role || 'user',
+              id: u.id,
+              email: u.email ?? '',
+              role: u.user_metadata?.role || 'user',
+              super_admin: sa,
             });
           }
         } else {
@@ -117,16 +138,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkSession();
     
     // Listen for auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: string, session: AuthSession | null) => {
       if (!isMounted) return;
       
       console.log('🔍 AuthContext: Auth state changed:', _event, session?.user?.email);
       
       if (session?.user) {
+        const u = session.user;
         setUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-          role: session.user.user_metadata?.role || 'user',
+          id: u.id,
+          email: u.email ?? '',
+          role: u.user_metadata?.role || 'user',
+          super_admin: isSuperAdmin(u),
         });
         setLoading(false);
       } else {
@@ -152,21 +175,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       console.log('✅ AuthContext: Sign in successful');
       
-      // Immediately fetch session and set user after signIn
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.user) {
+        const u = sessionData.session.user;
         setUser({
-          id: sessionData.session.user.id,
-          email: sessionData.session.user.email ?? '',
-          role: sessionData.session.user.user_metadata?.role || 'user',
+          id: u.id,
+          email: u.email ?? '',
+          role: u.user_metadata?.role || 'user',
+          super_admin: isSuperAdmin(u),
         });
       } else if (sessionData.session?.access_token) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData.user) {
+          const u = userData.user;
           setUser({
-            id: userData.user.id,
-            email: userData.user.email ?? '',
-            role: userData.user.user_metadata?.role || 'user',
+            id: u.id,
+            email: u.email ?? '',
+            role: u.user_metadata?.role || 'user',
+            super_admin: isSuperAdmin(u),
           });
         }
       }

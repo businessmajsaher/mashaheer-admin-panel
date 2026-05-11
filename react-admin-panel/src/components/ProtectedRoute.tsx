@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { Spin, Alert } from 'antd';
+import { Spin, Alert, Button } from 'antd';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
   
   console.log('🔒 ProtectedRoute: loading=', loading, 'user=', user);
   
@@ -54,7 +55,30 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     console.log('🔒 ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
-  
+
+  if (user.super_admin !== true) {
+    return (
+      <div style={{ maxWidth: 520, margin: '64px auto', padding: 24 }}>
+        <Alert
+          type="warning"
+          message="Super administrator required"
+          description="Only accounts with super administrator access can use this dashboard. Ask your owner to set super_admin to true on your user in Supabase Auth (User Metadata)."
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Button
+          type="primary"
+          onClick={async () => {
+            await signOut();
+            navigate('/login', { replace: true });
+          }}
+        >
+          Back to login
+        </Button>
+      </div>
+    );
+  }
+
   console.log('🔒 ProtectedRoute: User authenticated, showing content');
   return <>{children}</>;
-}; 
+};
