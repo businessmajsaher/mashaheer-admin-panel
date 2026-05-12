@@ -1,17 +1,67 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { AuthSession, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabaseClient';
+import { isSuperAdmin } from '@/utils/superAdmin';
 
 interface User {
   id: string;
   email: string;
   role?: string;
+  /** Only explicit true grants dashboard access (see ProtectedRoute). */
+  super_admin?: boolean;
+  /** True when an active row exists in public.staff_users. */
+  is_staff?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<any>;
+  signIn: (email: string, password: string) => Promise<{ user: User | null }>;
   signOut: () => Promise<void>;
+}
+
+/**
+ * Looks up `public.staff_users` for the given auth user id. Returns
+ * `true` when an *active* row exists. Used by login + ProtectedRoute
+ * so staff (non-super-admin) users may access the dashboard.
+ *
+ * IMPORTANT: must never be awaited from inside `onAuthStateChange`
+ * (supabase-js v2 holds an auth lock during subscriber notification
+ * and any other supabase call awaited from inside the listener can
+ * deadlock the entire client). Always defer via setTimeout(0) or
+ * call from a normal app context (signIn, useEffect, etc.).
+ */
+async function fetchIsStaff(authUserId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('staff_users')
+    .select('id, is_active')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+  if (error) {
+    console.warn('fetchIsStaff failed (will treat as non-staff):', error.message);
+    return false;
+  }
+  return !!(data && data.is_active);
+}
+
+function toBaseUser(u: SupabaseUser): User {
+  const sa = isSuperAdmin(u);
+  return {
+    id: u.id,
+    email: u.email ?? '',
+    role: (u.user_metadata?.role as string) || 'user',
+    super_admin: sa,
+    // For super admins, treat as staff too (full access). Real staff
+    // status is hydrated separately via fetchIsStaff.
+    is_staff: sa,
+  };
+}
+
+async function hydrateUser(u: SupabaseUser): Promise<User> {
+  const base = toBaseUser(u);
+  if (base.super_admin) return base;
+  const isStaff = await fetchIsStaff(u.id);
+  return { ...base, is_staff: isStaff };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,121 +70,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  console.log('🔍 AuthProvider: Component rendered, loading:', loading, 'user:', user);
-
   useEffect(() => {
-    console.log('🔍 AuthContext: Starting session check...');
-    
     let isMounted = true;
-    
-    // Check if Supabase is properly configured
+
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error('❌ AuthContext: Supabase not configured, skipping session check');
       setLoading(false);
       return;
     }
-    
-    // Add a timeout to prevent hanging
+
+    // Hard ceiling so the dashboard never hangs forever if something
+    // upstream gets wedged (slow network, deadlocked lock, etc.).
     const timeoutId = setTimeout(() => {
       if (isMounted) {
-        console.warn('⚠️ AuthContext: Session check timed out after 5 seconds');
+        console.warn('⚠️ AuthContext: Session check timed out after 8s');
         setLoading(false);
-        console.log('🔍 AuthContext: Forcing loading to false due to timeout');
       }
-    }, 5000); // Reduced timeout to 5 seconds for faster debugging
-    
-    // Check session on mount
+    }, 8000);
+
     const checkSession = async () => {
       try {
-        console.log('🔍 AuthContext: Calling getSession...');
-        console.log('🔍 AuthContext: Supabase client:', supabase);
-        console.log('🔍 AuthContext: Environment check:', {
-          url: import.meta.env.VITE_SUPABASE_URL,
-          key: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing'
-        });
-        
         const { data, error } = await supabase.auth.getSession();
-        console.log('🔍 AuthContext getSession result:', { data, error });
-        
         if (!isMounted) return;
-        
         if (error) {
           console.error('❌ AuthContext session error:', error);
           setLoading(false);
           return;
         }
-        
+
         if (data.session?.user) {
-          console.log('✅ AuthContext: User found in session');
-          setUser({
-            id: data.session.user.id,
-            email: data.session.user.email ?? '',
-            role: data.session.user.user_metadata?.role || 'user',
-          });
-        } else if (data.session?.access_token) {
-          console.log('🔍 AuthContext: Access token found, fetching user...');
-          // Fetch user info if not present in session
-          const { data: userData, error: userError } = await supabase.auth.getUser();
+          const hydrated = await hydrateUser(data.session.user);
           if (!isMounted) return;
-          
-          if (userError) {
-            console.error('❌ AuthContext getUser error:', userError);
-          } else if (userData.user) {
-            console.log('✅ AuthContext: User fetched successfully');
-            setUser({
-              id: userData.user.id,
-              email: userData.user.email ?? '',
-              role: userData.user.user_metadata?.role || 'user',
-            });
-          }
-        } else {
-          console.log('ℹ️ AuthContext: No session found');
+          setUser(hydrated);
         }
-        
-        console.log('🔍 AuthContext: Setting loading to false');
-        clearTimeout(timeoutId);
-        setLoading(false);
-        
-        // Force loading to false after a short delay to prevent hanging
-        setTimeout(() => {
-          if (isMounted && loading) {
-            console.log('🔍 AuthContext: Force setting loading to false');
-            setLoading(false);
-          }
-        }, 1000);
       } catch (err) {
-        if (isMounted) {
-          console.error('❌ AuthContext getSession catch error:', err);
-          clearTimeout(timeoutId);
-          setLoading(false);
-        }
+        console.error('❌ AuthContext getSession catch error:', err);
+      } finally {
+        clearTimeout(timeoutId);
+        if (isMounted) setLoading(false);
       }
     };
-    
-    checkSession();
-    
-    // Listen for auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      
-      console.log('🔍 AuthContext: Auth state changed:', _event, session?.user?.email);
-      
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-          role: session.user.user_metadata?.role || 'user',
-        });
+
+    void checkSession();
+
+    // CRITICAL: do NOT make this callback async, and do NOT await
+    // any supabase call from inside it. supabase-js v2 holds an
+    // internal lock while iterating subscribers; awaiting another
+    // supabase call here deadlocks the entire client (login then
+    // hangs on "Signing in...").
+    //
+    // We update the user synchronously with what's already in the
+    // session, then schedule the staff lookup on the next tick so
+    // it runs OUTSIDE the auth lock.
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event: string, session: AuthSession | null) => {
+        if (!isMounted) return;
+        console.log('🔍 AuthContext: Auth state changed:', event, session?.user?.email);
+
+        if (!session?.user) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        const u = session.user;
+        const base = toBaseUser(u);
+        setUser(base);
         setLoading(false);
-      } else {
-        setUser(null);
-        setLoading(false);
+
+        // Super admins don't need the staff lookup.
+        if (base.super_admin) return;
+
+        setTimeout(() => {
+          if (!isMounted) return;
+          fetchIsStaff(u.id)
+            .then((isStaff) => {
+              if (!isMounted) return;
+              setUser((prev) => (prev && prev.id === u.id ? { ...prev, is_staff: isStaff } : prev));
+            })
+            .catch((err) => console.warn('Deferred fetchIsStaff failed:', err));
+        }, 0);
       }
-    });
-    
+    );
+
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
@@ -142,37 +162,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    console.log('🔍 AuthContext: Signing in...');
+  const signIn = async (email: string, password: string): Promise<{ user: User | null }> => {
     setLoading(true);
-    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      
-      console.log('✅ AuthContext: Sign in successful');
-      
-      // Immediately fetch session and set user after signIn
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user) {
-        setUser({
-          id: sessionData.session.user.id,
-          email: sessionData.session.user.email ?? '',
-          role: sessionData.session.user.user_metadata?.role || 'user',
-        });
-      } else if (sessionData.session?.access_token) {
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
-          setUser({
-            id: userData.user.id,
-            email: userData.user.email ?? '',
-            role: userData.user.user_metadata?.role || 'user',
-          });
-        }
+
+      const supaUser = data.user;
+      if (!supaUser) {
+        setLoading(false);
+        return { user: null };
       }
-      
+
+      // Hydrate outside the auth lock (signInWithPassword already
+      // released it before resolving this promise).
+      const hydrated = await hydrateUser(supaUser);
+      setUser(hydrated);
       setLoading(false);
-      return data;
+      return { user: hydrated };
     } catch (error) {
       console.error('❌ AuthContext: Sign in failed:', error);
       setLoading(false);
@@ -181,18 +188,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    console.log('🔍 AuthContext: Signing out...');
     setLoading(true);
-    
     try {
       await supabase.auth.signOut();
       setUser(null);
-      setLoading(false);
-      console.log('✅ AuthContext: Sign out successful');
     } catch (error) {
       console.error('❌ AuthContext: Sign out failed:', error);
-      setLoading(false);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -207,4 +211,4 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
-}; 
+};

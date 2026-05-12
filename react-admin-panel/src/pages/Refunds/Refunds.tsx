@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { refundService, Refund } from '../../services/refundService';
 import { formatPrice } from '../../utils/currencyUtils';
+import { ProtectedButton } from '@/components/ProtectedButton';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -243,7 +244,8 @@ const Refunds: React.FC = () => {
                             Details
                         </Button>
                         {isPending && (
-                            <Button
+                            <ProtectedButton
+                                permission="refunds.reject"
                                 size="small"
                                 danger
                                 icon={<StopOutlined />}
@@ -251,7 +253,7 @@ const Refunds: React.FC = () => {
                                 onClick={() => handleCancelRefund(record)}
                             >
                                 Cancel
-                            </Button>
+                            </ProtectedButton>
                         )}
                     </Space>
                 );
@@ -486,7 +488,8 @@ const Refunds: React.FC = () => {
                         {(selectedRefund.status === 'pending' || selectedRefund.status === 'processing') && (
                             <>
                                 <Divider />
-                                <Button
+                                <ProtectedButton
+                                    permission="refunds.reject"
                                     danger
                                     block
                                     icon={<StopOutlined />}
@@ -494,7 +497,7 @@ const Refunds: React.FC = () => {
                                     onClick={() => handleCancelRefund(selectedRefund)}
                                 >
                                     Cancel This Refund
-                                </Button>
+                                </ProtectedButton>
                             </>
                         )}
                     </div>

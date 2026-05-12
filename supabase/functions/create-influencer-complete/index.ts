@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -638,20 +639,20 @@ serve(async (req: Request) => {
           .limit(1);
 
         if (tableError) {
-          console.error('❌ Table check error - influencer_media table might not exist:', tableError);
-          console.error('❌ Error details:', JSON.stringify(tableError, null, 2));
+          console.error('âŒ Table check error - influencer_media table might not exist:', tableError);
+          console.error('âŒ Error details:', JSON.stringify(tableError, null, 2));
 
           if (tableError.message && tableError.message.includes('relation "influencer_media" does not exist')) {
-            console.error('❌ CRITICAL: influencer_media table does not exist!');
-            console.error('❌ Please run the create_influencer_media_table.sql script in your Supabase database');
-            console.error('❌ Skipping media file processing due to missing table');
+            console.error('âŒ CRITICAL: influencer_media table does not exist!');
+            console.error('âŒ Please run the create_influencer_media_table.sql script in your Supabase database');
+            console.error('âŒ Skipping media file processing due to missing table');
           } else {
-            console.error('❌ Other table error, skipping media file processing');
+            console.error('âŒ Other table error, skipping media file processing');
           }
           return;
         }
 
-        console.log('✅ Table check successful, influencer_media table exists');
+        console.log('âœ… Table check successful, influencer_media table exists');
 
         // Delete existing media if updating
         if (is_update) {
@@ -662,9 +663,9 @@ serve(async (req: Request) => {
             .eq('influencer_id', userId);
 
           if (deleteError) {
-            console.warn('⚠️ Failed to delete existing media:', deleteError);
+            console.warn('âš ï¸ Failed to delete existing media:', deleteError);
           } else {
-            console.log('✅ Existing media deleted successfully');
+            console.log('âœ… Existing media deleted successfully');
           }
         }
 
@@ -694,7 +695,7 @@ serve(async (req: Request) => {
           };
         });
 
-        console.log('✅ Prepared media data for insertion:', mediaData);
+        console.log('âœ… Prepared media data for insertion:', mediaData);
         console.log('Media data count:', mediaData.length);
 
         console.log('Inserting media records into database...');
@@ -704,22 +705,22 @@ serve(async (req: Request) => {
           .select();
 
         if (mediaError) {
-          console.error('❌ Media creation error:', mediaError);
-          console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
-          console.error('❌ Media data that failed to insert:', mediaData);
+          console.error('âŒ Media creation error:', mediaError);
+          console.error('âŒ Error details:', JSON.stringify(mediaError, null, 2));
+          console.error('âŒ Media data that failed to insert:', mediaData);
           throw mediaError;
         }
 
-        console.log('✅ Media files processed successfully:', insertedMedia);
-        console.log('✅ Inserted media count:', insertedMedia?.length || 0);
+        console.log('âœ… Media files processed successfully:', insertedMedia);
+        console.log('âœ… Inserted media count:', insertedMedia?.length || 0);
       } catch (mediaError: any) {
-        console.error('❌ Failed to process media files:', mediaError);
-        console.error('❌ Error details:', JSON.stringify(mediaError, null, 2));
-        console.error('❌ This error will not fail the entire operation');
+        console.error('âŒ Failed to process media files:', mediaError);
+        console.error('âŒ Error details:', JSON.stringify(mediaError, null, 2));
+        console.error('âŒ This error will not fail the entire operation');
         // Don't fail the entire operation for media files
       }
     } else {
-      console.log('ℹ️ No media files to process');
+      console.log('â„¹ï¸ No media files to process');
     }
 
     // Create default wallet if new user

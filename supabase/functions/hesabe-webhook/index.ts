@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -216,12 +217,12 @@ serve(async (req: Request) => {
           .single();
 
         if (bookingError) {
-          console.error('❌ Error fetching booking:', bookingError);
+          console.error('âŒ Error fetching booking:', bookingError);
           console.error('Booking ID:', bookingId);
         } else if (!booking) {
-          console.error('❌ Booking not found for ID:', bookingId);
+          console.error('âŒ Booking not found for ID:', bookingId);
         } else {
-          console.log('✅ Booking found:', {
+          console.log('âœ… Booking found:', {
             booking_id: bookingId,
             customer_id: booking.customer_id,
             influencer_id: booking.influencer_id
@@ -229,9 +230,9 @@ serve(async (req: Request) => {
 
           // Validate required fields
           if (!booking.customer_id) {
-            console.error('❌ Booking missing customer_id');
+            console.error('âŒ Booking missing customer_id');
           } else if (!booking.influencer_id) {
-            console.error('❌ Booking missing influencer_id');
+            console.error('âŒ Booking missing influencer_id');
           } else {
             // Create payment record
             const paymentData = {
@@ -255,7 +256,7 @@ serve(async (req: Request) => {
               .single();
 
             if (createError) {
-              console.error('❌ Failed to create payment record');
+              console.error('âŒ Failed to create payment record');
               console.error('Error details:', {
                 message: createError.message,
                 code: createError.code,
@@ -264,7 +265,7 @@ serve(async (req: Request) => {
               });
               console.error('Payment data attempted:', paymentData);
             } else if (newPayment) {
-              console.log('✅ Created payment record:', newPayment.id);
+              console.log('âœ… Created payment record:', newPayment.id);
               payment = newPayment;
               
               // Update booking status to payment confirmed
@@ -286,22 +287,22 @@ serve(async (req: Request) => {
                 if (bookingUpdateError) {
                   console.error('Error updating booking status:', bookingUpdateError);
                 } else {
-                  console.log('✅ Updated booking status to payment confirmed');
+                  console.log('âœ… Updated booking status to payment confirmed');
                 }
               } else {
-                console.warn('⚠️ Payment confirmed status not found in booking_statuses');
+                console.warn('âš ï¸ Payment confirmed status not found in booking_statuses');
               }
             } else {
-              console.error('❌ Payment insert returned no data and no error');
+              console.error('âŒ Payment insert returned no data and no error');
             }
           }
         }
       } else {
         if (!bookingId) {
-          console.warn('⚠️ No booking ID extracted from reference:', referenceNumber);
+          console.warn('âš ï¸ No booking ID extracted from reference:', referenceNumber);
         }
         if (status !== 'SUCCESSFUL') {
-          console.warn('⚠️ Status is not SUCCESSFUL:', status);
+          console.warn('âš ï¸ Status is not SUCCESSFUL:', status);
         }
       }
 
@@ -434,7 +435,7 @@ serve(async (req: Request) => {
                   booking_id: booking.id
                 })
               });
-              console.log('✅ Payment receipt sent to customer');
+              console.log('âœ… Payment receipt sent to customer');
             } catch (receiptError) {
               console.error('Error sending payment receipt:', receiptError);
             }
@@ -460,7 +461,7 @@ serve(async (req: Request) => {
                   }
                 })
               });
-              console.log('✅ Notification sent to customer');
+              console.log('âœ… Notification sent to customer');
             } catch (notifError) {
               console.error('Error sending customer notification:', notifError);
             }
@@ -486,7 +487,7 @@ serve(async (req: Request) => {
                   }
                 })
               });
-              console.log('✅ Notification sent to influencer');
+              console.log('âœ… Notification sent to influencer');
             } catch (notifError) {
               console.error('Error sending influencer notification:', notifError);
             }

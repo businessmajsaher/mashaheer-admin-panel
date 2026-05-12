@@ -1,28 +1,65 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Card as AntCard, Divider, Switch, InputNumber, Progress, Tag } from 'antd';
+import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Divider, Switch, InputNumber, Progress, Tag } from 'antd';
 import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
 import { notificationService } from '@/services/notificationService';
-import { Modal as AntdModal, Slider } from 'antd';
+import { Slider } from 'antd';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
+
+interface InfluencerProfile {
+  id: string;
+  name: string;
+  email: string;
+  bio?: string;
+  country: string;
+  profile_image_url?: string;
+  is_verified: boolean;
+  commission_percentage: number;
+  created_at: string;
+}
+
+interface SocialLink {
+  id: string;
+  user_id: string;
+  platform_id: string;
+  handle: string;
+  profile_url?: string;
+  created_at: string;
+  social_media_platforms?: {
+    name: string;
+  };
+}
+
+interface MediaItem {
+  id: string;
+  influencer_id: string;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+  mime_type?: string;
+  file_size?: number;
+  created_at: string;
+}
 
 export default function Influencers() {
-  const [influencers, setInfluencers] = useState<any[]>([]);
+  const [influencers, setInfluencers] = useState<InfluencerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form] = Form.useForm();
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [influencerCreated, setInfluencerCreated] = useState(false);
-  const [editingInfluencer, setEditingInfluencer] = useState<any>(null);
+  const [editingInfluencer, setEditingInfluencer] = useState<InfluencerProfile | null>(null);
   const [platforms, setPlatforms] = useState<any[]>([]);
   const [mediaFiles, setMediaFiles] = useState<any[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState<any>(null);
-  const [detailMedia, setDetailMedia] = useState<any[]>([]);
-  const [detailSocial, setDetailSocial] = useState<any[]>([]);
+  const [detailData, setDetailData] = useState<InfluencerProfile | null>(null);
+  const [detailMedia, setDetailMedia] = useState<MediaItem[]>([]);
+  const [detailSocial, setDetailSocial] = useState<SocialLink[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [profileImageUploading, setProfileImageUploading] = useState(false);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
@@ -41,6 +78,7 @@ export default function Influencers() {
   const [commissionsLoading, setCommissionsLoading] = useState(false);
   const [commissionsData, setCommissionsData] = useState<any[]>([]);
   const [searchText, setSearchText] = useState('');
+
 
   // Handler for profile image upload
   const handleProfileImageUpload = async (file: File) => {
@@ -136,9 +174,9 @@ export default function Influencers() {
         }
 
         // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-        if (!allowedTypes.includes(file.type)) {
-          message.error('Please select a valid image file (JPG, PNG, GIF)');
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/heic'];
+        if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.heic')) {
+          message.error('Please select a valid image file (JPG, PNG, GIF, HEIC)');
           return;
         }
 
@@ -399,7 +437,7 @@ export default function Influencers() {
         // 1. Prepare existing media
         const existingMedia = detailMedia.map(m => ({
           file_url: m.file_url,
-          file_type: m.file_type || (m.mime_type?.startsWith('video/') ? 'video' : 'image'),
+          file_type: m.file_type || (m.mime_type?.startsWith('video') ? 'video' : 'image'),
           file_name: m.file_name,
           mime_type: m.mime_type,
           file_size: m.file_size
@@ -519,7 +557,7 @@ export default function Influencers() {
             }
 
             try {
-              const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
+              const uploadPromises = mediaFiles.map(async (mediaFile: any, index: number) => {
                 console.log(`15b. Processing media file ${index + 1}:`, mediaFile);
                 const file = mediaFile.file;
 
@@ -535,8 +573,8 @@ export default function Influencers() {
                 }
 
                 const maxImageSize = 10 * 1024 * 1024; // 10MB
-                const maxVideoSize = 100 * 1024 * 1024; // 100MB
-                const maxSize = file.type.startsWith('image/') ? maxImageSize : maxVideoSize;
+                const maxVideoSize = 5 * 1024 * 1024; // 5MB (User requirement)
+                const maxSize = file.type.startsWith('image') || file.name.toLowerCase().endsWith('.heic') ? maxImageSize : maxVideoSize;
 
                 if (file.size > maxSize) {
                   const errorMsg = `File ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds size limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`;
@@ -802,7 +840,7 @@ export default function Influencers() {
       console.log('📁 Starting media file upload');
       console.log('📁 Number of files to upload:', mediaFiles.length);
 
-      const uploadPromises = mediaFiles.map(async (mediaFile, index) => {
+      const uploadPromises = mediaFiles.map(async (mediaFile: any, index: number) => {
         console.log(`📁 Processing file ${index + 1}:`, mediaFile);
         const file = mediaFile.file;
 
@@ -1007,7 +1045,7 @@ export default function Influencers() {
 
         if (mediaFiles && mediaFiles.length > 0) {
           // Delete from storage
-          const filePaths = mediaFiles.map(media => {
+          const filePaths = mediaFiles.map((media: any) => {
             const path = media.file_url.split('/storage/v1/object/public/influencer-media/')[1];
             return path;
           }).filter(Boolean);
@@ -1091,7 +1129,7 @@ export default function Influencers() {
 
 
   // Fetch media and social links for influencer
-  const openDetail = async (record: any) => {
+  const openDetail = async (record: InfluencerProfile) => {
     setDetailOpen(true);
     setDetailLoading(true);
     setDetailData(record);
@@ -1107,7 +1145,21 @@ export default function Influencers() {
           console.warn('Media table might not exist or have different structure:', mediaError);
           setDetailMedia([]);
         } else {
-          setDetailMedia(media || []);
+          // Generate signed URLs for all media items to ensure they are visible
+          const mediaWithSignedUrls = await Promise.all((media || []).map(async (m: MediaItem) => {
+            const path = m.file_url.split('/storage/v1/object/public/influencer-media/')[1] ||
+              m.file_url.split('/storage/v1/object/sign/influencer-media/')[1];
+
+            if (path) {
+              const { data: signedData } = await supabase.storage
+                .from('influencer-media')
+                .createSignedUrl(decodeURIComponent(path).split('?')[0], 3600);
+
+              return { ...m, file_url: signedData?.signedUrl || m.file_url };
+            }
+            return m;
+          }));
+          setDetailMedia(mediaWithSignedUrls);
         }
       } catch (mediaTableError) {
         console.warn('influencer_media table not accessible:', mediaTableError);
@@ -1160,35 +1212,38 @@ export default function Influencers() {
     {
       title: 'Media',
       key: 'media',
-      render: (unused: any, record: any) => <MediaCount influencerId={record.id} />,
+      render: (_: unknown, record: InfluencerProfile) => <MediaCount influencerId={record.id} />,
     },
     {
       title: 'Actions',
       key: 'actions',
-      render: (unused: any, record: any) => (
+      render: (_: unknown, record: InfluencerProfile) => (
         <Space>
-          <Button
+          <ProtectedButton
+            permission="influencers.edit"
             type="primary"
             size="small"
             onClick={() => handleEditInfluencer(record)}
           >
             Edit
-          </Button>
-          <Popconfirm
-            title="Delete Influencer"
-            description="Are you sure you want to delete this influencer? This action cannot be undone."
-            onConfirm={() => handleDeleteInfluencer(record)}
-            okText="Yes"
-            cancelText="No"
-            okType="danger"
-          >
-            <Button
-              danger
-              size="small"
+          </ProtectedButton>
+          <PermissionGuard permission="influencers.delete">
+            <Popconfirm
+              title="Delete Influencer"
+              description="Are you sure you want to delete this influencer? This action cannot be undone."
+              onConfirm={() => handleDeleteInfluencer(record)}
+              okText="Yes"
+              cancelText="No"
+              okType="danger"
             >
-              Delete
-            </Button>
-          </Popconfirm>
+              <Button
+                danger
+                size="small"
+              >
+                Delete
+              </Button>
+            </Popconfirm>
+          </PermissionGuard>
         </Space>
       ),
     },
@@ -1242,7 +1297,7 @@ export default function Influencers() {
   }
 
   // Helper to delete media from Supabase Storage and DB
-  const handleDeleteMedia = async (media: any) => {
+  const handleDeleteMedia = async (media: MediaItem) => {
     try {
       // Remove from storage
       const filePath = media.file_url.split('/storage/v1/object/public/influencer-media/')[1];
@@ -1269,7 +1324,7 @@ export default function Influencers() {
   };
 
   // Helper to replace (edit) image media
-  const handleReplaceImage = async (media: any, file: File) => {
+  const handleReplaceImage = async (media: MediaItem, file: File) => {
     try {
       // Remove old file from storage
       const oldFilePath = media.file_url.split('/storage/v1/object/public/influencer-media/')[1];
@@ -1443,8 +1498,8 @@ export default function Influencers() {
           >
             <InputNumber
               placeholder="Enter commission percentage (0-100)"
-              min={0}
-              max={100}
+              min={0 as number}
+              max={100 as number}
               precision={2}
               size="large"
               style={{
@@ -1455,8 +1510,8 @@ export default function Influencers() {
                 fontSize: '14px',
                 transition: 'all 0.3s ease'
               }}
-              formatter={(value) => value ? `${value}%` : ''}
-              parser={(value) => value ? value.replace('%', '') : ''}
+              formatter={(value) => (value !== undefined && value !== null ? `${value}%` : '')}
+              parser={(value) => Number(value?.replace('%', '') || 0)}
             />
           </Form.Item>
 
@@ -1705,11 +1760,11 @@ export default function Influencers() {
                           }}
                           showSearch
                           filterOption={(input, option) =>
-                            (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+                            ((option?.label ?? '') as string).toLowerCase().includes(input.toLowerCase())
                           }
                         >
-                          {platforms.map((platform) => (
-                            <Select.Option key={platform.id} value={platform.id}>
+                          {platforms.map((platform: any) => (
+                            <Select.Option key={platform.id} value={platform.id} label={platform.name}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 {platform.icon_url && (
                                   <img
@@ -1924,7 +1979,7 @@ export default function Influencers() {
                     display: 'block',
                     marginTop: '12px'
                   }}>
-                    Supports: Images (JPG, PNG, GIF, WEBP - Max 10MB) | Videos (MP4, MOV, AVI, WEBM - Max 2MB, 5 min)
+                    Supports: Images (Max 10MB) | Videos (Max 5MB, 5 min) | Max 10 Files Total
                   </Typography.Text>
                 </div>
               ) : (
@@ -1975,7 +2030,8 @@ export default function Influencers() {
                             message.warning('No preview available for this file yet.');
                             return;
                           }
-                          const t = String(file.type || '').startsWith('video/') ? 'video' : 'image';
+                          const typeStr = String(file.type || '').toLowerCase();
+                          const t = typeStr.startsWith('video') ? 'video' : 'image';
                           setMediaPreviewType(t);
                           setMediaPreviewUrl(url);
                           setMediaPreviewOpen(true);
@@ -1989,7 +2045,7 @@ export default function Influencers() {
                           e.currentTarget.style.boxShadow = 'none';
                         }}
                       >
-                        {String(file.type || '').startsWith('image/') ? (
+                        {String(file.type || '').toLowerCase().startsWith('image') || String(file.name || '').toLowerCase().endsWith('.heic') ? (
                           <img
                             src={file.preview}
                             alt={`Media ${index + 1}`}
@@ -2027,11 +2083,11 @@ export default function Influencers() {
                           </div>
                           <div style={{
                             fontSize: '10px',
-                            color: String(file.type || '').startsWith('image/') ? '#52c41a' : '#1890ff',
+                            color: String(file.type || '').toLowerCase().startsWith('image') ? '#52c41a' : '#1890ff',
                             fontWeight: '500',
                             marginBottom: '2px'
                           }}>
-                            {String(file.type || '').startsWith('image/') ? '📷 Image' : '🎥 Video'}
+                            {String(file.type || '').toLowerCase().startsWith('image') ? '📷 Image' : '🎥 Video'}
                           </div>
                           <div style={{
                             fontSize: '9px',
@@ -2082,7 +2138,7 @@ export default function Influencers() {
               <input
                 id="media-upload"
                 type="file"
-                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/quicktime,video/x-msvideo,video/webm"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/heic,video/mp4,video/mpeg,video/quicktime,video/x-msvideo,video/webm"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
@@ -2143,7 +2199,7 @@ export default function Influencers() {
   }, [drawerOpen, form, editingInfluencer]);
 
   // Function to load influencer data for editing
-  const loadInfluencerForEditing = async (influencer: any) => {
+  const loadInfluencerForEditing = async (influencer: InfluencerProfile) => {
     try {
       console.log('Loading influencer data for editing:', influencer);
       console.log('Influencer object keys:', Object.keys(influencer));
@@ -2214,7 +2270,7 @@ export default function Influencers() {
       console.log('Social links loaded from database:', socialLinks);
 
       if (socialLinks && socialLinks.length > 0) {
-        const mappedSocialLinks = socialLinks.map(link => ({
+        const mappedSocialLinks = socialLinks.map((link: any) => ({
           platform_id: link.platform_id,
           handle: link.handle,
           profile_url: link.profile_url
@@ -2316,8 +2372,9 @@ export default function Influencers() {
   // Handler for media files upload
   const handleMediaFilesUpload = async (files: File[]) => {
     const maxImageSize = 10 * 1024 * 1024; // 10MB for images
-    const maxVideoSize = 2 * 1024 * 1024; // 2MB for videos (admin requirement)
+    const maxVideoSize = 5 * 1024 * 1024; // 5MB for videos (User requirement)
     const maxVideoDuration = 300; // 5 minutes in seconds
+    const maxMediaCount = 10;
 
     const validFiles: File[] = [];
     const errors: Array<{ file: string; reason: string }> = [];
@@ -2327,23 +2384,31 @@ export default function Influencers() {
     const allowedVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
     const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
 
+    // Check total count constraint
+    if (mediaFiles.length + files.length > maxMediaCount) {
+      message.error(`Maximum ${maxMediaCount} media files allowed per influencer. Currently you have ${mediaFiles.length}.`);
+      return;
+    }
+
     // Validate each file
     for (const file of files) {
       const fileErrors: string[] = [];
+      const isHeic = file.name.toLowerCase().endsWith('.heic');
+      const actualType = isHeic ? 'image/heic' : file.type;
 
       // Check file type
-      if (!allAllowedTypes.includes(file.type)) {
+      if (!allAllowedTypes.includes(actualType) && !isHeic) {
         fileErrors.push(`Invalid file type. Allowed: Images (JPG, PNG, GIF, WEBP) or Videos (MP4, MOV, AVI, WEBM)`);
       }
 
       // Check file size based on type
-      if (file.type.startsWith('image/')) {
+      if (actualType.startsWith('image') || isHeic) {
         if (file.size > maxImageSize) {
           fileErrors.push(`Image size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 10MB limit`);
         }
-      } else if (file.type.startsWith('video/')) {
+      } else if (file.type.startsWith('video')) {
         if (file.size > maxVideoSize) {
-          fileErrors.push(`Video size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 100MB limit`);
+          fileErrors.push(`Video size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds 5MB limit`);
         }
 
         // Validate video duration
@@ -2394,13 +2459,16 @@ export default function Influencers() {
 
     // Only process valid files
     if (validFiles.length > 0) {
-      const newFiles = validFiles.map(file => ({
-        file,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        preview: URL.createObjectURL(file)
-      }));
+      const newFiles = validFiles.map(file => {
+        const isHeic = file.name.toLowerCase().endsWith('.heic');
+        return {
+          file,
+          name: file.name,
+          type: isHeic ? 'image/heic' : file.type,
+          size: file.size,
+          preview: isHeic ? null : URL.createObjectURL(file) // Browsers can't preview HEIC natively
+        };
+      });
       setMediaFiles(prev => [...prev, ...newFiles]);
 
       if (validFiles.length > 0) {
@@ -2515,7 +2583,7 @@ export default function Influencers() {
           </Tag>
         );
       },
-      sorter: (a: any, b: any) => {
+      sorter: (a: { commission_percentage?: number }, b: { commission_percentage?: number }) => {
         const aVal = a.commission_percentage !== null && a.commission_percentage !== undefined ? Number(a.commission_percentage) : 0;
         const bVal = b.commission_percentage !== null && b.commission_percentage !== undefined ? Number(b.commission_percentage) : 0;
         return aVal - bVal;
@@ -2535,19 +2603,23 @@ export default function Influencers() {
           >
             View Commissions
           </Button>
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => {
-            // Reset all state for new influencer creation
-            setEditingInfluencer(null);
-            setInfluencerCreated(false);
-            setMediaFiles([]);
-            setProfileImagePreview(null);
-            setCurrentStep(0);
-            setFormError(null);
-            form.resetFields();
-            setDrawerOpen(true);
-          }}>
+          <ProtectedButton
+            permission="influencers.create"
+            type="primary"
+            icon={<UserAddOutlined />}
+            onClick={() => {
+              setEditingInfluencer(null);
+              setInfluencerCreated(false);
+              setMediaFiles([]);
+              setProfileImagePreview(null);
+              setCurrentStep(0);
+              setFormError(null);
+              form.resetFields();
+              setDrawerOpen(true);
+            }}
+          >
             Add Influencer
-          </Button>
+          </ProtectedButton>
         </Space>
       </div>
 
@@ -2580,7 +2652,7 @@ export default function Influencers() {
             const email = influencer.email?.toLowerCase() || '';
             const bio = influencer.bio?.toLowerCase() || '';
             const country = influencer.country?.toLowerCase() || '';
-            const countryLabel = countries.find(c => c.value === influencer.country)?.label.toLowerCase() || '';
+            const countryLabel = countries.find((c) => c.value === influencer.country)?.label.toLowerCase() || '';
 
             return (
               name.includes(searchLower) ||
@@ -2591,7 +2663,7 @@ export default function Influencers() {
             );
           })}
           rowKey="id"
-          onRow={(record: any) => ({ onClick: () => openDetail(record) })}
+          onRow={(record: InfluencerProfile) => ({ onClick: () => openDetail(record) })}
         />
       )}
       <Drawer
@@ -2615,7 +2687,7 @@ export default function Influencers() {
         {formError && <Alert message={formError} type="error" showIcon style={{ marginBottom: 16, maxWidth: 600 }} />}
 
         <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', marginTop: 16 }}>
-          <Steps current={currentStep} items={stepItems.map(s => ({ title: s.title }))} style={{ marginBottom: 32 }} responsive direction={isMobile ? 'vertical' : 'horizontal'} />
+          <Steps current={currentStep} items={stepItems.map((s) => ({ title: s.title }))} style={{ marginBottom: 32 }} responsive direction={isMobile ? 'vertical' : 'horizontal'} />
 
           {/* Step guidance */}
           <div style={{ marginBottom: 16, textAlign: 'center' }}>
@@ -2630,7 +2702,7 @@ export default function Influencers() {
           </div>
 
           <Divider style={{ margin: '16px 0 32px 0' }} />
-          <AntCard style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} styles={{ body: { padding: 0 } }}>
+          <Card style={{ boxShadow: '0 2px 8px #0001', borderRadius: 12, background: '#fff', padding: isMobile ? 12 : 32 }} styles={{ body: { padding: 0 } }}>
             <Form
               key={editingInfluencer?.id || 'new'}
               form={form}
@@ -2755,7 +2827,7 @@ export default function Influencers() {
                 </div>
               </div>
             </Form>
-          </AntCard>
+          </Card>
         </div>
       </Drawer>
 
@@ -2799,27 +2871,49 @@ export default function Influencers() {
                   <div key={m.id} style={{ position: 'relative', display: 'inline-block' }}>
                     <Image src={m.file_url} width={80} height={80} style={{ objectFit: 'cover' }} />
                     <div style={{ position: 'absolute', top: 2, right: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Upload
-                        showUploadList={false}
-                        accept="image/*"
-                        beforeUpload={(file) => { handleReplaceImage(m, file); return false; }}
-                      >
-                        <Button size="small" type="link">Edit</Button>
-                      </Upload>
-                      <Popconfirm title="Delete this image?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
-                        <Button size="small" danger type="link">Delete</Button>
-                      </Popconfirm>
+                      <PermissionGuard permission="influencers.edit">
+                        <Upload
+                          showUploadList={false}
+                          accept="image/*"
+                          beforeUpload={(file) => { handleReplaceImage(m, file); return false; }}
+                        >
+                          <Button size="small" type="link">Edit</Button>
+                        </Upload>
+                      </PermissionGuard>
+                      <PermissionGuard permission="influencers.delete">
+                        <Popconfirm title="Delete this image?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
+                          <Button size="small" danger type="link">Delete</Button>
+                        </Popconfirm>
+                      </PermissionGuard>
                     </div>
                   </div>
-                ) : m.file_type === 'video' ? (
+                ) : m.file_type === 'video' || m.mime_type?.startsWith('video') ? (
                   <div key={m.id} style={{ position: 'relative', display: 'inline-block' }}>
-                    <a href={m.file_url} target="_blank" rel="noopener noreferrer">
-                      <VideoCameraOutlined style={{ fontSize: 48 }} />
-                    </a>
+                    <div
+                      onClick={() => {
+                        setMediaPreviewType('video');
+                        setMediaPreviewUrl(m.file_url);
+                        setMediaPreviewOpen(true);
+                      }}
+                      style={{
+                        width: 80,
+                        height: 80,
+                        background: '#000',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 4,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <VideoCameraOutlined style={{ fontSize: 32, color: '#fff' }} />
+                    </div>
                     <div style={{ position: 'absolute', top: 2, right: 2 }}>
-                      <Popconfirm title="Delete this video?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
-                        <Button size="small" danger type="link">Delete</Button>
-                      </Popconfirm>
+                      <PermissionGuard permission="influencers.delete">
+                        <Popconfirm title="Delete this video?" onConfirm={() => handleDeleteMedia(m)} okText="Yes" cancelText="No">
+                          <Button size="small" danger type="link">Delete</Button>
+                        </Popconfirm>
+                      </PermissionGuard>
                     </div>
                   </div>
                 ) : null
@@ -2828,7 +2922,7 @@ export default function Influencers() {
             <Typography.Paragraph><b>Social Links:</b></Typography.Paragraph>
             <ul>
               {detailSocial.length === 0 && <li>No social links</li>}
-              {detailSocial.map((s: any) => (
+              {detailSocial.map((s: SocialLink) => (
                 <li key={s.id}>
                   <b>{s.social_media_platforms?.name || 'Platform'}:</b> {s.handle} (<a href={s.profile_url} target="_blank" rel="noopener noreferrer">Profile</a>)
                 </li>

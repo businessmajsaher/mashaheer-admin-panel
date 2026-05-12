@@ -3,6 +3,8 @@ import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, messa
 import { AppstoreAddOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { mapDeleteErrorToFriendlyMessage } from '@/utils/errorMessages';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 const { TextArea } = Input;
 
@@ -249,16 +251,18 @@ export default function Categories() {
       key: 'actions',
       render: (_: any, record: any) => (
         <span>
-          <Button icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
+          <ProtectedButton permission="categories.edit" icon={<EditOutlined />} size="small" style={{ marginRight: 8 }} onClick={() => {
             console.log('🔍 Edit button clicked for category:', record);
             setEditingCategory(record);
             setEditModalOpen(true);
             setEditThumbnailFile(null);
             setEditIconFile(null);
-          }}>Edit</Button>
-          <Popconfirm title="Delete this category?" onConfirm={() => handleDeleteCategory(record.id)} okText="Yes" cancelText="No">
-            <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
-          </Popconfirm>
+          }}>Edit</ProtectedButton>
+          <PermissionGuard permission="categories.delete">
+            <Popconfirm title="Delete this category?" onConfirm={() => handleDeleteCategory(record.id)} okText="Yes" cancelText="No">
+              <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
+            </Popconfirm>
+          </PermissionGuard>
         </span>
       ),
     },
@@ -312,9 +316,9 @@ export default function Categories() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Service Categories</Typography.Title>
         <div>
-          <Button type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
+          <ProtectedButton permission="categories.create" type="primary" icon={<AppstoreAddOutlined />} onClick={() => { setModalOpen(true); form.resetFields(); }}>
             Add Category
-          </Button>
+          </ProtectedButton>
         </div>
       </div>
       <Input.Search

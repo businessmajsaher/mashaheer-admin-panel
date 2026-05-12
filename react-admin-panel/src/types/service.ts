@@ -6,6 +6,8 @@ export interface Service {
   min_duration_days: number;
   is_flash_deal: boolean;
   offer_active?: boolean;
+  /** Admin suspend — row kept for bookings / FK integrity */
+  is_suspended?: boolean;
   flash_from?: string;
   flash_to?: string;
   location_required: boolean;

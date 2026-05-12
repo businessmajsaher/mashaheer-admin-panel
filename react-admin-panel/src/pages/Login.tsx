@@ -1,28 +1,59 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const location = useLocation();
+  const { signIn, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const infoMessage = (location.state as { message?: string } | null)?.message;
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: { email: string; password: string }) => {
     setLoading(true);
     setError(null);
+
+    // Hard safety: if anything wedges, never leave the user stuck on
+    // the spinner. 15s is comfortably longer than a normal sign-in.
+    const safety = setTimeout(() => {
+      console.warn('Login: safety timeout reached, releasing spinner.');
+      setLoading(false);
+      setError(
+        'Sign in is taking longer than expected. Please check your network and try again.'
+      );
+    }, 15000);
+
     try {
       console.log('Attempting signIn with:', values.email);
-      await signIn(values.email, values.password);
+      const { user } = await signIn(values.email, values.password);
+
+      console.log('Login: access diagnostics', {
+        email: user?.email,
+        super_admin: user?.super_admin,
+        is_staff: user?.is_staff,
+        role: user?.role,
+      });
+
+      const allowed = !!user && (user.super_admin === true || user.is_staff === true);
+      if (!allowed) {
+        await signOut();
+        setError(
+          'This account is not authorized for the admin panel. Ask your super administrator to create a staff account for you.'
+        );
+        return;
+      }
+
       console.log('SignIn successful, navigating to /dashboard');
       navigate('/dashboard');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('SignIn error:', err);
-      let msg = err?.message || 'Login failed';
+      const msg = err instanceof Error ? err.message : 'Login failed';
       setError(msg);
     } finally {
+      clearTimeout(safety);
       setLoading(false);
     }
   };
@@ -34,6 +65,9 @@ export default function Login() {
         <Typography.Title level={2} style={{ textAlign: 'center', marginBottom: 24 }}>
           Admin Login
         </Typography.Title>
+        {infoMessage && (
+          <Alert message={infoMessage} type="info" showIcon style={{ marginBottom: 16 }} closable />
+        )}
         {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form
           name="login"
@@ -70,4 +104,4 @@ export default function Login() {
       </Card>
     </div>
   );
-} 
+}

@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
+import { PermissionProvider } from '@/context/PermissionContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { MainLayout } from '@/layouts/MainLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -28,6 +29,7 @@ const Discounts = lazy(() => import('@/pages/Discounts/Discounts'));
 const DiscountAnalytics = lazy(() => import('@/pages/Discounts/Analytics'));
 const CashOut = lazy(() => import('@/pages/CashOut/CashOut'));
 const Refunds = lazy(() => import('@/pages/Refunds/Refunds'));
+const Staff = lazy(() => import('@/pages/Staff/Staff'));
 const SupabaseConnectionTest = lazy(() => import('@/pages/SupabaseConnectionTest'));
 const AuthRouter = lazy(() => import('@/components/AuthRouter'));
 const Diagnostics = lazy(() => import('@/pages/Diagnostics'));
@@ -45,6 +47,7 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
+          <PermissionProvider>
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Suspense fallback={
               <div style={{
@@ -108,6 +111,7 @@ export default function App() {
                 {/* Authentication routes */}
                 <Route path="/auth" element={<AuthRouter />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/admin/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
 
                 {/* Password reset callback */}
@@ -116,7 +120,7 @@ export default function App() {
 
                 {/* Protected routes */}
                 <Route path="/dashboard" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="dashboard.view">
                     <MainLayout>
                       <Dashboard />
                     </MainLayout>
@@ -124,7 +128,7 @@ export default function App() {
                 } />
 
                 <Route path="/users" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="users.view">
                     <MainLayout>
                       <Users />
                     </MainLayout>
@@ -132,7 +136,7 @@ export default function App() {
                 } />
 
                 <Route path="/influencers" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="influencers.view">
                     <MainLayout>
                       <Influencers />
                     </MainLayout>
@@ -140,7 +144,7 @@ export default function App() {
                 } />
 
                 <Route path="/categories" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="categories.view">
                     <MainLayout>
                       <Categories />
                     </MainLayout>
@@ -148,7 +152,7 @@ export default function App() {
                 } />
 
                 <Route path="/services" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="services.view">
                     <MainLayout>
                       <Services />
                     </MainLayout>
@@ -156,7 +160,7 @@ export default function App() {
                 } />
 
                 <Route path="/contracts" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="contracts.view">
                     <MainLayout>
                       <Contracts />
                     </MainLayout>
@@ -165,7 +169,7 @@ export default function App() {
 
 
                 <Route path="/reviews" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="reviews.view">
                     <MainLayout>
                       <Reviews />
                     </MainLayout>
@@ -173,7 +177,7 @@ export default function App() {
                 } />
 
                 <Route path="/bookings" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="bookings.view">
                     <MainLayout>
                       <Bookings />
                     </MainLayout>
@@ -181,7 +185,7 @@ export default function App() {
                 } />
 
                 <Route path="/settings" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="settings.view">
                     <MainLayout>
                       <Settings />
                     </MainLayout>
@@ -189,7 +193,7 @@ export default function App() {
                 } />
 
                 <Route path="/platforms" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="platforms.view">
                     <MainLayout>
                       <Platforms />
                     </MainLayout>
@@ -197,7 +201,7 @@ export default function App() {
                 } />
 
                 <Route path="/discounts" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="discounts.view">
                     <MainLayout>
                       <Discounts />
                     </MainLayout>
@@ -205,7 +209,7 @@ export default function App() {
                 } />
 
                 <Route path="/discounts/analytics" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="discounts.view">
                     <MainLayout>
                       <DiscountAnalytics />
                     </MainLayout>
@@ -213,7 +217,7 @@ export default function App() {
                 } />
 
                 <Route path="/cash-out" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="cash_out.view">
                     <MainLayout>
                       <CashOut />
                     </MainLayout>
@@ -221,7 +225,7 @@ export default function App() {
                 } />
 
                 <Route path="/refunds" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="refunds.view">
                     <MainLayout>
                       <Refunds />
                     </MainLayout>
@@ -229,7 +233,7 @@ export default function App() {
                 } />
 
                 <Route path="/legal-notices" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="legal_notices.view">
                     <MainLayout>
                       <LegalNotices />
                     </MainLayout>
@@ -237,7 +241,7 @@ export default function App() {
                 } />
 
                 <Route path="/privacy-policy" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="privacy_policy.view">
                     <MainLayout>
                       <PrivacyPolicy />
                     </MainLayout>
@@ -253,7 +257,7 @@ export default function App() {
                 } />
 
                 <Route path="/contact-support" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="contact_support.view">
                     <MainLayout>
                       <ContactSupport />
                     </MainLayout>
@@ -261,9 +265,17 @@ export default function App() {
                 } />
 
                 <Route path="/help-support" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requirePermission="help_support.view">
                     <MainLayout>
                       <HelpSupport />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/staff" element={
+                  <ProtectedRoute requirePermission="staff.view">
+                    <MainLayout>
+                      <Staff />
                     </MainLayout>
                   </ProtectedRoute>
                 } />
@@ -315,6 +327,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </Router>
+          </PermissionProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -3,6 +3,7 @@ import { Card, Table, Button, Typography, Tag, Space, Avatar, message, Modal, Fo
 import { UserAddOutlined, EditOutlined, DeleteOutlined, EyeOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { PasswordResetModal } from '@/components/PasswordResetModal';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 interface Customer {
   id: string;
@@ -317,6 +318,41 @@ export default function Users() {
 
       if (error) throw error;
 
+      const trimmedNewEmail = (values.email ?? '').trim();
+      const trimmedOldEmail = (editingCustomer.email ?? '').trim();
+      if (trimmedNewEmail !== trimmedOldEmail) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (token) {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const syncRes = await fetch(
+            `${supabaseUrl}/functions/v1/admin-update-customer-auth-email`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                user_id: editingCustomer.id,
+                email: trimmedNewEmail
+              })
+            }
+          );
+          if (!syncRes.ok) {
+            const errBody = (await syncRes.json().catch(() => ({}))) as {
+              error?: string;
+              details?: string;
+            };
+            message.warning(
+              `Profile saved, but the login email in authentication could not be updated: ${
+                errBody.details || errBody.error || syncRes.status
+              }. Password reset emails will show the correct address to use for sign-in.`
+            );
+          }
+        }
+      }
+
       message.success('Customer updated successfully!');
       setEditModalOpen(false);
       setEditingCustomer(null);
@@ -395,9 +431,10 @@ export default function Users() {
           >
             View
           </Button>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<EditOutlined />}
             size="small"
             onClick={() => {
               setEditingCustomer(record);
@@ -405,15 +442,16 @@ export default function Users() {
             }}
           >
             Edit
-          </Button>
-          <Button 
-            type="link" 
-            icon={<KeyOutlined />} 
+          </ProtectedButton>
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<KeyOutlined />}
             size="small"
             onClick={() => handlePasswordReset(record.email, record.name)}
           >
             Reset Password
-          </Button>
+          </ProtectedButton>
           <Popconfirm
             title={record.is_suspended ? "Unsuspend this customer?" : "Suspend this customer?"}
             description={record.is_suspended 
@@ -423,14 +461,15 @@ export default function Users() {
             okText="Yes"
             cancelText="No"
           >
-          <Button 
-            type="link" 
-            icon={<DeleteOutlined />} 
+          <ProtectedButton
+            permission="users.edit"
+            type="link"
+            icon={<DeleteOutlined />}
             size="small"
-              danger={!record.is_suspended}
+            danger={!record.is_suspended}
           >
               {record.is_suspended ? 'Unsuspend' : 'Suspend'}
-          </Button>
+          </ProtectedButton>
           </Popconfirm>
         </Space>
       ),
@@ -442,8 +481,9 @@ export default function Users() {
       <Card style={{ margin: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Typography.Title level={4} style={{ margin: 0 }}>Customers</Typography.Title>
-          <Button 
-            type="primary" 
+          <ProtectedButton
+            permission="users.create"
+            type="primary"
             icon={<UserAddOutlined />}
             onClick={() => {
               setAddModalOpen(true);
@@ -452,7 +492,7 @@ export default function Users() {
             }}
           >
             Add Customer
-          </Button>
+          </ProtectedButton>
         </div>
         
         <Input.Search

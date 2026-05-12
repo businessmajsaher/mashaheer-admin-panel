@@ -46,6 +46,8 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { supabase } from '@/services/supabaseClient';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -405,9 +407,10 @@ const Discounts: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title="Edit">
-            <Button 
-              type="text" 
-              icon={<EditOutlined />} 
+            <ProtectedButton
+              permission="discounts.edit"
+              type="text"
+              icon={<EditOutlined />}
               onClick={() => {
                 setEditingCoupon(record);
                 setApplicableTo(record.applicable_to || 'all');
@@ -426,22 +429,25 @@ const Discounts: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title={record.is_active ? 'Deactivate' : 'Activate'}>
-            <Button 
-              type="text" 
+            <ProtectedButton
+              permission="discounts.edit"
+              type="text"
               icon={record.is_active ? <CloseCircleOutlined /> : <CheckCircleOutlined />}
               onClick={() => handleToggleActive(record.id, record.is_active)}
             />
           </Tooltip>
-          <Popconfirm
-            title="Are you sure you want to delete this coupon?"
-            onConfirm={() => handleDeleteCoupon(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Tooltip title="Delete">
-              <Button type="text" danger icon={<DeleteOutlined />} />
-            </Tooltip>
-          </Popconfirm>
+          <PermissionGuard permission="discounts.delete">
+            <Popconfirm
+              title="Are you sure you want to delete this coupon?"
+              onConfirm={() => handleDeleteCoupon(record.id)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Tooltip title="Delete">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          </PermissionGuard>
         </Space>
       ),
     },
@@ -523,17 +529,22 @@ const Discounts: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={fetchCoupons}>
               Refresh
             </Button>
-            <Button icon={<ExportOutlined />}>
+            <ProtectedButton permission="discounts.view" icon={<ExportOutlined />}>
               Export
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-              setIsModalVisible(true);
-              setApplicableTo('all');
-              setUserRestrictions('all');
-              form.resetFields();
-            }}>
+            </ProtectedButton>
+            <ProtectedButton
+              permission="discounts.create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setIsModalVisible(true);
+                setApplicableTo('all');
+                setUserRestrictions('all');
+                form.resetFields();
+              }}
+            >
               Create Coupon
-            </Button>
+            </ProtectedButton>
           </Space>
         </div>
 

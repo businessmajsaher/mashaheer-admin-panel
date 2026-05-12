@@ -3,6 +3,8 @@ import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, messa
 import { FileTextOutlined, EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { contractService } from '@/services/contractService';
 import { supabase } from '@/services/supabaseClient';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { PermissionGuard } from '@/components/PermissionGuard';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
@@ -823,13 +825,15 @@ export default function Contracts() {
             setViewingContract(record);
             setViewModalOpen(true);
           }}>Preview</Button>
-          <Button icon={<EditOutlined />} size="small" onClick={() => {
+          <ProtectedButton permission="contracts.edit" icon={<EditOutlined />} size="small" onClick={() => {
             setEditingContract(record);
             setEditModalOpen(true);
-          }}>Edit</Button>
-          <Popconfirm title="Delete this contract template?" onConfirm={() => handleDeleteContract(record.id)} okText="Yes" cancelText="No">
-            <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
-          </Popconfirm>
+          }}>Edit</ProtectedButton>
+          <PermissionGuard permission="contracts.delete">
+            <Popconfirm title="Delete this contract template?" onConfirm={() => handleDeleteContract(record.id)} okText="Yes" cancelText="No">
+              <Button icon={<DeleteOutlined />} size="small" danger>Delete</Button>
+            </Popconfirm>
+          </PermissionGuard>
         </Space>
       ),
     },
@@ -842,13 +846,13 @@ export default function Contracts() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Contracts</Typography.Title>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+          <ProtectedButton permission="contracts.create" type="primary" icon={<PlusOutlined />} onClick={() => {
             setModalOpen(true);
             form.resetFields();
             form.setFieldsValue({ content: defaultTemplate });
           }}>
             Add Template
-          </Button>
+          </ProtectedButton>
         </div>
       </div>
 

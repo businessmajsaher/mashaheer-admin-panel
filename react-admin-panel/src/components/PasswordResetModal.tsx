@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Button, Alert, message } from 'antd';
-import { resetPassword } from '@/services/authService';
+import { adminResetCustomerPasswordEmail } from '@/services/authService';
 
 interface PasswordResetModalProps {
   isOpen: boolean;
@@ -39,14 +39,12 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     setError(null);
 
     try {
-      // Use the password reset callback page as redirect URL
-      const redirectUrl = `${window.location.origin}/password-reset-callback`;
-      
-      await resetPassword(email, redirectUrl);
+      const loginUrl = `${window.location.origin}/login`;
+      await adminResetCustomerPasswordEmail(email, userName || email.split('@')[0], loginUrl);
       setSuccess(true);
-      message.success('Password reset email sent successfully!');
+      message.success('New password generated and emailed to the customer.');
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to send password reset email';
+      const errorMessage = err.message || 'Failed to reset password or send email';
       setError(errorMessage);
       message.error(errorMessage);
     } finally {
@@ -104,7 +102,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
             Cancel
           </Button>
           <Button type="primary" htmlType="submit" loading={loading}>
-            Send Reset Email
+            Generate password and email
           </Button>
         </Form.Item>
       </Form>
@@ -112,12 +110,15 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
       {success && (
         <div>
           <Alert
-            message="Password Reset Email Sent"
+            message="New password emailed"
             description={
               <div>
-                <p>A password reset email has been sent to <strong>{form.getFieldValue('email')}</strong></p>
+                <p>
+                  A newly generated password has been sent to{' '}
+                  <strong>{form.getFieldValue('email')}</strong>.
+                </p>
                 <p style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-              The user will receive an email with a link to reset their password. 
+                  The customer should sign in with the credentials in that message and change their password if they wish.
                 </p>
               </div>
             }

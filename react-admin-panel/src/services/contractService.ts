@@ -170,7 +170,7 @@ export const contractService = {
 
     let generatedContent = template.content;
 
-    Object.entries(mergedVariables).forEach(([key, value]) => {
+    Object.entries(replacementVars).forEach(([key, value]) => {
       // Flexible regex: handles spaces, underscores, and case insensitivity
       // e.g. matches {{customer_name}}, {{customer name}}, {{ Customer Name }}
       const searchKey = key.replace(/_/g, '[_\\s]');
@@ -330,13 +330,13 @@ export const contractService = {
     }
 
     // If we're looking for a specific party copy or the final document, ensure signature is visible
-    const needsSignatureSection = signerType 
+    const needsSignatureSection = signerType
       ? (signerType === 'customer' ? !html.includes(customerSigImg) : !html.includes(influencerSigImg))
       : (!html.includes(customerSigImg) || !html.includes(influencerSigImg));
 
     if (needsSignatureSection) {
       let signatureSection = '<div class="signature-section" style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; display: flex; justify-content: space-between; flex-wrap: wrap;">';
-      
+
       if (customerSig && (!signerType || signerType === 'customer')) {
         signatureSection += `
           <div style="text-align: center; width: 45%; min-width: 250px; margin-bottom: 20px;">
@@ -346,7 +346,7 @@ export const contractService = {
           </div>
         `;
       }
-      
+
       if (influencerSig && (!signerType || signerType === 'influencer')) {
         signatureSection += `
           <div style="text-align: center; width: 45%; min-width: 250px; margin-bottom: 20px;">
@@ -356,9 +356,9 @@ export const contractService = {
           </div>
         `;
       }
-      
+
       signatureSection += '</div>';
-      
+
       if (html.includes('</body>')) {
         html = html.replace('</body>', signatureSection + '</body>');
       } else {

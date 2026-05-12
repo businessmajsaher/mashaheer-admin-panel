@@ -376,22 +376,38 @@ export const faqService = {
 
   // Increment FAQ view count
   async incrementFAQView(id: string): Promise<void> {
-    const { error } = await supabase
+    const { data: faq } = await supabase
       .from('faq_items')
-      .update({ view_count: supabase.sql`view_count + 1` })
-      .eq('id', id);
+      .select('view_count')
+      .eq('id', id)
+      .single();
 
-    if (error) throw error;
+    if (faq) {
+      const { error } = await supabase
+        .from('faq_items')
+        .update({ view_count: (faq.view_count || 0) + 1 })
+        .eq('id', id);
+
+      if (error) throw error;
+    }
   },
 
   // Increment FAQ helpful count
   async incrementFAQHelpful(id: string): Promise<void> {
-    const { error } = await supabase
+    const { data: faq } = await supabase
       .from('faq_items')
-      .update({ helpful_count: supabase.sql`helpful_count + 1` })
-      .eq('id', id);
+      .select('helpful_count')
+      .eq('id', id)
+      .single();
 
-    if (error) throw error;
+    if (faq) {
+      const { error } = await supabase
+        .from('faq_items')
+        .update({ helpful_count: (faq.helpful_count || 0) + 1 })
+        .eq('id', id);
+
+      if (error) throw error;
+    }
   },
 
   // Create new FAQ item
@@ -516,10 +532,16 @@ export const supportTicketsService = {
     if (error) throw error;
 
     // Update ticket response count and last response time
+    const { data: ticket } = await supabase
+      .from('support_tickets')
+      .select('response_count')
+      .eq('id', response.ticket_id)
+      .single();
+
     await supabase
       .from('support_tickets')
       .update({ 
-        response_count: supabase.sql`response_count + 1`,
+        response_count: (ticket?.response_count || 0) + 1,
         last_response_at: new Date().toISOString()
       })
       .eq('id', response.ticket_id);
@@ -598,7 +620,7 @@ export const termsOfServiceService = {
       .select('*')
       .eq('category', 'terms-of-service')
       .eq('is_active', true)
-      .order('order_index', { ascending: true });
+      .order('title', { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -610,7 +632,7 @@ export const termsOfServiceService = {
       .from('legal_notices')
       .select('*')
       .eq('category', 'terms-of-service')
-      .order('order_index', { ascending: true });
+      .order('title', { ascending: true });
 
     if (error) throw error;
     return data || [];

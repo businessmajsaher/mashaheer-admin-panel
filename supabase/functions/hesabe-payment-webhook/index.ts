@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -233,7 +234,7 @@ serve(async (req: Request) => {
             .single();
 
           if (!createError && newPayment) {
-            console.log('✅ Created payment record:', newPayment.id);
+            console.log('âœ… Created payment record:', newPayment.id);
             payment = newPayment;
             
             // Update booking status to payment confirmed
@@ -252,7 +253,7 @@ serve(async (req: Request) => {
                 })
                 .eq('id', bookingId);
               
-              console.log('✅ Updated booking status to payment confirmed');
+              console.log('âœ… Updated booking status to payment confirmed');
             }
           } else {
             console.error('Failed to create payment record:', createError);
@@ -389,7 +390,7 @@ serve(async (req: Request) => {
                   booking_id: booking.id
                 })
               });
-              console.log('✅ Payment receipt sent to customer');
+              console.log('âœ… Payment receipt sent to customer');
             } catch (receiptError) {
               console.error('Error sending payment receipt:', receiptError);
             }
@@ -415,7 +416,7 @@ serve(async (req: Request) => {
                   }
                 })
               });
-              console.log('✅ Notification sent to customer');
+              console.log('âœ… Notification sent to customer');
             } catch (notifError) {
               console.error('Error sending customer notification:', notifError);
             }
@@ -441,7 +442,7 @@ serve(async (req: Request) => {
                   }
                 })
               });
-              console.log('✅ Notification sent to influencer');
+              console.log('âœ… Notification sent to influencer');
             } catch (notifError) {
               console.error('Error sending influencer notification:', notifError);
             }

@@ -33,6 +33,7 @@ import {
 import dayjs from 'dayjs';
 import { supabase } from '@/services/supabaseClient';
 import { getCouponAnalytics } from '@/services/discountService';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -232,9 +233,9 @@ const Analytics: React.FC = () => {
           <Button icon={<ReloadOutlined />} onClick={fetchAnalytics}>
             Refresh
           </Button>
-          <Button icon={<ExportOutlined />} onClick={handleExport}>
+          <ProtectedButton permission="discounts.view" icon={<ExportOutlined />} onClick={handleExport}>
             Export
-          </Button>
+          </ProtectedButton>
         </Space>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Typography, Space, Alert, Spin, message } from 'antd';
 import { EditOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
 import { legalNoticesService, LegalNotice } from '@/services/legalSupportService';
+import { ProtectedButton } from '@/components/ProtectedButton';
 
 const { Title, Paragraph } = Typography;
 
@@ -51,8 +52,8 @@ export default function LegalNotices() {
       setEditingId(null);
       setEditContent('');
       message.success('Legal notice updated successfully!');
-    } catch (error) {
-      message.error('Failed to save changes');
+    } catch (error: any) {
+      message.error(`Failed to save changes: ${error.message || 'Unknown error'}`);
       console.error('Error updating legal notice:', error);
     } finally {
       setSaving(false);
@@ -99,7 +100,8 @@ export default function LegalNotices() {
                     آخر تحديث: {new Date(content.last_updated).toLocaleDateString()}
                   </small>
                   {editingId !== content.id && (
-                    <Button
+                    <ProtectedButton
+                      permission="legal_notices.edit"
                       type="primary"
                       icon={<EditOutlined />}
                       size="small"
@@ -107,7 +109,7 @@ export default function LegalNotices() {
                       style={{ backgroundColor: '#000', borderColor: '#000' }}
                     >
                       تعديل
-                    </Button>
+                    </ProtectedButton>
                   )}
                 </Space>
               </div>

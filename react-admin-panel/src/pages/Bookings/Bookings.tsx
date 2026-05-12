@@ -27,6 +27,8 @@ import html2pdf from 'html2pdf.js';
 import { Booking, BookingFilters, BookingStatus } from '../../types/booking';
 import { Service } from '../../types/service';
 import { formatPrice } from '../../utils/currencyUtils';
+import { ProtectedButton } from '@/components/ProtectedButton';
+import { usePermissions } from '@/context/PermissionContext';
 import dayjs from 'dayjs';
 import advancedFormat from 'dayjs/plugin/advancedFormat';
 
@@ -232,6 +234,8 @@ function downloadPartyContract(contract: Record<string, unknown>, party: Contrac
 
 
 const Bookings: React.FC = () => {
+  const { has: hasPerm, isSuperAdmin: isSuper } = usePermissions();
+  const canEditBookings = isSuper || hasPerm('bookings.edit');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [bookingStatuses, setBookingStatuses] = useState<BookingStatus[]>([]);
@@ -640,7 +644,8 @@ const Bookings: React.FC = () => {
               View Details
             </Button>
             {completedPayment && !isPublished && !refundBlocksNew && (
-              <Button
+              <ProtectedButton
+                permission="refunds.create"
                 type="link"
                 icon={<DollarOutlined />}
                 danger
@@ -648,7 +653,7 @@ const Bookings: React.FC = () => {
                 title="Initiate refund"
               >
                 Refund
-              </Button>
+              </ProtectedButton>
             )}
             {hasAnyRefund && latestRefund && (
               <Tag color={LOCAL_REFUND_STATUS_COLOR[latestRefund.status] || 'default'} style={{ marginLeft: 4 }}>
@@ -659,6 +664,7 @@ const Bookings: React.FC = () => {
               value={record.status_id}
               style={{ width: 150 }}
               onChange={(value) => handleUpdateStatus(record.id, value)}
+              disabled={!canEditBookings}
             >
               {bookingStatuses.map(status => (
                 <Option key={status.id} value={status.id}>
@@ -797,7 +803,10 @@ const Bookings: React.FC = () => {
                         {selectedBooking.contract.status?.toUpperCase()}
                       </Tag>
                       <Space wrap size="small">
-                        <Button
+                        <ProtectedButton
+                          permission="bookings.export"
+                          unauthorized="disable"
+                          noAccessTooltip="You do not have permission to export contracts."
                           type="primary"
                           size="small"
                           icon={<DownloadOutlined />}
@@ -805,8 +814,11 @@ const Bookings: React.FC = () => {
                           onClick={() => handleDownloadSignatureOnly(selectedBooking.contract!.id, 'customer')}
                         >
                           Customer signature
-                        </Button>
-                        <Button
+                        </ProtectedButton>
+                        <ProtectedButton
+                          permission="bookings.export"
+                          unauthorized="disable"
+                          noAccessTooltip="You do not have permission to export contracts."
                           type="primary"
                           size="small"
                           icon={<DownloadOutlined />}
@@ -814,9 +826,12 @@ const Bookings: React.FC = () => {
                           onClick={() => handleDownloadSignatureOnly(selectedBooking.contract!.id, 'influencer')}
                         >
                           Influencer signature
-                        </Button>
+                        </ProtectedButton>
                         {(selectedBooking.contract.status === 'active' || selectedBooking.contract.status === 'completed') && (
-                          <Button
+                          <ProtectedButton
+                            permission="bookings.export"
+                            unauthorized="disable"
+                            noAccessTooltip="You do not have permission to export contracts."
                             type="primary"
                             size="small"
                             icon={<DownloadOutlined />}
@@ -824,7 +839,7 @@ const Bookings: React.FC = () => {
                             onClick={() => handleDownloadContract(selectedBooking.contract!.id)}
                           >
                             Final Signed Agreement (PDF)
-                          </Button>
+                          </ProtectedButton>
                         )}
                       </Space>
                       <span style={{ fontSize: 12, color: '#888' }}>
