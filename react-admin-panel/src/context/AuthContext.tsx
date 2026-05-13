@@ -7,8 +7,8 @@ interface User {
   id: string;
   email: string;
   role?: string;
-  /** Only explicit true grants dashboard access (see ProtectedRoute). */
-  super_admin?: boolean;
+  /** JWT/metadata + mirrors auth.users.is_super_admin for dashboard super admins. */
+  is_super_admin?: boolean;
   /** True when an active row exists in public.staff_users. */
   is_staff?: boolean;
 }
@@ -50,7 +50,7 @@ function toBaseUser(u: SupabaseUser): User {
     id: u.id,
     email: u.email ?? '',
     role: (u.user_metadata?.role as string) || 'user',
-    super_admin: sa,
+    is_super_admin: sa,
     // For super admins, treat as staff too (full access). Real staff
     // status is hydrated separately via fetchIsStaff.
     is_staff: sa,
@@ -59,7 +59,7 @@ function toBaseUser(u: SupabaseUser): User {
 
 async function hydrateUser(u: SupabaseUser): Promise<User> {
   const base = toBaseUser(u);
-  if (base.super_admin) return base;
+  if (base.is_super_admin) return base;
   const isStaff = await fetchIsStaff(u.id);
   return { ...base, is_staff: isStaff };
 }
@@ -141,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
 
         // Super admins don't need the staff lookup.
-        if (base.super_admin) return;
+        if (base.is_super_admin) return;
 
         setTimeout(() => {
           if (!isMounted) return;

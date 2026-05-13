@@ -89,9 +89,13 @@ create table if not exists public.staff_permissions (
 -- =====================================================================
 -- Helper SQL functions
 -- =====================================================================
+--
+-- Cannot ALTER auth.users here (hosted migration role). Add column once in Dashboard → SQL:
+--   alter table auth.users add column if not exists is_super_admin boolean not null default false;
+--
 
--- Super admin check — accepts either auth.users.is_super_admin OR
--- user_metadata.super_admin = true (or "true" string).
+-- Super-admin RPC: auth.users.is_super_admin column OR raw_user_meta_data.is_super_admin.
+-- Use public.is_admin() for full admin checks (profiles / metadata role admin / super-admin).
 create or replace function public.is_super_admin(uid uuid)
 returns boolean
 language sql
@@ -99,17 +103,26 @@ stable
 security definer
 set search_path = public, auth
 as $$
-  select coalesce((select is_super_admin from auth.users where id = uid), false)
-      or coalesce(
-           (select (raw_user_meta_data->>'super_admin')::boolean
-              from auth.users where id = uid),
-           false
+  select exists (
+    select 1
+      from auth.users u
+     where u.id = uid
+       and (
+         coalesce(u.is_super_admin, false) = true
+         or (
+           case
+             when u.raw_user_meta_data is null
+               or not (u.raw_user_meta_data ? 'is_super_admin')
+             then false
+             when jsonb_typeof(u.raw_user_meta_data->'is_super_admin') = 'boolean' then
+               (u.raw_user_meta_data->'is_super_admin')::text::boolean
+             when jsonb_typeof(u.raw_user_meta_data->'is_super_admin') = 'string' then
+               lower(trim(u.raw_user_meta_data->>'is_super_admin')) in ('true')
+             else false
+           end
          )
-      or coalesce(
-           lower(coalesce((select raw_user_meta_data->>'super_admin'
-                             from auth.users where id = uid), '')) = 'true',
-           false
-         );
+       )
+  );
 $$;
 
 -- Has permission check used in policies and server logic.

@@ -19,7 +19,7 @@ export default function Signup() {
         options: {
           data: {
             role: 'admin',
-            super_admin: false,
+            is_super_admin: false,
           },
         },
       });
@@ -28,7 +28,7 @@ export default function Signup() {
         replace: true,
         state: {
           message:
-            'Account created. Sign in only works after a super administrator enables access for your user in Supabase (User Metadata: super_admin = true).',
+            'Account created. Sign in only works after a super administrator enables access (auth.users.is_super_admin = true and/or User Metadata: is_super_admin = true).',
         },
       });
     } catch (err: any) {

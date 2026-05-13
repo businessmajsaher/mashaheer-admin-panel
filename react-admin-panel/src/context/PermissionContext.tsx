@@ -34,7 +34,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setLoading(false);
       return;
     }
-    if (user.super_admin) {
+    if (user.is_super_admin) {
       setPermissions(['*']);
       setLoading(false);
       return;

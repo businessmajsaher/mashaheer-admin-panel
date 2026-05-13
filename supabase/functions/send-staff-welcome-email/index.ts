@@ -42,8 +42,8 @@ serve(async (req) => {
       : "Welcome to Mashaheer Admin — Your staff account is ready";
 
     const intro = isReset
-      ? "Your super administrator generated a new password for your Mashaheer Admin account. Use the credentials below to sign in. For security, change this password from your profile after you log in."
-      : "You have been added to the Mashaheer Admin panel by your super administrator. Use the credentials below to sign in. You will be asked to change your password after the first login.";
+      ? "Your administrator generated a new password for your Mashaheer Admin account. Use the credentials below to sign in. For security, change this password from your profile after you log in."
+      : "You have been added to the Mashaheer Admin panel by your administrator. Use the credentials below to sign in. You will be asked to change your password after the first login.";
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff;">
