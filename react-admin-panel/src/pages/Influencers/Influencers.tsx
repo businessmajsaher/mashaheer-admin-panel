@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, Table, Button, Typography, Modal, Form, Input, Alert, Spin, message, Checkbox, Select, Space, Upload, Drawer, Image, Popconfirm, Steps, Row, Col, Divider, Switch, InputNumber, Progress, Tag } from 'antd';
-import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined, SearchOutlined } from '@ant-design/icons';
+import { UserAddOutlined, UploadOutlined, VideoCameraOutlined, PictureOutlined, DeleteOutlined, PlusOutlined, DollarOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
 import { supabase } from '@/services/supabaseClient';
 import { uploadInfluencerProfileImage } from '@/services/storageService';
 import { generateRandomPassword, sendWelcomeEmail } from '@/services/emailService';
@@ -19,6 +19,8 @@ interface InfluencerProfile {
   is_verified: boolean;
   commission_percentage: number;
   created_at: string;
+  /** Admin suspension — hide or block in other apps as needed */
+  account_suspended?: boolean;
 }
 
 interface SocialLink {
@@ -284,7 +286,7 @@ export default function Influencers() {
     setLoading(true);
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, bio, country, profile_image_url, is_verified, commission_percentage, created_at')
+      .select('id, name, email, bio, country, profile_image_url, is_verified, commission_percentage, created_at, account_suspended')
       .eq('role', 'influencer')
       .order('created_at', { ascending: false });
     if (error) message.error(error.message);
@@ -1127,6 +1129,20 @@ export default function Influencers() {
     }
   };
 
+  const handleSetInfluencerSuspended = async (record: InfluencerProfile, suspended: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ account_suspended: suspended })
+        .eq('id', record.id);
+      if (error) throw error;
+      message.success(suspended ? 'Influencer suspended' : 'Influencer reactivated');
+      await fetchInfluencers();
+    } catch (e: any) {
+      message.error(e.message || 'Failed to update suspension');
+    }
+  };
+
 
   // Fetch media and social links for influencer
   const openDetail = async (record: InfluencerProfile) => {
@@ -1210,6 +1226,13 @@ export default function Influencers() {
     },
     { title: 'Created At', dataIndex: 'created_at', key: 'created_at', render: (v: string) => new Date(v).toLocaleString() },
     {
+      title: 'Status',
+      key: 'account_suspended',
+      width: 120,
+      render: (_: unknown, record: InfluencerProfile) =>
+        record.account_suspended ? <Tag color="red">Suspended</Tag> : <Tag color="green">Active</Tag>,
+    },
+    {
       title: 'Media',
       key: 'media',
       render: (_: unknown, record: InfluencerProfile) => <MediaCount influencerId={record.id} />,
@@ -1227,6 +1250,34 @@ export default function Influencers() {
           >
             Edit
           </ProtectedButton>
+          {record.account_suspended ? (
+            <PermissionGuard permission="influencers.edit">
+              <Popconfirm
+                title="Reactivate influencer?"
+                description="They will be treated as active again in the admin panel."
+                onConfirm={() => handleSetInfluencerSuspended(record, false)}
+                okText="Reactivate"
+              >
+                <Button size="small" type="default">
+                  Reactivate
+                </Button>
+              </Popconfirm>
+            </PermissionGuard>
+          ) : (
+            <PermissionGuard permission="influencers.edit">
+              <Popconfirm
+                title="Suspend influencer?"
+                description="Profile data is kept; use this to block access in your product (enforce in RLS or app as needed)."
+                onConfirm={() => handleSetInfluencerSuspended(record, true)}
+                okText="Suspend"
+                okType="danger"
+              >
+                <Button danger size="small" icon={<StopOutlined />}>
+                  Suspend
+                </Button>
+              </Popconfirm>
+            </PermissionGuard>
+          )}
           <PermissionGuard permission="influencers.delete">
             <Popconfirm
               title="Delete Influencer"

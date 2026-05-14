@@ -24,7 +24,9 @@ async function callEdgeFunction<T>(
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    const msg = (json.error as string) || (json.details as string) || `HTTP ${res.status}`;
+    const base = (json.error as string) || `HTTP ${res.status}`;
+    const details = json.details as string | undefined;
+    const msg = details ? `${base}: ${details}` : base;
     throw new Error(msg);
   }
   return json as T;
@@ -80,35 +82,18 @@ export async function createStaffUser(input: {
 
 export async function updateStaffUser(
   id: string,
-  patch: { full_name?: string; designation_id?: string | null; is_active?: boolean }
+  patch: { email?: string; full_name?: string; designation_id?: string | null; is_active?: boolean }
 ): Promise<void> {
-  const updates: Record<string, unknown> = {};
-  if (patch.full_name !== undefined) updates.full_name = patch.full_name.trim();
-  if (patch.designation_id !== undefined) updates.designation_id = patch.designation_id;
-  if (patch.is_active !== undefined) updates.is_active = patch.is_active;
-  if (Object.keys(updates).length === 0) return;
+  const body: Record<string, unknown> = { staff_user_id: id };
+  if (patch.email !== undefined) body.email = patch.email.trim().toLowerCase();
+  if (patch.full_name !== undefined) body.full_name = patch.full_name.trim();
+  if (patch.designation_id !== undefined) body.designation_id = patch.designation_id;
+  if (patch.is_active !== undefined) body.is_active = patch.is_active;
 
-  const { error } = await supabase.from('staff_users').update(updates).eq('id', id);
-  if (error) throw error;
+  const extraKeys = Object.keys(body).filter((k) => k !== 'staff_user_id');
+  if (extraKeys.length === 0) return;
 
-  // Keep auth.users.user_metadata.designation_id in sync so the JWT
-  // is fresh after the staff user next signs in.
-  if (patch.designation_id !== undefined) {
-    const { data: row } = await supabase
-      .from('staff_users')
-      .select('auth_user_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (row?.auth_user_id) {
-      try {
-        await supabase.auth.admin.updateUserById(row.auth_user_id, {
-          user_metadata: { designation_id: patch.designation_id },
-        });
-      } catch {
-        /* not allowed from client without service role — harmless */
-      }
-    }
-  }
+  await callEdgeFunction('admin-update-staff', body);
 }
 
 export async function setStaffActive(id: string, isActive: boolean): Promise<void> {

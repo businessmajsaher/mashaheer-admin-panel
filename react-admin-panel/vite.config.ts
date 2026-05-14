@@ -22,6 +22,12 @@ export default defineConfig({
     //   }
     // }
   ],
+  build: {
+    // Vite automatically copies files from public/ to dist/
+    sourcemap: false,
+    minify: 'esbuild',
+    // This ensures _redirects file is included in the build
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -35,8 +41,5 @@ export default defineConfig({
     port: 4173,
     strictPort: false
   },
-  build: {
-    // Vite automatically copies files from public/ to dist/
-    // This ensures _redirects file is included in the build
-  }
+  
 });

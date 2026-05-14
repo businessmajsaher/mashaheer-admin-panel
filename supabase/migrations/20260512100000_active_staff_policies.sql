@@ -1,13 +1,15 @@
 -- =====================================================================
--- Active staff: parallel RLS (select / insert / update / delete via is_staff_active)
+-- Active staff RLS (admin-managed tables)
 --
---   - public.is_super_admin(uid) is defined in 20260511120000_create_rbac_staff.sql
---     (column is_super_admin OR metadata is_super_admin). Do not redefine here.
---   - public.is_admin(): profiles.role admin OR raw_user_meta_data.role admin OR is_super_admin(uid).
---   - Staff lives in staff_users only; profiles.role stays admin | customer | influencer.
---     Staff checks use raw_user_meta_data.role = ''staff'' plus active staff_users.
---   - New parallel policies here only reference public.is_staff_active()
---     (including delete).
+--   - Permissive "Active staff can select/insert/update": only when
+--     public.is_staff_active() — i.e. staff_users.is_active = true AND
+--     metadata role = staff. Inactive staff do not pass this.
+--   - RESTRICTIVE "Inactive staff forbids select|insert|update": when
+--     staff_users row exists with is_active = false AND metadata role staff,
+--     block SELECT / INSERT / UPDATE even if another permissive policy would allow.
+--     (Inactive staff cannot do any of these operations on these tables.)
+--   - RESTRICTIVE "Staff identity forbids delete": any staff (active or inactive)
+--     with metadata role staff and a staff_users row cannot DELETE.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -84,7 +86,52 @@ comment on function public.is_staff_active() is
 grant execute on function public.is_staff_active() to authenticated;
 
 -- ---------------------------------------------------------------------
--- 2b. RBAC — staff permissions only when user_has_staff_role() holds
+-- 2a. Staff identity (any staff_users row + role staff): used to forbid DELETE for all staff.
+-- ---------------------------------------------------------------------
+create or replace function public.auth_user_is_staff_identity(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select public.user_has_staff_role(uid)
+    and exists (
+      select 1 from public.staff_users su
+       where su.auth_user_id = uid
+    );
+$$;
+
+comment on function public.auth_user_is_staff_identity(uuid) is
+  'True when metadata role is staff and a staff_users row exists (active or inactive). DELETE is denied for these users on admin tables.';
+
+grant execute on function public.auth_user_is_staff_identity(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2b. Inactive staff: staff_users.is_active = false + role staff — forbid SELECT/INSERT/UPDATE.
+-- ---------------------------------------------------------------------
+create or replace function public.auth_user_is_inactive_staff(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select public.user_has_staff_role(uid)
+    and exists (
+      select 1 from public.staff_users su
+       where su.auth_user_id = uid
+         and su.is_active = false
+    );
+$$;
+
+comment on function public.auth_user_is_inactive_staff(uuid) is
+  'True when metadata role is staff and staff_users row is inactive. Used to block read/write on admin tables.';
+
+grant execute on function public.auth_user_is_inactive_staff(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2c. RBAC — staff permissions only when user_has_staff_role() holds
 -- ---------------------------------------------------------------------
 create or replace function public.has_permission(uid uuid, perm_key text)
 returns boolean
@@ -209,7 +256,7 @@ end$$;
 
 -- ---------------------------------------------------------------------
 -- 4. Parallel RLS per table — USING / WITH CHECK only public.is_staff_active()
---    (select, insert, update, delete).
+--    (select, insert, update only).
 --
 --    Tables included (mirrors the comprehensive admin RLS migration):
 --      services, bookings, payments, transactions, refunds, settlements,
@@ -311,9 +358,35 @@ begin
       'using (public.is_staff_active()) with check (public.is_staff_active())',
       t
     );
+
+    execute format('drop policy if exists "Staff identity forbids delete" on public.%I', t);
     execute format(
-      'create policy "Active staff can delete" on public.%I '
-      'for delete to authenticated using (public.is_staff_active())',
+      'create policy "Staff identity forbids delete" on public.%I '
+      'as restrictive for delete to authenticated '
+      'using (not public.auth_user_is_staff_identity((select auth.uid())))',
+      t
+    );
+
+    execute format('drop policy if exists "Inactive staff forbids select" on public.%I', t);
+    execute format(
+      'create policy "Inactive staff forbids select" on public.%I '
+      'as restrictive for select to authenticated '
+      'using (not public.auth_user_is_inactive_staff((select auth.uid())))',
+      t
+    );
+    execute format('drop policy if exists "Inactive staff forbids insert" on public.%I', t);
+    execute format(
+      'create policy "Inactive staff forbids insert" on public.%I '
+      'as restrictive for insert to authenticated '
+      'with check (not public.auth_user_is_inactive_staff((select auth.uid())))',
+      t
+    );
+    execute format('drop policy if exists "Inactive staff forbids update" on public.%I', t);
+    execute format(
+      'create policy "Inactive staff forbids update" on public.%I '
+      'as restrictive for update to authenticated '
+      'using (not public.auth_user_is_inactive_staff((select auth.uid()))) '
+      'with check (not public.auth_user_is_inactive_staff((select auth.uid())))',
       t
     );
   end loop;
@@ -334,10 +407,14 @@ create or replace view public.staff_rls_policy_audit as
     permissive
     from pg_policies
    where schemaname = 'public'
-     and policyname like 'Active staff%'
+     and (
+       policyname like 'Active staff%'
+       or policyname = 'Staff identity forbids delete'
+       or policyname like 'Inactive staff forbids%'
+     )
    order by tablename, cmd;
 
 comment on view public.staff_rls_policy_audit is
-  'Lists RLS policies named Active staff* (parallel select/insert/update/delete via is_staff_active).';
+  'Staff RLS audit: Active staff* (active-only CRUD except no delete), Inactive staff forbids select/insert/update, Staff identity forbids delete.';
 
 grant select on public.staff_rls_policy_audit to authenticated;
