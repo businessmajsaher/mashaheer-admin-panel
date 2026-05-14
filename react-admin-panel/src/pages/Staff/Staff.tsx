@@ -20,9 +20,11 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined,
+  DeleteOutlined,
   EditOutlined,
   KeyOutlined,
   ReloadOutlined,
+  SettingOutlined,
   StopOutlined,
   UserAddOutlined,
 } from '@ant-design/icons';
@@ -37,9 +39,12 @@ import type {
   StaffUserListItem,
 } from '@/types/rbac';
 import {
+  createDesignation,
+  deleteDesignation,
   getDesignationPermissionIds,
   listDesignations,
   listPermissions,
+  setDesignationPermissions,
 } from '@/services/permissionService';
 import {
   createStaffUser,
@@ -103,6 +108,14 @@ export default function Staff() {
   const [designationPerms, setDesignationPerms] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<StaffPermissionOverride[]>([]);
   const [effective, setEffective] = useState<Set<string>>(new Set());
+
+  const [rolesModalOpen, setRolesModalOpen] = useState(false);
+  const [newRoleForm] = Form.useForm();
+  const [roleCreateLoading, setRoleCreateLoading] = useState(false);
+  const [rolePermDesig, setRolePermDesig] = useState<Designation | null>(null);
+  const [rolePermLoading, setRolePermLoading] = useState(false);
+  const [rolePermSaving, setRolePermSaving] = useState(false);
+  const [rolePermEffective, setRolePermEffective] = useState<Set<string>>(new Set());
 
   const loadAll = async () => {
     setLoading(true);
@@ -172,6 +185,7 @@ export default function Staff() {
   const openEdit = (row: StaffUserListItem) => {
     setEditTarget(row);
     editForm.setFieldsValue({
+      email: row.email,
       full_name: row.full_name,
       designation_id: row.designation_id ?? null,
       is_active: row.is_active,
@@ -183,6 +197,7 @@ export default function Staff() {
     setEditLoading(true);
     try {
       await updateStaffUser(editTarget.id, {
+        email: values.email,
         full_name: values.full_name,
         designation_id: values.designation_id ?? null,
         is_active: !!values.is_active,
@@ -256,6 +271,75 @@ export default function Staff() {
       else next.delete(permission.id);
       return next;
     });
+  };
+
+  const openRolesModal = () => {
+    setRolesModalOpen(true);
+    newRoleForm.resetFields();
+    void loadAll();
+  };
+
+  const handleCreateDesignation = async (values: { name: string; description?: string }) => {
+    setRoleCreateLoading(true);
+    try {
+      await createDesignation(values.name, values.description);
+      message.success('Role (designation) created');
+      newRoleForm.resetFields();
+      const d = await listDesignations();
+      setDesignations(d);
+    } catch (e: any) {
+      message.error(e.message || 'Failed to create role');
+    } finally {
+      setRoleCreateLoading(false);
+    }
+  };
+
+  const handleDeleteDesignation = async (id: string) => {
+    try {
+      await deleteDesignation(id);
+      message.success('Role removed');
+      const d = await listDesignations();
+      setDesignations(d);
+    } catch (e: any) {
+      message.error(e.message || 'Cannot delete — it may still be assigned to staff');
+    }
+  };
+
+  const openRoleDesignationPerms = async (d: Designation) => {
+    setRolePermDesig(d);
+    setRolePermLoading(true);
+    try {
+      const ids = await getDesignationPermissionIds(d.id);
+      setRolePermEffective(new Set(ids));
+    } catch (e: any) {
+      message.error(e.message || 'Failed to load default permissions');
+      setRolePermDesig(null);
+    } finally {
+      setRolePermLoading(false);
+    }
+  };
+
+  const toggleRolePerm = (permissionId: string, checked: boolean) => {
+    setRolePermEffective((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(permissionId);
+      else next.delete(permissionId);
+      return next;
+    });
+  };
+
+  const saveRoleDesignationPerms = async () => {
+    if (!rolePermDesig) return;
+    setRolePermSaving(true);
+    try {
+      await setDesignationPermissions(rolePermDesig.id, Array.from(rolePermEffective));
+      message.success('Default permissions saved for this role');
+      setRolePermDesig(null);
+    } catch (e: any) {
+      message.error(e.message || 'Failed to save');
+    } finally {
+      setRolePermSaving(false);
+    }
   };
 
   const savePerms = async () => {
@@ -405,6 +489,11 @@ export default function Staff() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: 320 }}
             />
+            {isSuperAdmin && (
+              <Button icon={<SettingOutlined />} onClick={openRolesModal}>
+                Manage roles
+              </Button>
+            )}
             <ProtectedButton
               permission="staff.create"
               type="primary"
@@ -501,6 +590,9 @@ export default function Staff() {
         destroyOnHidden
       >
         <Form form={editForm} layout="vertical" onFinish={handleEdit}>
+          <Form.Item label="Email" name="email" rules={[{ required: true, message: 'Enter email' }, { type: 'email' }]}>
+            <Input type="email" autoComplete="off" />
+          </Form.Item>
           <Form.Item label="Full name" name="full_name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -524,7 +616,125 @@ export default function Staff() {
         </Form>
       </Modal>
 
-      {/* ---------- Permission matrix modal */}
+      {/* ---------- Staff roles (designations) — super admin */}
+      <Modal
+        title="Staff roles (designations)"
+        open={rolesModalOpen}
+        onCancel={() => setRolesModalOpen(false)}
+        footer={null}
+        width={560}
+        destroyOnHidden
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Create job roles here, then assign them to staff and set default permissions for each role. Only super administrators can manage roles."
+        />
+        <Form form={newRoleForm} layout="vertical" onFinish={handleCreateDesignation}>
+          <Form.Item label="Role name" name="name" rules={[{ required: true, message: 'Enter role name' }]}>
+            <Input placeholder="e.g. Content Moderator" maxLength={120} />
+          </Form.Item>
+          <Form.Item label="Description" name="description">
+            <Input.TextArea rows={2} placeholder="Optional" maxLength={500} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={roleCreateLoading}>
+            Add role
+          </Button>
+        </Form>
+        <Divider orientation="left">Existing roles</Divider>
+        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+          {designations.map((d) => (
+            <div
+              key={d.id}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 0',
+                borderBottom: '1px solid #f0f0f0',
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 600 }}>{d.name}</div>
+                {d.description ? (
+                  <div style={{ color: '#888', fontSize: 12 }}>{d.description}</div>
+                ) : null}
+              </div>
+              <Space>
+                <Button type="link" size="small" onClick={() => openRoleDesignationPerms(d)}>
+                  Default permissions
+                </Button>
+                <Popconfirm
+                  title="Delete this role?"
+                  description="Staff assigned to it will become unassigned for this role."
+                  onConfirm={() => handleDeleteDesignation(d.id)}
+                  okText="Delete"
+                  okType="danger"
+                >
+                  <Button type="link" danger size="small" icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Space>
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      {/* ---------- Default permissions for a designation */}
+      <Modal
+        title={rolePermDesig ? `Default permissions — ${rolePermDesig.name}` : 'Permissions'}
+        open={!!rolePermDesig}
+        onCancel={() => setRolePermDesig(null)}
+        width={760}
+        footer={null}
+        destroyOnHidden
+      >
+        {rolePermLoading ? (
+          <div>Loading...</div>
+        ) : (
+          <div style={{ maxHeight: 480, overflowY: 'auto', paddingRight: 8 }}>
+            {Object.keys(
+              permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+                acc[p.module_name] ??= [];
+                acc[p.module_name].push(p);
+                return acc;
+              }, {})
+            )
+              .sort((a, b) => (PRETTY_MODULE[a] || a).localeCompare(PRETTY_MODULE[b] || b))
+              .map((mod) => {
+                const modPerms = permissions.filter((p) => p.module_name === mod);
+                return (
+                  <div key={mod} style={{ marginBottom: 18 }}>
+                    <Divider orientation="left" style={{ margin: '8px 0' }}>
+                      {PRETTY_MODULE[mod] || mod}
+                    </Divider>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                      {modPerms.map((p) => (
+                        <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <Checkbox
+                            checked={rolePermEffective.has(p.id)}
+                            onChange={(e) => toggleRolePerm(p.id, e.target.checked)}
+                          />
+                          <span style={{ textTransform: 'capitalize' }}>{p.action_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <Button onClick={() => setRolePermDesig(null)} style={{ marginRight: 8 }}>
+            Cancel
+          </Button>
+          <Button type="primary" loading={rolePermSaving} onClick={saveRoleDesignationPerms}>
+            Save defaults
+          </Button>
+        </div>
+      </Modal>
+
+      {/* ---------- Per-staff permission matrix */}
       <Modal
         title={
           permsTarget
