@@ -1,13 +1,9 @@
 import type { User } from '@supabase/supabase-js';
 
 /**
- * Returns true if the auth user is flagged as super_admin.
- *
- * Tolerant of common ways admins set the flag in Supabase Dashboard:
- *  - user_metadata.super_admin === true                  (boolean, recommended)
- *  - user_metadata.super_admin === "true"                (string, common typo)
- *  - app_metadata.super_admin === true | "true"          (admin-only buckets)
- *  - Same logic for is_super_admin / superAdmin aliases  (safety net)
+ * True when JWT metadata marks this user as a super admin.
+ * Matches DB convention: raw_user_meta_data.is_super_admin (boolean or string).
+ * Legacy keys such as super_admin are ignored — use is_super_admin and auth.users.is_super_admin.
  */
 export function isSuperAdmin(user: User | null | undefined): boolean {
   if (!user) return false;
@@ -17,16 +13,12 @@ export function isSuperAdmin(user: User | null | undefined): boolean {
     user.app_metadata as Record<string, unknown> | undefined,
   ];
 
-  const keys = ['super_admin', 'is_super_admin', 'superAdmin'];
-
   for (const bucket of buckets) {
     if (!bucket) continue;
-    for (const key of keys) {
-      const raw = bucket[key];
-      if (raw === true) return true;
-      if (typeof raw === 'string' && raw.trim().toLowerCase() === 'true') return true;
-      if (typeof raw === 'number' && raw === 1) return true;
-    }
+    const raw = bucket.is_super_admin;
+    if (raw === true) return true;
+    if (typeof raw === 'string' && raw.trim().toLowerCase() === 'true') return true;
+    if (typeof raw === 'number' && raw === 1) return true;
   }
   return false;
 }

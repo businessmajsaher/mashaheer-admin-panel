@@ -39,14 +39,14 @@ export const ProtectedRoute: React.FC<Props> = ({ children, requirePermission, a
   }
 
   // Admin panel = super admin OR active staff user.
-  const hasAdminAccess = user.super_admin === true || user.is_staff === true;
+  const hasAdminAccess = user.is_super_admin === true || user.is_staff === true;
   if (!hasAdminAccess) {
     return (
       <div style={{ maxWidth: 520, margin: '64px auto', padding: 24 }}>
         <Alert
           type="warning"
           message="Admin access required"
-          description="This dashboard is restricted to super administrators and active staff users. Ask your owner to create a staff account for you in Mashaheer Admin."
+          description="This dashboard is restricted to  administrators and active staff users. Ask your owner to create a staff account for you in Mashaheer Admin."
           showIcon
           style={{ marginBottom: 16 }}
         />

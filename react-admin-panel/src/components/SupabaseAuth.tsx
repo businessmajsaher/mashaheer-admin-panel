@@ -78,7 +78,7 @@ export default function SupabaseAuth({ mode, onSuccess }: SupabaseAuthProps) {
         options: {
           data: {
             role: 'admin',
-            super_admin: false,
+            is_super_admin: false,
           },
         },
       });

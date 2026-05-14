@@ -32,12 +32,12 @@ export default function Login() {
 
       console.log('Login: access diagnostics', {
         email: user?.email,
-        super_admin: user?.super_admin,
+        is_super_admin: user?.is_super_admin,
         is_staff: user?.is_staff,
         role: user?.role,
       });
 
-      const allowed = !!user && (user.super_admin === true || user.is_staff === true);
+      const allowed = !!user && (user.is_super_admin === true || user.is_staff === true);
       if (!allowed) {
         await signOut();
         setError(

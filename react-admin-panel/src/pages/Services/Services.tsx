@@ -582,11 +582,19 @@ export default function Services() {
   const handleToggleServiceSuspended = async (record: any) => {
     try {
       const nextSuspended = !record.is_suspended;
-      const { error } = await supabase
+      // Return the affected row so RLS-denied updates (0 rows) surface
+      // as a real error instead of a silent "success".
+      const { data, error } = await supabase
         .from('services')
         .update({ is_suspended: nextSuspended })
-        .eq('id', record.id);
+        .eq('id', record.id)
+        .select('id, is_suspended');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'No rows updated. You may not have permission to change this service.'
+        );
+      }
       message.success(nextSuspended ? 'Service suspended' : 'Service activated');
       fetchServices();
     } catch (err: any) {
