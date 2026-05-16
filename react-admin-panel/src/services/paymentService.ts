@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { settingsService } from './settingsService';
 
 export interface CreatePaymentRequest {
   booking_id: string;
@@ -117,6 +118,7 @@ export const paymentService = {
         influencer_id,
         service_id,
         status_id,
+        payment_deadline,
         status:booking_statuses(name)
       `)
       .eq('id', bookingId)
@@ -173,14 +175,20 @@ export const paymentService = {
       .maybeSingle();
 
     if (awaitingPaymentStatus && booking.status_id !== awaitingPaymentStatus.id) {
-      const paymentDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(); // 12 hours
-      await supabase
-        .from('bookings')
-        .update({ 
-          status_id: awaitingPaymentStatus.id,
-          payment_deadline: paymentDeadline
-        })
-        .eq('id', bookingId);
+      const platform = await settingsService.getSettings();
+      const hours = Number(platform?.payment_deadline_hours ?? 12) || 12;
+      const ms = hours * 60 * 60 * 1000;
+
+      const updatePayload: { status_id: string; payment_deadline?: string } = {
+        status_id: awaitingPaymentStatus.id
+      };
+
+      // Primary-influencer contract sign sets payment_deadline in DB; do not overwrite.
+      if (!booking.payment_deadline) {
+        updatePayload.payment_deadline = new Date(Date.now() + ms).toISOString();
+      }
+
+      await supabase.from('bookings').update(updatePayload).eq('id', bookingId);
     }
 
     return {

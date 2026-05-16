@@ -27,6 +27,11 @@ export interface PlatformSettings {
   updated_at: string;
 }
 
+/** Fields the admin Settings form may send alongside automation timing. */
+export type PlatformSettingsUpdate = Partial<
+  AutomationTimingSettings & Pick<PlatformSettings, 'commission_percentage' | 'platform_commission_fixed'>
+>;
+
 export const settingsService = {
   // Get app settings (key-value pairs)
   async getAppSettings(): Promise<Record<string, string>> {
@@ -62,6 +67,16 @@ export const settingsService = {
     if (error) throw error;
   },
 
+  /** Dual / shared platform commission: App Settings key first, then platform_settings (same value as Settings form). */
+  async getDualPlatformCommissionPercentage(): Promise<number> {
+    const [platform, app] = await Promise.all([this.getSettings(), this.getAppSettings()]);
+    const fromApp = parseFloat(app.dual_platform_commission_percentage || '');
+    if (Number.isFinite(fromApp) && fromApp >= 0 && fromApp <= 100) {
+      return fromApp;
+    }
+    return platform?.commission_percentage ?? 5;
+  },
+
   // Get platform settings
   async getSettings(): Promise<PlatformSettings | null> {
     const { data, error } = await supabase
@@ -78,7 +93,7 @@ export const settingsService = {
   },
 
   // Update platform settings
-  async updateSettings(settings: Partial<AutomationTimingSettings>): Promise<PlatformSettings> {
+  async updateSettings(settings: PlatformSettingsUpdate): Promise<PlatformSettings> {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

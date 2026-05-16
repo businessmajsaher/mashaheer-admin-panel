@@ -17,6 +17,7 @@ import {
   PhoneOutlined,
   BookOutlined,
   GiftOutlined,
+  BarChartOutlined,
   WalletOutlined,
   RollbackOutlined,
   IdcardOutlined,
@@ -48,6 +49,7 @@ const entries: Array<MenuEntry | { divider: true }> = [
   { key: '/reviews',     label: 'Reviews',     icon: <StarOutlined />,    module: 'reviews' },
   { key: '/bookings',    label: 'Bookings',    icon: <CalendarOutlined />, module: 'bookings' },
   { key: '/cash-out',    label: 'Cash Out',    icon: <WalletOutlined />,   module: 'cash_out' },
+  { key: '/transactions', label: 'Transactions', icon: <BarChartOutlined />, module: 'transactions' },
   { key: '/refunds',     label: 'Refunds',     icon: <RollbackOutlined />, module: 'refunds' },
   { key: '/platforms',   label: 'Platforms',   icon: <GlobalOutlined />,   module: 'platforms' },
   {

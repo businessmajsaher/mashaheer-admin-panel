@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Table,
     Button,
@@ -47,6 +48,9 @@ const LOCAL_STATUS_COLOR: Record<string, string> = {
 };
 
 const Refunds: React.FC = () => {
+    const [searchParams] = useSearchParams();
+    const refundIdFromUrl = searchParams.get('refundId');
+
     const [refunds, setRefunds] = useState<Refund[]>([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 15, total: 0 });
@@ -96,7 +100,7 @@ const Refunds: React.FC = () => {
         fetchHesabeStats();
     }, [statusFilter]);
 
-    const handleViewDetails = async (record: Refund) => {
+    const openRefundDetails = useCallback(async (record: Refund) => {
         setSelectedRefund(record);
         setDetailsDrawerOpen(true);
         setHesabeDetails(null);
@@ -112,6 +116,27 @@ const Refunds: React.FC = () => {
                 setDetailsLoading(false);
             }
         }
+    }, []);
+
+    useEffect(() => {
+        const id = refundIdFromUrl;
+        if (!id) return;
+        let cancelled = false;
+        refundService
+            .getRefund(id)
+            .then((r) => {
+                if (!cancelled) void openRefundDetails(r);
+            })
+            .catch(() => {
+                message.error('Could not load refund for this link');
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [refundIdFromUrl, openRefundDetails]);
+
+    const handleViewDetails = (record: Refund) => {
+        void openRefundDetails(record);
     };
 
     const handleCancelRefund = (record: Refund) => {

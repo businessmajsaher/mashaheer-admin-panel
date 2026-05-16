@@ -169,6 +169,11 @@ export const bookingService = {
   },
 
   // Update booking status
+  /**
+   * Admin/status transitions. Deadline enforcement for customer/influencer apps should also
+   * live in Postgres (triggers/RPC) or Edge Functions so direct Supabase writes cannot bypass rules.
+   * Auto transitions use `process-booking-automation` comparing stored deadline instants to `now`.
+   */
   async updateBookingStatus(id: string, status_id: string) {
     // Get current booking to compare status
     const { data: currentBooking } = await supabase

@@ -36,6 +36,12 @@ export default function Settings() {
             ? Math.max(0, parseInt(appSettingsData.booking_cooldown_days, 10) * 8)
             : 24;
 
+        const appDual = parseFloat(appSettingsData.dual_platform_commission_percentage || '');
+        const commissionPct =
+          Number.isFinite(appDual) && appDual >= 0 && appDual <= 100
+            ? appDual
+            : data.commission_percentage ?? 5;
+
         form.setFieldsValue({
           influencer_approval_hours: data.influencer_approval_hours || 12,
           payment_deadline_hours: data.payment_deadline_hours || 12,
@@ -49,7 +55,7 @@ export default function Settings() {
           max_script_reject_count: appSettingsData.max_script_reject_count
             ? parseInt(appSettingsData.max_script_reject_count, 10)
             : 3,
-          commission_percentage: data.commission_percentage || 5,
+          commission_percentage: commissionPct,
         });
       }
     } catch (error: any) {
@@ -72,6 +78,17 @@ export default function Settings() {
 
       const updated = await settingsService.updateSettings(platformSettings);
       setSettings(updated);
+
+      if (platformSettings.commission_percentage !== undefined && platformSettings.commission_percentage !== null) {
+        await settingsService.updateAppSetting(
+          'dual_platform_commission_percentage',
+          String(platformSettings.commission_percentage)
+        );
+        setAppSettings((prev) => ({
+          ...prev,
+          dual_platform_commission_percentage: String(platformSettings.commission_percentage)
+        }));
+      }
 
       if (booking_cooldown_hours !== undefined) {
         await settingsService.updateAppSetting('booking_cooldown_hours', String(booking_cooldown_hours));

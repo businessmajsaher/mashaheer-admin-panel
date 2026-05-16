@@ -24,6 +24,89 @@ interface HesabeWebhookPayload {
   order_reference_number?: string;
 }
 
+/** Statuses we still consider "open" for MH_ / booking lookups (Flutter may use paid vs pending). */
+const OPEN_PAYMENT_STATUSES = ['pending', 'processing', 'paid', 'initiated', 'created'];
+
+/**
+ * Hesabe sometimes sends Slack-style `blocks` with fields instead of (or in addition to) top-level keys.
+ */
+function extractFromBlocks(blocks: unknown): Partial<HesabeWebhookPayload> {
+  const out: Partial<HesabeWebhookPayload> = {};
+  if (!Array.isArray(blocks)) return out;
+  for (const block of blocks as any[]) {
+    if (block?.type === 'header' && block?.text?.text) {
+      const h = String(block.text.text).toUpperCase();
+      if (h.includes('SUCCESSFUL')) out.status = out.status || 'SUCCESSFUL';
+      else if (h.includes('FAIL') || h.includes('DECLIN')) out.status = out.status || 'FAILED';
+    }
+    if (block?.type !== 'section' || !Array.isArray(block?.fields)) continue;
+    for (const field of block.fields) {
+      const text =
+        typeof field?.text === 'string' ? field.text : field?.text?.text;
+      if (typeof text !== 'string') continue;
+      const lines = text.split('\n').map((l: string) => l.trim());
+      const labelRaw = lines[0] || '';
+      const label = labelRaw.replace(/\*/g, '').replace(/:$/, '').trim().toLowerCase();
+      const value = (lines[1] ?? labelRaw.replace(/^\*[^*]+\*\s*/, '')).trim();
+
+      if (label.includes('transaction token')) out.token = out.token || value;
+      else if (label.includes('order reference')) out.reference_number = out.reference_number || value;
+      else if (label === 'amount' || (label.includes('amount') && !label.includes('auth')))
+        out.amount = out.amount || value.replace(/^KWD\s*/i, '').trim();
+      else if (label.includes('payment type')) out.payment_type = out.payment_type || value;
+      else if (label.includes('date') && label.includes('time')) out.datetime = out.datetime || value;
+    }
+  }
+  return out;
+}
+
+async function readWebhookBody(req: Request): Promise<any> {
+  const ct = (req.headers.get('content-type') || '').toLowerCase();
+  const rawText = await req.text();
+  if (!rawText?.trim()) {
+    console.warn('Empty webhook body');
+    return {};
+  }
+  if (ct.includes('application/x-www-form-urlencoded')) {
+    const params = new URLSearchParams(rawText);
+    const obj: Record<string, string> = {};
+    params.forEach((v, k) => {
+      obj[k] = v;
+    });
+    if (obj.data) {
+      try {
+        const inner = JSON.parse(obj.data);
+        return { ...obj, ...inner };
+      } catch {
+        console.warn('Could not parse form field `data` as JSON');
+      }
+    }
+    return obj;
+  }
+  try {
+    return JSON.parse(rawText);
+  } catch (e) {
+    console.warn('Body is not JSON. First 240 chars:', rawText.slice(0, 240), e);
+    return {};
+  }
+}
+
+function mergeHesabePayload(raw: any): HesabeWebhookPayload {
+  const fromBlocks = extractFromBlocks(raw?.blocks);
+  return { ...fromBlocks, ...raw } as HesabeWebhookPayload;
+}
+
+function parseBookingIdFromReference(referenceNumber: string): string | null {
+  if (referenceNumber.startsWith('MH_')) {
+    const parts = referenceNumber.split('_');
+    if (parts.length >= 2) return parts[1];
+    return null;
+  }
+  const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const uuidMatch = referenceNumber.match(uuidPattern);
+  return uuidMatch ? uuidMatch[0] : null;
+}
+
 serve(async (req: Request) => {
   console.log('=== HESABE WEBHOOK RECEIVED ===');
   console.log('Method:', req.method);
@@ -62,25 +145,38 @@ serve(async (req: Request) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Parse webhook payload
-    const payload: HesabeWebhookPayload = await req.json();
-    console.log('Webhook Payload:', JSON.stringify(payload, null, 2));
+    const rawBody = await readWebhookBody(req);
+    const payload = mergeHesabePayload(rawBody);
+    console.log('Webhook Payload (merged):', JSON.stringify(payload, null, 2));
 
-    // Extract transaction details
-    const transactionToken = payload.token || payload.transaction_token;
-    const referenceNumber = payload.reference_number || payload.order_reference_number;
-    const status = payload.status?.toUpperCase();
-    const amount = payload.amount;
+    const referenceNumber = String(
+      payload.reference_number ||
+        payload.order_reference_number ||
+        (rawBody as any).orderReferenceNumber ||
+        (rawBody as any).referenceNumber ||
+        ''
+    ).trim();
+    const status = String(payload.status || '')
+      .trim()
+      .toUpperCase();
+    const transactionToken = String(
+      payload.token ||
+        payload.transaction_token ||
+        (rawBody as any).transactionToken ||
+        referenceNumber ||
+        ''
+    ).trim();
+    const amount = payload.amount ?? (rawBody as any).amount;
     const paymentType = payload.payment_type;
     const datetime = payload.datetime;
 
-    // Validate required fields
-    if (!transactionToken || !referenceNumber || !status) {
+    // reference + status are required; token is optional (some Hesabe callbacks omit it)
+    if (!referenceNumber || !status) {
       console.error('Missing required fields:', { transactionToken, referenceNumber, status });
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Missing required fields',
-          received: { transactionToken, referenceNumber, status }
+          received: { transactionToken, referenceNumber, status, keys: Object.keys(rawBody || {}) }
         }),
         {
           status: 400,
@@ -132,7 +228,7 @@ serve(async (req: Request) => {
           .from('payments')
           .select('*, booking:bookings(id, customer_id, influencer_id, scheduled_time, service:services(title))')
           .eq('booking_id', bookingId)
-          .in('status', ['pending', 'processing'])
+          .in('status', OPEN_PAYMENT_STATUSES)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -154,12 +250,12 @@ serve(async (req: Request) => {
       if (uuidMatch) {
         const possibleBookingId = uuidMatch[0];
         console.log('Found UUID pattern in reference, trying booking ID:', possibleBookingId);
-        
+
         result = await supabase
           .from('payments')
           .select('*, booking:bookings(id, customer_id, influencer_id, scheduled_time, service:services(title))')
           .eq('booking_id', possibleBookingId)
-          .in('status', ['pending', 'processing'])
+          .in('status', OPEN_PAYMENT_STATUSES)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -169,6 +265,28 @@ serve(async (req: Request) => {
         } else if (result.data) {
           payment = result.data;
           console.log('Found payment by extracted booking ID:', payment.id);
+        }
+      }
+    }
+
+    // Strategy 4: Latest payment for booking when open-status lookup missed (e.g. status stored differently)
+    if (!payment) {
+      const bid = parseBookingIdFromReference(referenceNumber);
+      if (bid) {
+        console.log('Strategy 4: latest payment for booking (any status):', bid);
+        result = await supabase
+          .from('payments')
+          .select('*, booking:bookings(id, customer_id, influencer_id, scheduled_time, service:services(title))')
+          .eq('booking_id', bid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (result.error) {
+          console.error('Error finding payment (strategy 4):', result.error);
+        } else if (result.data) {
+          payment = result.data;
+          console.log('Found payment by strategy 4 (latest for booking):', payment.id);
         }
       }
     }
@@ -185,27 +303,12 @@ serve(async (req: Request) => {
 
     if (!payment) {
       console.warn('Payment not found for reference:', referenceNumber);
-      console.warn('Tried: exact match, booking ID extraction, UUID pattern matching');
-      
-      // Try to extract booking ID and create payment if it doesn't exist
-      let bookingId: string | null = null;
-      
-      if (referenceNumber.startsWith('MH_')) {
-        const parts = referenceNumber.split('_');
-        if (parts.length >= 2) {
-          bookingId = parts[1];
-        }
-      } else {
-        // Try UUID pattern
-        const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-        const uuidMatch = referenceNumber.match(uuidPattern);
-        if (uuidMatch) {
-          bookingId = uuidMatch[0];
-        }
-      }
+      console.warn('Tried: exact match, booking ID extraction, UUID pattern matching, latest-for-booking');
 
+      // Try to extract booking ID and create payment if it doesn't exist
+      const bookingId = parseBookingIdFromReference(referenceNumber);
       // If we have booking ID, try to create payment record
-      if (bookingId && status === 'SUCCESSFUL') {
+      if (bookingId && (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'PAID')) {
         console.log('Attempting to create payment record for booking:', bookingId);
         
         // Get booking details
@@ -241,7 +344,7 @@ serve(async (req: Request) => {
             const { data: paymentConfirmedStatus } = await supabase
               .from('booking_statuses')
               .select('id')
-              .eq('name', 'payment confirmed')
+              .ilike('name', 'payment confirmed')
               .maybeSingle();
 
             if (paymentConfirmedStatus) {
@@ -292,7 +395,7 @@ serve(async (req: Request) => {
 
     // Determine payment status
     let paymentStatus = 'pending';
-    if (status === 'SUCCESSFUL' || status === 'SUCCESS') {
+    if (status === 'SUCCESSFUL' || status === 'SUCCESS' || status === 'PAID') {
       paymentStatus = 'completed';
     } else if (status === 'FAILED' || status === 'FAILURE') {
       paymentStatus = 'failed';
@@ -354,7 +457,7 @@ serve(async (req: Request) => {
       const { data: statusData } = await supabase
         .from('booking_statuses')
         .select('id')
-        .eq('name', 'payment confirmed')
+        .ilike('name', 'payment confirmed')
         .maybeSingle();
 
       if (statusData) {

@@ -1,5 +1,14 @@
 import { supabase } from './supabaseClient';
 import { settingsService } from './settingsService';
+import dayjs from 'dayjs';
+
+/** Stored on `settlements.period_type`; admin cash-out uses date range (`custom`). */
+export type SettlementPeriodType = 'weekly' | 'monthly' | 'custom';
+
+/** Admin UI uses 3 dp for money cells; normalize floats so totals match summed rows */
+function roundToFils(n: number): number {
+  return Math.round(Number(n) * 1000) / 1000;
+}
 
 export interface InfluencerEarning {
   influencer_id: string;
@@ -53,7 +62,7 @@ export interface CashOutSummary {
 export const cashOutService = {
   // Get influencer earnings for a specific period
   async getInfluencerEarnings(
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate?: string,
     endDate?: string
   ): Promise<InfluencerEarning[]> {
@@ -87,12 +96,10 @@ export const cashOutService = {
 
     // Use provided dates if available (overrides period calculation)
     if (startDate) {
-      periodStart = new Date(startDate);
-      periodStart.setHours(0, 0, 0, 0);
+      periodStart = dayjs(startDate).startOf('day').toDate();
     }
     if (endDate) {
-      periodEnd = new Date(endDate);
-      periodEnd.setHours(23, 59, 59, 999);
+      periodEnd = dayjs(endDate).endOf('day').toDate();
     }
 
     // If both dates are explicitly cleared (empty strings), show all payments
@@ -101,8 +108,8 @@ export const cashOutService = {
       periodEnd = null;
     }
 
-    // Get platform settings for commission
-    const settings = await settingsService.getSettings();
+    // Dual / shared platform commission: App Settings (`dual_platform_commission_percentage`) then platform_settings
+    const dualCommissionRate = await settingsService.getDualPlatformCommissionPercentage();
 
     // Get all completed payments to influencers
     // First, get all payments with payee_id (influencer receiving payment)
@@ -126,6 +133,11 @@ export const cashOutService = {
           id,
           is_published,
           service_id,
+          service_type,
+          influencer_id,
+          invited_influencer_id,
+          primary_influencer_earnings_percentage,
+          invited_influencer_earnings_percentage,
           service:services!bookings_service_id_fkey(
             title,
             service_type,
@@ -244,17 +256,29 @@ export const cashOutService = {
           return;
         }
 
-        const service = payment.booking?.service as {
-          title?: string;
+        const booking = payment.booking as {
           service_type?: string;
-          price?: number;
-          primary_influencer_id?: string;
-          invited_influencer_id?: string;
-          primary_influencer_earnings_percentage?: number;
-          invited_influencer_earnings_percentage?: number;
+          influencer_id?: string;
+          invited_influencer_id?: string | null;
+          primary_influencer_earnings_percentage?: number | null;
+          invited_influencer_earnings_percentage?: number | null;
+          service?: {
+            title?: string;
+            service_type?: string;
+            price?: number;
+            primary_influencer_id?: string;
+            invited_influencer_id?: string | null;
+            primary_influencer_earnings_percentage?: number | null;
+            invited_influencer_earnings_percentage?: number | null;
+          };
         } | undefined;
 
-        const serviceType = (service?.service_type || 'normal').toLowerCase();
+        const service = booking?.service;
+
+        // Booking row mirrors service_type & influencers for cash-out; use when nested service is missing or thin
+        const serviceType = String(
+          booking?.service_type ?? service?.service_type ?? 'normal'
+        ).toLowerCase();
         const originalPrice = service?.price || paymentAmount;
         const discountAmount = Math.max(0, originalPrice - paymentAmount);
 
@@ -288,11 +312,17 @@ export const cashOutService = {
             netAfterBankPart: number;
           }
         ) => {
+          const attributedGross = roundToFils(opts.attributedGross);
+          const pgPart = roundToFils(opts.pgPart);
+          const platformCommission = roundToFils(opts.platformCommission);
+          const netAfterBankPart = roundToFils(opts.netAfterBankPart);
+          const netPayout = roundToFils(opts.netPayout);
+
           const earning = ensureEarning(targetId);
-          earning.total_earnings += opts.attributedGross;
-          earning.total_pg_charges += opts.pgPart;
-          earning.total_platform_commission += opts.platformCommission;
-          earning.net_payout += opts.netPayout;
+          earning.total_earnings += attributedGross;
+          earning.total_pg_charges += pgPart;
+          earning.total_platform_commission += platformCommission;
+          earning.net_payout += netPayout;
           earning.payment_count += 1;
 
           earning.payments.push({
@@ -303,11 +333,11 @@ export const cashOutService = {
             service_type: serviceType,
             original_price: originalPrice,
             discount_amount: discountAmount,
-            amount: opts.attributedGross,
-            pg_charge: opts.pgPart,
-            platform_commission: opts.platformCommission,
-            net_after_bank: opts.netAfterBankPart,
-            net_amount: opts.netPayout,
+            amount: attributedGross,
+            pg_charge: pgPart,
+            platform_commission: platformCommission,
+            net_after_bank: netAfterBankPart,
+            net_amount: netPayout,
             currency: payment.currency || 'KWD',
             paid_at: payment.paid_at || '',
             transaction_reference: payment.transaction_reference,
@@ -317,18 +347,26 @@ export const cashOutService = {
           });
         };
 
-        const primaryId = service?.primary_influencer_id;
-        const invitedId = service?.invited_influencer_id;
+        const primaryId = service?.primary_influencer_id ?? booking?.influencer_id;
+        const invitedId = service?.invited_influencer_id ?? booking?.invited_influencer_id ?? undefined;
         const isDual =
           serviceType === 'dual' && primaryId && invitedId;
 
         if (isDual) {
-          const commissionRate = settings?.commission_percentage || 5;
+          const commissionRate = dualCommissionRate;
           const platformCommissionFull = netAfterBank * (commissionRate / 100);
           const amountAfterCommission = netAfterBank - platformCommissionFull;
 
-          const primaryPct = service?.primary_influencer_earnings_percentage ?? 50;
-          const invitedPct = service?.invited_influencer_earnings_percentage ?? 50;
+          const primaryPctRaw =
+            service?.primary_influencer_earnings_percentage ??
+            booking?.primary_influencer_earnings_percentage ??
+            50;
+          const invitedPctRaw =
+            service?.invited_influencer_earnings_percentage ??
+            booking?.invited_influencer_earnings_percentage ??
+            50;
+          const primaryPct = Number.isFinite(Number(primaryPctRaw)) ? Number(primaryPctRaw) : 50;
+          const invitedPct = Number.isFinite(Number(invitedPctRaw)) ? Number(invitedPctRaw) : 50;
 
           const splits: { id: string; pct: number }[] = [
             { id: primaryId!, pct: primaryPct },
@@ -357,11 +395,14 @@ export const cashOutService = {
 
           const commissionRate = payment.payee?.commission_percentage || 2;
           const influencerSharePercentage = 100;
-          const platformCommission = netAfterBank * (commissionRate / 100);
-          const netPayout = netAfterBank - platformCommission;
+          const gross = roundToFils(paymentAmount);
+          const pg = roundToFils(pgCharge);
+          const netBank = roundToFils(netAfterBank);
+          const platformCommission = roundToFils(netBank * (commissionRate / 100));
+          const netPayout = roundToFils(netBank - platformCommission);
 
-          earning.total_earnings += paymentAmount;
-          earning.total_pg_charges += pgCharge;
+          earning.total_earnings += gross;
+          earning.total_pg_charges += pg;
           earning.total_platform_commission += platformCommission;
           earning.net_payout += netPayout;
           earning.payment_count += 1;
@@ -374,10 +415,10 @@ export const cashOutService = {
             service_type: serviceType,
             original_price: originalPrice,
             discount_amount: discountAmount,
-            amount: paymentAmount,
-            pg_charge: pgCharge,
+            amount: gross,
+            pg_charge: pg,
             platform_commission: platformCommission,
-            net_after_bank: netAfterBank,
+            net_after_bank: netBank,
             net_amount: netPayout,
             currency: payment.currency || 'KWD',
             paid_at: payment.paid_at || '',
@@ -418,7 +459,7 @@ export const cashOutService = {
 
   // Get cash out summary for a period
   async getCashOutSummary(
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate?: string,
     endDate?: string
   ): Promise<CashOutSummary> {
@@ -475,7 +516,7 @@ export const cashOutService = {
   // Check if influencer is settled for a period
   async isSettled(
     influencerId: string,
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate: string,
     endDate: string
   ): Promise<boolean> {
@@ -499,7 +540,7 @@ export const cashOutService = {
 
   // Get all settlements for a period
   async getSettlements(
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate?: string,
     endDate?: string
   ): Promise<Map<string, any>> {
@@ -534,7 +575,7 @@ export const cashOutService = {
   // Mark influencer as settled
   async markAsSettled(
     influencerId: string,
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate: string,
     endDate: string,
     earnings: InfluencerEarning,
@@ -694,7 +735,7 @@ export const cashOutService = {
   // Remove settlement (unsettle)
   async unmarkSettled(
     influencerId: string,
-    periodType: 'weekly' | 'monthly',
+    periodType: SettlementPeriodType,
     startDate: string,
     endDate: string
   ): Promise<void> {

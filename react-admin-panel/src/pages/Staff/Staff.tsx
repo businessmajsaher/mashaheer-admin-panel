@@ -68,6 +68,7 @@ const PRETTY_MODULE: Record<string, string> = {
   reviews: 'Reviews',
   bookings: 'Bookings',
   cash_out: 'Cash Out',
+  transactions: 'Transactions',
   refunds: 'Refunds',
   platforms: 'Platforms',
   discounts: 'Discounts',

@@ -51,6 +51,7 @@ export const MODULE_KEYS = [
   'reviews',
   'bookings',
   'cash_out',
+  'transactions',
   'refunds',
   'platforms',
   'discounts',

@@ -3,7 +3,6 @@ import {
   Card,
   Table,
   DatePicker,
-  Select,
   Button,
   Space,
   Typography,
@@ -16,7 +15,8 @@ import {
   Descriptions,
   Modal,
   Divider,
-  Tabs
+  Tabs,
+  Alert
 } from 'antd';
 import {
   DollarOutlined,
@@ -27,7 +27,13 @@ import {
   CloseCircleOutlined,
   DownloadOutlined
 } from '@ant-design/icons';
-import { cashOutService, InfluencerEarning, CashOutSummary, PaymentEarning } from '../../services/cashOutService';
+import {
+  cashOutService,
+  InfluencerEarning,
+  CashOutSummary,
+  PaymentEarning,
+  type SettlementPeriodType
+} from '../../services/cashOutService';
 import { settingsService } from '../../services/settingsService';
 import { ProtectedButton } from '@/components/ProtectedButton';
 import dayjs, { Dayjs } from 'dayjs';
@@ -48,6 +54,7 @@ export default function CashOut() {
   const [settling, setSettling] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [settlingBulk, setSettlingBulk] = useState(false);
+  const [dualPlatformCommissionPct, setDualPlatformCommissionPct] = useState<number | null>(null);
 
 
   // Settlement History State
@@ -60,6 +67,13 @@ export default function CashOut() {
   }, [activeTab]);
 
   useEffect(() => {
+    settingsService
+      .getDualPlatformCommissionPercentage()
+      .then(setDualPlatformCommissionPct)
+      .catch(() => setDualPlatformCommissionPct(5));
+  }, []);
+
+  useEffect(() => {
     // Re-fetch earnings when date range inputs change
     if (!loading && activeTab === 'earnings') {
       fetchEarnings();
@@ -69,10 +83,6 @@ export default function CashOut() {
   const fetchSettingsAndEarnings = async () => {
     setLoading(true);
     try {
-      // 1. Fetch App Settings to get Payment Recurrence
-      await settingsService.getAppSettings();
-
-      // 2. Load data based on tab
       if (activeTab === 'earnings') {
         await fetchEarnings();
       } else if (activeTab === 'history') {
@@ -103,8 +113,8 @@ export default function CashOut() {
     setLoading(true);
     try {
       const [earningsData, summaryData] = await Promise.all([
-        cashOutService.getInfluencerEarnings('monthly', startDate, endDate),
-        cashOutService.getCashOutSummary('monthly', startDate, endDate)
+        cashOutService.getInfluencerEarnings('custom', startDate, endDate),
+        cashOutService.getCashOutSummary('custom', startDate, endDate)
       ]);
 
       setEarnings(earningsData);
@@ -134,6 +144,19 @@ export default function CashOut() {
       minimumFractionDigits: 3,
       maximumFractionDigits: 3
     }).format(amount);
+  };
+
+  /**
+   * Total = sum of per-line rounded amounts (3 dp — matches formatCurrency on this screen).
+   * Accumulates integer fils so IEEE float drift cannot make the footer disagree with visible cells.
+   */
+  const sumMoneyAsDisplayed = (values: number[]) => {
+    const mult = 1000;
+    const totalUnits = values.reduce(
+      (sum, v) => sum + Math.round(Number(v ?? 0) * mult),
+      0
+    );
+    return totalUnits / mult;
   };
 
   const handleViewPayments = (influencer: InfluencerEarning) => {
@@ -183,7 +206,7 @@ export default function CashOut() {
     try {
       await cashOutService.markAsSettled(
         influencer.influencer_id,
-        'monthly',
+        'custom',
         periodStart,
         periodEnd,
         influencer
@@ -211,7 +234,7 @@ export default function CashOut() {
     try {
       await cashOutService.unmarkSettled(
         influencer.influencer_id,
-        'monthly',
+        'custom',
         periodStart,
         periodEnd
       );
@@ -284,7 +307,7 @@ export default function CashOut() {
           const selectedInfluencers = earnings.filter(e => selectedRowKeys.includes(e.influencer_id));
 
           await Promise.all(selectedInfluencers.map(influencer =>
-            cashOutService.markAsSettled(influencer.influencer_id, 'monthly', periodStart, periodEnd, influencer)
+            cashOutService.markAsSettled(influencer.influencer_id, 'custom', periodStart, periodEnd, influencer)
           ));
 
           message.success(`${selectedInfluencers.length} influencers marked as settled`);
@@ -326,7 +349,7 @@ export default function CashOut() {
       'Net Payout',
       'Payment Count',
       'Payout status',
-      'Payment status'
+      'Payment Status'
     ];
 
     const rows = earnings.map(e => [
@@ -360,13 +383,15 @@ export default function CashOut() {
       'Type',
       'Final Amount',
       'PG Charge',
+      'Net After Bank',
       'Commission',
+      'Influencer Share %',
       'Net Payout',
       'Payout status',
-      'Payment status'
+      'Payment Status'
     ];
 
-    const rows = influencer.payments.map(p => [
+    const rowForPayment = (p: PaymentEarning) => [
       dayjs(p.paid_at).format('YYYY-MM-DD'),
       p.transaction_reference || '',
       p.booking_id,
@@ -374,13 +399,31 @@ export default function CashOut() {
       p.service_type,
       p.amount.toFixed(3),
       p.pg_charge.toFixed(3),
+      p.net_after_bank.toFixed(3),
       p.platform_commission.toFixed(3),
+      String(
+        p.influencer_share_percentage != null &&
+          Number.isFinite(Number(p.influencer_share_percentage))
+          ? `${Number(p.influencer_share_percentage)}%`
+          : '-'
+      ),
       p.net_amount.toFixed(3),
       p.is_settled ? 'Settled' : 'Unsettled',
       p.status
-    ]);
+    ];
 
-    const data = [headers, ...rows];
+    const unsettled = influencer.payments.filter((p) => !p.is_settled);
+    const settled = influencer.payments.filter((p) => p.is_settled);
+
+    const data: (string | number)[][] = [];
+    data.push(['UNSETTLED']);
+    data.push(headers);
+    unsettled.forEach((p) => data.push(rowForPayment(p)));
+    data.push([]);
+    data.push(['SETTLED']);
+    data.push(headers);
+    settled.forEach((p) => data.push(rowForPayment(p)));
+
     const dateStr = dayjs().format('YYYY-MM-DD');
     const safeName = influencer.influencer_name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     downloadExcel(data, `payout_${safeName}_${dateStr}.xlsx`);
@@ -519,7 +562,11 @@ export default function CashOut() {
       title: 'Service Type',
       dataIndex: 'service_type',
       key: 'service_type',
-      render: (text) => <Tag color={text === 'dual' ? 'purple' : 'blue'}>{(text || 'NORMAL').toUpperCase()}</Tag>,
+      render: (text) => (
+        <Tag color={text === 'dual' ? 'purple' : text === 'flash' ? 'red' : 'blue'}>
+          {(text || 'normal').toUpperCase()}
+        </Tag>
+      ),
     },
     {
       title: 'Original Price',
@@ -568,8 +615,11 @@ export default function CashOut() {
       dataIndex: 'influencer_share_percentage',
       key: 'influencer_share_percentage',
       align: 'center',
-      render: (pct, record) =>
-        String(record.service_type || '').toLowerCase() === 'dual' && pct != null ? `${pct}%` : '-',
+      render: (pct, record) => {
+        if (String(record.service_type || '').toLowerCase() !== 'dual') return '-';
+        const n = Number(pct);
+        return Number.isFinite(n) ? `${n}%` : '-';
+      },
     },
     {
       title: 'Influencer Earnings',
@@ -614,12 +664,19 @@ export default function CashOut() {
       };
       setSelectedInfluencer(influencer);
 
-      // Fetch specific payments for this settlement period
-      const earnings = await cashOutService.getInfluencerEarnings(
-        settlement.period_type,
-        settlement.period_start,
-        settlement.period_end
-      );
+      const periodTypes: SettlementPeriodType[] = ['weekly', 'monthly', 'custom'];
+      const rawType = settlement.period_type as SettlementPeriodType | undefined;
+      const periodType: SettlementPeriodType =
+        rawType && periodTypes.includes(rawType) ? rawType : 'custom';
+
+      const startIso = settlement.period_start
+        ? dayjs(settlement.period_start).startOf('day').toISOString()
+        : undefined;
+      const endIso = settlement.period_end
+        ? dayjs(settlement.period_end).endOf('day').toISOString()
+        : undefined;
+
+      const earnings = await cashOutService.getInfluencerEarnings(periodType, startIso, endIso);
 
       // Filter for this specific influencer
       const influencerEarning = earnings.find(e => e.influencer_id === settlement.influencer_id);
@@ -790,7 +847,9 @@ export default function CashOut() {
                 <Col xs={24} sm={12} md={8}>
                   <Statistic
                     title="Settled Amount"
-                    value={earnings.filter(e => e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
+                    value={sumMoneyAsDisplayed(
+                      earnings.filter(e => e.is_settled).map((e) => e.net_payout)
+                    )}
                     prefix={<DollarOutlined />}
                     suffix="KWD"
                     precision={3}
@@ -800,7 +859,9 @@ export default function CashOut() {
                 <Col xs={24} sm={12} md={8}>
                   <Statistic
                     title="Pending Settlement"
-                    value={earnings.filter(e => !e.is_settled).reduce((sum, e) => sum + e.net_payout, 0)}
+                    value={sumMoneyAsDisplayed(
+                      earnings.filter(e => !e.is_settled).map((e) => e.net_payout)
+                    )}
                     prefix={<DollarOutlined />}
                     suffix="KWD"
                     precision={3}
@@ -828,8 +889,8 @@ export default function CashOut() {
                       <li>Date within the selected period (if date range is selected)</li>
                     </ul>
                     <br />
-                    <Text type="warning" style={{ fontSize: '14px', display: 'block', marginTop: '16px' }}>
-                      💡 Tip: Try clearing the date range filter to see all payments, or check the browser console (F12) for detailed payment information.
+                    <Text type="secondary" style={{ fontSize: '14px', display: 'block', marginTop: '16px' }}>
+                      If you expect rows here, open the browser console (F12) for detailed payment debug logs.
                     </Text>
                   </Text>
                 </div>
@@ -844,10 +905,10 @@ export default function CashOut() {
                     showTotal: (total) => `Total ${total} influencers`,
                   }}
                   summary={(pageData) => {
-                    const totalEarnings = pageData.reduce((sum, record) => sum + record.total_earnings, 0);
-                    const totalPgCharges = pageData.reduce((sum, record) => sum + record.total_pg_charges, 0);
-                    const totalCommission = pageData.reduce((sum, record) => sum + record.total_platform_commission, 0);
-                    const totalNetPayout = pageData.reduce((sum, record) => sum + record.net_payout, 0);
+                    const totalEarnings = sumMoneyAsDisplayed(pageData.map((r) => r.total_earnings));
+                    const totalPgCharges = sumMoneyAsDisplayed(pageData.map((r) => r.total_pg_charges));
+                    const totalCommission = sumMoneyAsDisplayed(pageData.map((r) => r.total_platform_commission));
+                    const totalNetPayout = sumMoneyAsDisplayed(pageData.map((r) => r.net_payout));
                     return (
                       <Table.Summary fixed>
                         <Table.Summary.Row>
@@ -927,6 +988,17 @@ export default function CashOut() {
       >
         {selectedInfluencer && (
           <>
+            {dualPlatformCommissionPct != null &&
+              selectedPayments.some(
+                (p) => String(p.service_type || '').toLowerCase() === 'dual'
+              ) && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`Dual & shared bookings use ${dualPlatformCommissionPct}% platform commission (App Settings → Platform commission). Per-influencer rows use the booking earnings split.`}
+                  style={{ marginBottom: 16 }}
+                />
+              )}
             {/* Unsettled Transactions */}
             <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
               <Col>
@@ -960,11 +1032,21 @@ export default function CashOut() {
               scroll={{ x: 1300 }}
               locale={{ emptyText: 'No unsettled transactions' }}
               summary={(pageData) => {
-                const totalAmount = pageData.reduce((sum, record) => sum + Number(record.amount || 0), 0);
-                const totalPgCharge = pageData.reduce((sum, record) => sum + Number(record.pg_charge || 0), 0);
-                const totalCommission = pageData.reduce((sum, record) => sum + Number(record.platform_commission || 0), 0);
-                const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
-                const totalNetAfterBank = pageData.reduce((sum, record) => sum + Number(record.net_after_bank || 0), 0);
+                const totalAmount = sumMoneyAsDisplayed(
+                  pageData.map((r) => Number(r.amount || 0))
+                );
+                const totalPgCharge = sumMoneyAsDisplayed(
+                  pageData.map((r) => Number(r.pg_charge || 0))
+                );
+                const totalCommission = sumMoneyAsDisplayed(
+                  pageData.map((r) => Number(r.platform_commission || 0))
+                );
+                const totalNet = sumMoneyAsDisplayed(
+                  pageData.map((r) => Number(r.net_amount || 0))
+                );
+                const totalNetAfterBank = sumMoneyAsDisplayed(
+                  pageData.map((r) => Number(r.net_after_bank || 0))
+                );
 
                 return (
                   <Table.Summary fixed>
@@ -1011,7 +1093,9 @@ export default function CashOut() {
                   scroll={{ x: 1300 }}
                   style={{ opacity: 0.8 }}
                   summary={(pageData) => {
-                    const totalNet = pageData.reduce((sum, record) => sum + Number(record.net_amount || 0), 0);
+                    const totalNet = sumMoneyAsDisplayed(
+                      pageData.map((r) => Number(r.net_amount || 0))
+                    );
                     return (
                       <Table.Summary fixed>
                         <Table.Summary.Row style={{ background: '#f6ffed' }}>
